@@ -723,7 +723,8 @@ class Ventana(QMainWindow):
                 return
         if self.proyectos.pop(nombre, None) is not None:
             eliminados = plantillas.quitar(ruta) if ruta else []
-            guardar(self.proyectos, self.tema)
+            # exacto: this is the one place where the list must shrink.
+            guardar(self.proyectos, self.tema, exacto=True)
             # If the removed project was the active one, forget it in the
             # settings too: without this, closeEvent/_cambiar_proyecto would
             # re-save its config (and an orphan entry) when reopening the GUI.

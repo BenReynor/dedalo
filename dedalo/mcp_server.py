@@ -295,9 +295,7 @@ def instalar_proyecto(ruta: str, nombre: str = "") -> str:
     creados = plantillas.instalar(ruta)
     git = plantillas.inicializar_git(ruta)
     nombre = (nombre or os.path.basename(ruta.rstrip(os.sep))).strip()
-    reg = proyectos.cargar()
-    reg[nombre] = {"ruta": ruta}
-    proyectos.guardar(reg)
+    proyectos.registrar(nombre, ruta)
     return json.dumps({"nombre": nombre, "ruta": ruta,
                        "creados": creados, "git": git},
                       ensure_ascii=False, indent=2)

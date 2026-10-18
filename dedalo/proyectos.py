@@ -170,20 +170,57 @@ def leer_config_proyecto(nombre):
 def guardar_config_proyecto(proyectos, nombre, config):
     """Persists the project's specific configuration alongside its registry entry.
 
-    Does not re-add the project if it no longer exists in the registry (e.g. after
-    "Quitar"): a removed name must not reappear when saving its config.
+    Reads the registry from disk and touches ONLY this project: a window whose
+    in-memory list is stale must not overwrite projects that another process
+    (the MCP server, a second window) added or removed meanwhile. That is how a
+    long-running window used to wipe the whole registry on a theme change.
+
+    Does not re-add the project if it is neither on disk nor in the passed dict
+    (e.g. after "Quitar"): a removed name must not reappear when saving config.
     """
-    if nombre not in proyectos:
-        return
     datos = _leer_archivo()
-    datos["proyectos"] = proyectos
-    proyectos.setdefault(nombre, {})["config"] = config
+    reg = datos.get("proyectos", {})
+    if nombre not in reg and nombre not in proyectos:
+        return
+    entrada = reg.get(nombre) or dict(proyectos.get(nombre) or {})
+    entrada["config"] = config
+    reg[nombre] = entrada
+    datos["proyectos"] = reg
     _escribir(datos)
 
 
-def guardar(proyectos, tema=None, seguridad=None, webhooks=None, modelos=None):
+def registrar(nombre, ruta):
+    """Registers a project (read-modify-write) without touching the others.
+
+    A fresh read before the write keeps entries added by another process; the
+    previous read-then-write from the caller's copy lost them.
+    """
     datos = _leer_archivo()
-    datos["proyectos"] = proyectos
+    reg = datos.get("proyectos", {})
+    entrada = dict(reg.get(nombre) or {})
+    entrada["ruta"] = ruta
+    reg[nombre] = entrada
+    datos["proyectos"] = reg
+    _escribir(datos)
+    return reg
+
+
+def guardar(proyectos, tema=None, seguridad=None, webhooks=None, modelos=None,
+            exacto=False):
+    """Saves the project list and, optionally, the global settings.
+
+    By default the write is a UNION with what is already on disk: entries added
+    by another process are kept instead of being clobbered by a stale in-memory
+    copy. Pass `exacto=True` to replace the list as-is, which is what actually
+    removes a project.
+    """
+    datos = _leer_archivo()
+    if exacto:
+        datos["proyectos"] = proyectos
+    else:
+        reg = dict(datos.get("proyectos", {}))
+        reg.update(proyectos)
+        datos["proyectos"] = reg
     if tema:
         datos["tema"] = tema
     if seguridad is not None:

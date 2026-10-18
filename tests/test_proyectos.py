@@ -55,7 +55,8 @@ def test_guardar_config_no_reañade_proyecto_quitado():
         }
         proyectos.guardar(proyectos_dic, "Oscuro")
         proyectos_dic.pop("A", None)
-        proyectos.guardar(proyectos_dic, "Oscuro")
+        # Removing a project is the only case that must shrink the list.
+        proyectos.guardar(proyectos_dic, "Oscuro", exacto=True)
 
         # closeEvent keeps calling with the active name already removed
         proyectos.guardar_config_proyecto(proyectos_dic, "A", {"tema": "Y"})
@@ -213,6 +214,80 @@ def test_escribir_no_deja_el_registro_roto_si_falla_la_serializacion():
             datos = json.load(f)
         assert datos["proyectos"]["A"]["ruta"] == "/tmp/a"
         assert not [f for f in os.listdir(os.path.dirname(reg)) if ".tmp" in f]
+    finally:
+        _limpiar(reg)
+
+
+# ---------- no clobbering the registry from a stale window ----------
+#
+# A window keeps its project list in memory and re-saves it on every config
+# change. If another process (the MCP server, a second window) registered a
+# project meanwhile, that save used to overwrite the whole registry with the
+# stale list: the project installed in the background vanished.
+
+
+def test_guardar_no_machaca_los_proyectos_ajenos():
+    """Saving global settings with a stale (empty) list keeps what is on disk."""
+    reg = _config_aislada()
+    try:
+        proyectos.guardar({"instalado": {"ruta": "/tmp/instalado"}}, "Oscuro")
+
+        # A window opened before that project existed saves its theme.
+        proyectos.guardar({}, "Claro")
+
+        with open(reg, encoding="utf-8") as f:
+            datos = json.load(f)
+        assert "instalado" in datos["proyectos"], "el proyecto ajeno desapareció"
+        assert datos["tema"] == "Claro"
+    finally:
+        _limpiar(reg)
+
+
+def test_guardar_exacto_si_permite_vaciar_la_lista():
+    reg = _config_aislada()
+    try:
+        proyectos.guardar({"A": {"ruta": "/tmp/a"}}, "Oscuro")
+        proyectos.guardar({}, "Oscuro", exacto=True)
+        with open(reg, encoding="utf-8") as f:
+            assert json.load(f)["proyectos"] == {}
+    finally:
+        _limpiar(reg)
+
+
+def test_guardar_config_no_pisa_los_proyectos_ajenos():
+    """The config save for the active project must touch only that project."""
+    reg = _config_aislada()
+    try:
+        proyectos.guardar({"A": {"ruta": "/tmp/a"},
+                           "B": {"ruta": "/tmp/b"}}, "Oscuro")
+
+        # The window only knows about "A" (its list predates "B").
+        proyectos.guardar_config_proyecto({"A": {"ruta": "/tmp/a"}},
+                                          "A", {"tema": "X"})
+
+        with open(reg, encoding="utf-8") as f:
+            datos = json.load(f)
+        assert set(datos["proyectos"]) == {"A", "B"}
+        assert datos["proyectos"]["A"]["config"] == {"tema": "X"}
+        # B's entry survives untouched (without config, as it was).
+        assert datos["proyectos"]["B"] == {"ruta": "/tmp/b"}
+    finally:
+        _limpiar(reg)
+
+
+def test_registrar_no_pierde_los_demas_proyectos():
+    """registering a project is a read-modify-write, not a replace."""
+    reg = _config_aislada()
+    try:
+        proyectos.guardar({"A": {"ruta": "/tmp/a"}}, "Oscuro")
+
+        reg_de_vuelta = proyectos.registrar("Nuevo", "/tmp/nuevo")
+
+        with open(reg, encoding="utf-8") as f:
+            datos = json.load(f)
+        assert set(datos["proyectos"]) == {"A", "Nuevo"}
+        assert datos["proyectos"]["Nuevo"]["ruta"] == "/tmp/nuevo"
+        assert set(reg_de_vuelta) == {"A", "Nuevo"}
     finally:
         _limpiar(reg)
 
