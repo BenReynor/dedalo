@@ -818,8 +818,12 @@ class Ventana(QMainWindow):
             return
         estado_net = net.ultimo_estado()
         if estado_net is None:
-            estado_net = net.hay_internet()
-        if not estado_net:
+            # Not known yet: refresh in the background instead of blocking the
+            # UI thread (the check can take up to 2×TIMEOUT_INTERNET seconds).
+            # Optimistic: the loop itself aborts on start if there is no
+            # network, and the warning appears as soon as the state is known.
+            net.verificar_async()
+        elif not estado_net:
             QMessageBox.warning(
                 self, t("No internet"),
                 t("There is no internet connection.\n\nThe opencode AI models "
@@ -1137,11 +1141,14 @@ class Ventana(QMainWindow):
         m = re.search(r"tarea bloqueada[:\s]+([^\n]+)", log_texto, re.IGNORECASE)
         tarea = m.group(1).strip() if m else t("unknown")
         self.estado.setText(t("⚠ Blocked task: {tarea}", tarea=tarea))
-        # Alert sound
+        # Alert sound: fire-and-forget. `notify-send` can hang for up to its
+        # timeout; running it with subprocess.run would block the UI thread.
         try:
-            import subprocess
-            subprocess.run(["notify-send", "Dédalo",
-                            t("Blocked task: {tarea}", tarea=tarea)], timeout=2)
+            subprocess.Popen(
+                ["notify-send", "Dédalo",
+                 t("Blocked task: {tarea}", tarea=tarea)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL)
         except Exception:
             pass
         # Beep
