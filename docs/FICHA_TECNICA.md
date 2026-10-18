@@ -175,6 +175,15 @@ Implemented:
 - **Credentials**: the bundled dev credentials (`admin`/`admin123`) are only
   applied when the backend target is `localhost`; a remote URL never receives
   them.
+- **Environment allowlist**: the engine (and the gate and the agent CLIs it
+  spawns) does not inherit the caller's full environment; only an allowlist of
+  names crosses over (`loop_launch.filtrar_entorno`), so unrelated secrets in
+  the user's shell never reach a prompt-injected agent. Extra names can be
+  opted in per launch with `DEDALO_ENTORNO_EXTRA`.
+- **Shared loop state + single-run lock**: GUI, MCP and engine share one
+  registry (`~/.config/dedalo/loops.json`) and the engine holds an exclusive
+  `flock` for its whole run, so a loop started by one side is visible to the
+  others and a duplicate for the same project cannot start.
 - Atomic registry writes (temp file + `os.replace`).
 - **CI `seguridad`**: `gitleaks` over the full history + `pip-audit
   --strict` on `requirements.lock` + a check that the lock is up to date.
@@ -190,8 +199,9 @@ Known risks (accepted, see [BUGS_CONOCIDOS.md](BUGS_CONOCIDOS.md)):
 - Webhook tokens are stored **in plaintext** in
   `~/.config/dedalo/proyectos.json` (`0700` folder; unencrypted file).
 - The AI agent runs as the full user, **with no sandbox** (the tool's
-  model, documented as a risk). The gate consent gate above mitigates, but does
-  not eliminate, running untrusted project code.
+  model, documented as a risk). The environment allowlist above limits what it
+  can read from the environment and the gate consent limits what it runs, but
+  neither replaces OS-level isolation (containers, `bubblewrap`/`firejail`).
 
 ## Quality and CI
 

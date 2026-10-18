@@ -325,6 +325,12 @@ fills them in from the Run form). The most useful ones:
 > While waiting on `REVISION_MANUAL`, if the network goes down the loop aborts
 > (rather than hanging); and if `TIMEOUT_REVISION_MANUAL` expires, the task is
 > marked `[B]`.
+>
+> These variables (plus everything prefixed `DEDALO_`, `CLI_`, `LC_`,
+> `OPENCODE_`, `CODEX_` and `CLAUDE_`) are always passed through. Any **other**
+> variable you need in the engine/gate must be opted in with
+> `DEDALO_ENTORNO_EXTRA` — see [Security](#-security).
+
 ### CLI Agents
 
 `auto` (default) picks the first installed CLI according to `AGENTES_PREFERIDOS`
@@ -458,6 +464,27 @@ The gate can smoke-test a backend's endpoints. The bundled dev credentials
 (`admin`/`admin123`) are applied **only when the target is `localhost`**; a
 remote `SERVE_URL` with no `USUARIO`/`CLAVE` never receives them and prints a
 warning instead.
+
+### Engine environment (allowlist)
+
+The engine does **not** inherit the full environment of the GUI/MCP process:
+only an allowlist of variables crosses over, and from there into the gate and
+the agent CLIs (`dedalo/loop_launch.py` → `filtrar_entorno`). This prevents a
+prompt-injected agent from reading unrelated secrets you exported in your shell
+(`AWS_*`, `DATABASE_URL`, tokens of other services…) with a plain `env`.
+
+Allowed are the process/session basics (`PATH`, `HOME`, `LANG`, `TZ`…), the
+XDG/display vars (keyring, `notify-send`), proxies and TLS, the git/SSH ones
+(`SSH_AUTH_SOCK`, `GITHUB_TOKEN`, `GH_TOKEN`…), the engine overrides
+(`MODELO_JUEZ`, `TIMEOUT_JUEZ`, `CRITERIO`, `SKIP_RUFF`) and, if present, the
+agent CLIs' own API keys.
+
+If a project's gate legitimately needs **other** variables (cloud creds, a real
+`DATABASE_URL`…), opt in per launch with a space/comma-separated list:
+
+```bash
+DEDALO_ENTORNO_EXTRA="DATABASE_URL KUBECONFIG" dedalo
+```
 
 ### Supply chain
 

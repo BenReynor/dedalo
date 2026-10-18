@@ -1211,7 +1211,7 @@ class Ventana(QMainWindow):
         panel.clear()
         programa, args = argv_gate(getattr(sys, "frozen", False))
         panel.appendPlainText("> " + " ".join([programa, *args]))
-        env = dict(os.environ)
+        env = loop_launch.filtrar_entorno(os.environ)
         if not getattr(sys, "frozen", False):
             env["PYTHONPATH"] = _raiz_codigo() + (
                 os.pathsep + env["PYTHONPATH"]

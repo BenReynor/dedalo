@@ -307,7 +307,7 @@ def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     """Runs the project gate (blocking, with timeout) and returns its output."""
     ruta = _ruta_de(nombre)
     programa, argv = argv_gate(getattr(sys, "frozen", False))
-    env = dict(os.environ)
+    env = loop_launch.filtrar_entorno(os.environ)
     if not getattr(sys, "frozen", False):
         env["PYTHONPATH"] = loop_launch.raiz_codigo() + (
             os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
