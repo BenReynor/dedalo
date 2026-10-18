@@ -29,7 +29,7 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, net
+from . import consentimiento, loops_estado, net
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
@@ -117,6 +117,12 @@ class Config:
         self.hasta = args.hasta or ""
         self.rama_trabajo = args.trabajo or ""
         self.inicio_ms = ahora_ms()
+        # Shared loop registry identity (set by the GUI/MCP launchers). Without
+        # a name, fall back to the project folder name so a manual
+        # `python -m dedalo.loop` also registers itself.
+        self.nombre = (env.get("DEDALO_PROYECTO_NOMBRE")
+                       or os.path.basename(self.proyecto.rstrip("/\\")) or "")
+        self.origen = env.get("DEDALO_ORIGEN", "cli") or "cli"
 
     def tmp(self, sufijo=""):
         """New temporary path (equivalent to mktemp; unique per call)."""
@@ -1106,10 +1112,30 @@ def _esperar_revision_manual(cfg, tarea):
     return 1
 
 
+_LOCK = {"handle": None}
+
+
 def main(argv=None):
     args = parse_args(argv)
     cfg = Config(args)
-    return run(cfg)
+    if cfg.nombre:
+        # Single-run guard: an exclusive lock held for the whole run. A second
+        # engine for the same project (another GUI click, an MCP call or a
+        # manual launch) cannot take it and aborts instead of duplicating work.
+        handle = loops_estado.adquirir(cfg.nombre)
+        if handle is None:
+            print(f"[dedalo] ✗ Ya hay un bucle corriendo para '{cfg.nombre}'. "
+                  f"Deténlo antes de lanzar otro.")
+            logx(cfg.log, f"ABORTADO: ya hay un bucle en marcha ({cfg.nombre})")
+            return 5
+        _LOCK["handle"] = handle
+        loops_estado.registrar(cfg.nombre, os.getpid(), origen=cfg.origen)
+    try:
+        return run(cfg)
+    finally:
+        if cfg.nombre:
+            loops_estado.olvidar(cfg.nombre)
+        loops_estado.liberar(_LOCK.pop("handle", None))
 
 
 if __name__ == "__main__":

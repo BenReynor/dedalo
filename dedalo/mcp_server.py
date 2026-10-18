@@ -23,10 +23,16 @@ import json
 import os
 import subprocess
 import sys
-import time
 
-from . import configuracion as cfg
-from . import loop_launch, loop_proceso, modelos, net, plantillas, proyectos
+from . import (
+    loop_launch,
+    loop_proceso,
+    loops_estado,
+    modelos,
+    net,
+    plantillas,
+    proyectos,
+)
 from .gate import argv_gate
 
 try:
@@ -94,10 +100,10 @@ FICHEROS_RECURSO = (
     "mapeo.txt",
 )
 
-# Loops running per project: name → subprocess.Popen. The pid is also persisted
-# in CONFIG_DIR so that a restarted MCP server can still stop it.
+# Loops launched from THIS process: name → subprocess.Popen. The persisted
+# state (pid/origin) lives in `loops_estado` and is shared with the GUI, so a
+# restarted MCP server (or the GUI) can still see/stop it.
 _LOOPS: dict[str, subprocess.Popen] = {}
-_PIDS_RUTA = os.path.join(cfg.CONFIG_DIR, "mcp_loops.json")
 RC_TIMEOUT_LOOP = loop_proceso.RC_TIMEOUT
 
 
@@ -149,80 +155,14 @@ def _ruta_de_fichero(nombre, fichero):
     return os.path.join(_ruta_de(nombre), fichero)
 
 
-def _pids():
-    try:
-        with open(_PIDS_RUTA, encoding="utf-8") as f:
-            datos = json.load(f)
-        return {k: int(v) for k, v in datos.items()}
-    except (OSError, ValueError, TypeError):
-        return {}
-
-
-def _guardar_pid(nombre, pid):
-    datos = _pids()
-    datos[nombre] = int(pid)
-    try:
-        os.makedirs(cfg.CONFIG_DIR, exist_ok=True)
-        with open(_PIDS_RUTA, "w", encoding="utf-8") as f:
-            json.dump(datos, f)
-    except OSError:
-        pass
-
-
-def _olvidar_pid(nombre):
-    datos = _pids()
-    datos.pop(nombre, None)
-    try:
-        with open(_PIDS_RUTA, "w", encoding="utf-8") as f:
-            json.dump(datos, f)
-    except OSError:
-        pass
-
-
-def _vivo(pid):
-    if not pid:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _matar_pid(pid, espera=5):
-    """TERM→KILL for the process group of `pid` (started with start_new_session)."""
-    if os.name != "nt":
-        import signal
-        try:
-            pgid = os.getpgid(pid)
-        except (ProcessLookupError, PermissionError):
-            return False
-        for sig, pausa in ((signal.SIGTERM, espera), (signal.SIGKILL, 0)):
-            try:
-                os.killpg(pgid, sig)
-            except (ProcessLookupError, PermissionError):
-                return True
-            if pausa:
-                for _ in range(pausa):
-                    time.sleep(1)
-                    if not _vivo(pid):
-                        return True
-        return not _vivo(pid)
-    proc = subprocess.Popen(["taskkill", "/PID", str(pid), "/T", "/F"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    proc.wait(timeout=10)
-    return True
-
-
 def _estado_loop(nombre):
-    """Dict with the project's loop state: running, pid, pending review."""
-    proc = _LOOPS.get(nombre)
-    pid = proc.pid if proc and proc.poll() is None else _pids().get(nombre)
-    if pid and not _vivo(pid):
-        _olvidar_pid(nombre)
-        pid = None
+    """Dict with the project's loop state: running, pid, origin, pending review.
+
+    The running state comes from `loops_estado`, the shared registry the GUI
+    also reads/writes, so this reflects loops started by EITHER the MCP or the
+    GUI (not just this process's own children).
+    """
+    est = loops_estado.estado(nombre)
     fondo = os.path.join(_ruta_de(nombre), ".dedalo_review")
     pendiente = os.path.isfile(os.path.join(fondo, "waiting"))
     tarea = ""
@@ -235,8 +175,9 @@ def _estado_loop(nombre):
             tarea = ""
     return {
         "nombre": nombre,
-        "corriendo": bool(pid),
-        "pid": pid,
+        "corriendo": est["corriendo"],
+        "pid": est["pid"],
+        "origen": est["origen"],
         "revision_pendiente": pendiente,
         "tarea_en_revision": tarea,
     }
@@ -365,7 +306,7 @@ def instalar_proyecto(ruta: str, nombre: str = "") -> str:
 def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     """Runs the project gate (blocking, with timeout) and returns its output."""
     ruta = _ruta_de(nombre)
-    programa, argv = argv_gate(getattr(sys, "frozen", False), ruta, ruta)
+    programa, argv = argv_gate(getattr(sys, "frozen", False))
     env = dict(os.environ)
     if not getattr(sys, "frozen", False):
         env["PYTHONPATH"] = loop_launch.raiz_codigo() + (
@@ -395,7 +336,7 @@ def iniciar_loop(nombre: str) -> str:
                            "motivo": "sin conexión a internet"},
                           ensure_ascii=False, indent=2)
     conf, nav = loop_launch.config_de_proyecto(nombre)
-    plan = loop_launch.preparar(conf, nav)
+    plan = loop_launch.preparar(conf, nav, nombre=nombre, origen="mcp")
     if not plan["detectados"]:
         return json.dumps({"iniciado": False, "detectados": [],
                            "motivo": "ningún agente CLI con sesión"},
@@ -406,7 +347,10 @@ def iniciar_loop(nombre: str) -> str:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=(os.name != "nt"))
     _LOOPS[nombre] = proc
-    _guardar_pid(nombre, proc.pid)
+    # Register immediately so the GUI (which reads the same file) sees the loop
+    # even before the engine has finished booting; the engine re-registers
+    # itself with the same pid once it holds its lock.
+    loops_estado.registrar(nombre, proc.pid, origen="mcp")
     conf, _ = loop_launch.config_de_proyecto(nombre)
     return json.dumps({
         "nombre": nombre, "pid": proc.pid,
@@ -432,8 +376,8 @@ def detener_loop(nombre: str, espera_s: int = 5) -> str:
     if proc and proc.poll() is None:
         loop_proceso.matar_grupo(proc, espera=max(0, int(espera_s)))
     else:
-        _matar_pid(estado["pid"], espera=max(0, int(espera_s)))
-    _olvidar_pid(nombre)
+        loops_estado.matar(estado["pid"], espera=max(0, int(espera_s)))
+    loops_estado.olvidar(nombre)
     return json.dumps({"nombre": nombre, "pid": estado["pid"], "detenido": True},
                       ensure_ascii=False, indent=2)
 

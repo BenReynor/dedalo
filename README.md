@@ -385,6 +385,13 @@ MCP client configuration (example for `opencode`/Claude Desktop):
 **Action tools:** `instalar_proyecto`, `correr_gate`, `iniciar_loop`
 (background), `estado_loop`, `detener_loop`, `resolver_revision`.
 
+**Shared state:** the MCP server, the GUI and the loop engine share a single
+running-state registry (`dedalo/loops_estado.py`, `~/.config/dedalo/loops.json`)
+and the engine holds an exclusive `flock` for its whole lifetime. So a loop
+started by the MCP **shows up as running in the GUI** (and vice versa), the GUI
+can stop it, and neither side can launch a duplicate for a project that already
+has one running.
+
 **Program context:** the server sends a curated manual in the
 `instructions` field of `initialize` (what Dédalo is, how the loop works, the
 files, and the usage flow), which the client shows the model as context without
@@ -501,6 +508,7 @@ dedalo/
 ├── metricas.py         # progreso.log parsing → series
 ├── plan.py             # plan.md model
 ├── proyectos.py        # JSON persistence (~/.config/dedalo/)
+├── loops_estado.py     # shared loop registry + flock, read by GUI/MCP/engine
 ├── loop_launch.py      # launch preparation (env + argv), shared GUI/MCP
 ├── mcp_server.py       # MCP server over stdio (tools + resources); extra `mcp`
 ├── plantillas.py       # project scaffolding

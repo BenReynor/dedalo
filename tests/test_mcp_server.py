@@ -7,6 +7,7 @@ a tmp_path, without starting the stdio transport.
 
 import asyncio
 import json
+import os
 
 import pytest
 
@@ -32,7 +33,10 @@ def proyecto(tmp_path, monkeypatch):
         "\n".join(f"linea {i}" for i in range(100)), encoding="utf-8")
     monkeypatch.setattr(m.proyectos, "cargar",
                         lambda: {"p1": {"ruta": str(tmp_path)}})
-    monkeypatch.setattr(m, "_PIDS_RUTA", str(tmp_path / "pids.json"))
+    # Isolate the shared loop registry (read by the MCP and the GUI).
+    monkeypatch.setattr(m.loops_estado, "RUTA", str(tmp_path / "loops.json"))
+    monkeypatch.setattr(m.loops_estado, "_RUTA_LEGACY",
+                        str(tmp_path / "loops_legacy.json"))
     return tmp_path
 
 
@@ -141,3 +145,20 @@ def test_iniciar_loop_sin_internet(proyecto, monkeypatch):
     datos = json.loads(m.iniciar_loop("p1"))
     assert datos["iniciado"] is False
     assert "internet" in datos["motivo"]
+
+
+def test_estado_loop_ve_bucle_externo(proyecto):
+    """A loop started elsewhere (GUI/CLI) is visible via the shared registry."""
+    m.loops_estado.registrar("p1", os.getpid(), origen="gui")
+    datos = json.loads(m.estado_loop("p1"))
+    assert datos["corriendo"] is True
+    assert datos["pid"] == os.getpid()
+    assert datos["origen"] == "gui"
+
+
+def test_iniciar_loop_no_duplica_si_ya_corre(proyecto, monkeypatch):
+    monkeypatch.setattr(m.net, "hay_internet", lambda: True)
+    m.loops_estado.registrar("p1", os.getpid(), origen="mcp")
+    datos = json.loads(m.iniciar_loop("p1"))
+    assert datos["iniciado"] is False
+    assert "corriendo" in datos["motivo"]

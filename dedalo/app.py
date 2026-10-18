@@ -31,7 +31,15 @@ from PySide6.QtWidgets import (
 )
 
 from . import configuracion as cfg
-from . import consentimiento, loop_launch, modelos, net, plantillas, sensor
+from . import (
+    consentimiento,
+    loop_launch,
+    loops_estado,
+    modelos,
+    net,
+    plantillas,
+    sensor,
+)
 from .gate import argv_gate
 from .i18n import IDIOMAS, NOMBRES_IDIOMA, idioma, set_idioma, t
 from .paneles import (
@@ -172,6 +180,78 @@ class Ventana(QMainWindow):
         self.timer_incidencias = QTimer(self)
         self.timer_incidencias.timeout.connect(self._refrescar_incidencias)
         self.timer_incidencias.start(2000)
+
+        # Shared state sync: an AI connected over MCP can install a project or
+        # start/stop a loop behind our back. This timer makes the panel SEE
+        # those changes (project appears, loop shows as running) and prevents
+        # launching a duplicate loop from the GUI.
+        self._worker_externo = None
+        self.timer_estado = QTimer(self)
+        self.timer_estado.timeout.connect(self._sincronizar_estado)
+        self.timer_estado.start(2000)
+
+    def _sincronizar_estado(self):
+        self._refrescar_proyectos()
+        self._refrescar_loop_externo()
+
+    def _refrescar_proyectos(self):
+        """Adds projects created by others (e.g. an AI over MCP) to the combo
+        without disturbing the current selection; refreshes their paths."""
+        try:
+            reg = cargar()
+        except (RegistroCorrupto, OSError, ValueError):
+            return
+        if not isinstance(reg, dict):
+            return
+        nuevos = [n for n in reg if n not in self.proyectos]
+        cambiados = {n: d for n, d in reg.items()
+                     if n in self.proyectos and self.proyectos.get(n) != d}
+        if not nuevos and not cambiados:
+            return
+        self.proyectos.update(reg)
+        for n in nuevos:
+            self.cmb.blockSignals(True)
+            self.cmb.addItem(n)
+            self.cmb.blockSignals(False)
+        if nuevos:
+            self.estado.setText(
+                t("[auto] New project(s) detected: {lista}",
+                  lista=", ".join(nuevos)))
+
+    def _refrescar_loop_externo(self):
+        """Mirrors (in the panel) a loop started outside this GUI (MCP/CLI).
+
+        If one is running for the current project and this GUI has no local
+        loop, the panel shows it as running (start disabled, stop enabled) and
+        tails its log; when it ends, the panel returns to the idle state.
+        """
+        p = self._proyecto_actual()
+        if not p:
+            return
+        nombre = p[0]
+        # Our own loop, if any, is authoritative for the local process state.
+        local = bool(self.loop) and self.loop.state() != QProcess.NotRunning
+        externo = loops_estado.estado(nombre)
+        corriendo = externo["corriendo"]
+        if corriendo and not local:
+            if not self._loop_externo:
+                self._loop_externo = True
+                self.pan_logs.panel_loop.appendPlainText(
+                    t("[mcp] A loop started by an external agent is running "
+                      "(pid {pid}); following it.", pid=externo["pid"] or "?"))
+                self.timer.start(cfg.TIMER_TAIL_MS)
+            self.pan_ejec.establecer_running(True)
+        elif self._loop_externo and not corriendo:
+            # The external loop finished: back to the idle state.
+            self._loop_externo = False
+            self.timer.stop()
+            self.pan_ejec.establecer_running(False)
+            self.pan_ejec.b_iniciar.setEnabled(True)
+            self.pan_ejec.b_detener.setEnabled(False)
+            self._set_fase_loop(0, 0, corriendo=False)
+            self.pan_plan.cargar(os.path.join(p[1], "plan.md"))
+            self.pan_lecciones.cargar(os.path.join(p[1], "lecciones.md"))
+            self.pan_git.cargar(p[1])
 
     def _refrescar_plan(self):
         self.pan_plan._recargar_si_cambio()
@@ -574,6 +654,9 @@ class Ventana(QMainWindow):
         if not self.loop or self.loop.state() != QProcess.Running:
             self.pan_ejec.b_iniciar.setEnabled(True)
         self._aplicar_sel_modelos()
+        # If an external agent (MCP/CLI) has a loop running for this project,
+        # reflect it now instead of waiting for the sync timer.
+        self._refrescar_loop_externo()
 
     def _agregar_proyecto(self):
         ruta = QFileDialog.getExistingDirectory(
@@ -746,6 +829,17 @@ class Ventana(QMainWindow):
         ruta = p[1]
         if not self._consentimiento_gate(ruta):
             return
+        # Shared registry: never launch a duplicate for a project that already
+        # has a loop running (e.g. one an AI started over MCP).
+        est_loop = loops_estado.estado(self._nombre_activo)
+        if est_loop["corriendo"]:
+            QMessageBox.information(
+                self, t("Dédalo running"),
+                t("A loop is already running for this project "
+                  "(started by {origen}). Stop it before launching another.",
+                  origen=est_loop["origen"] or "?"))
+            self._refrescar_loop_externo()
+            return
         self._capturar_lanzamiento()
         self._guardar_config_proyecto()
         conf = self._lanzamiento
@@ -753,7 +847,8 @@ class Ventana(QMainWindow):
 
         base_env = dict(e.split("=", 1) for e in QProcess.systemEnvironment()
                         if "=" in e)
-        plan = loop_launch.preparar(conf, nav_conf, base_env)
+        plan = loop_launch.preparar(conf, nav_conf, base_env,
+                                    nombre=self._nombre_activo, origen="gui")
         detectados = plan["detectados"]
         if not detectados:
             self.estado.setText(
@@ -946,6 +1041,23 @@ class Ventana(QMainWindow):
             # the escalation to SIGKILL.
             if self.loop.state() != QProcess.NotRunning:
                 QTimer.singleShot(5000, self._loop_forzar_kill)
+            return
+        # No local loop: it may be one started by an external agent (MCP/CLI).
+        p = self._proyecto_actual()
+        if p and self._loop_externo:
+            est = loops_estado.estado(p[0])
+            if est["corriendo"]:
+                self.pan_logs.panel_loop.appendPlainText(
+                    "[manual] " + t("stopping the external loop (pid {pid})…",
+                                    pid=est["pid"] or "?"))
+                loops_estado.matar(est["pid"], espera=5)
+                loops_estado.olvidar(p[0])
+            self._loop_externo = False
+            self.timer.stop()
+            self.pan_ejec.establecer_running(False)
+            self.pan_ejec.b_iniciar.setEnabled(True)
+            self.pan_ejec.b_detener.setEnabled(False)
+            self._set_fase_loop(0, 0, corriendo=False)
 
     def _loop_forzar_kill(self):
         """Escalates to SIGKILL if the loop ignores the timer's SIGTERM."""
@@ -1178,7 +1290,7 @@ class Ventana(QMainWindow):
         for temporizador in (self.timer, self.timer_temp, self.timer_net,
                              self.timer_revision, self.timer_metricas,
                              self.timer_plan, self.timer_lecciones,
-                             self.timer_incidencias):
+                             self.timer_incidencias, self.timer_estado):
             temporizador.stop()
         # Terminate the loop process if running (SIGTERM and, if it does not die, SIGKILL)
         if self.loop and self.loop.state() == QProcess.Running:

@@ -58,6 +58,17 @@ _ES: dict[str, str] = {
     "  (none)": "  (ninguno)",
     " · phase: {fase}": " · fase: {fase}",
     "# Lessons learned — project memory\n\n": "# Lecciones aprendidas — memoria del proyecto\n\n",
+    "[auto] New project(s) detected: {lista}":
+        "[auto] Proyecto(s) nuevo(s) detectado(s): {lista}",
+    "[mcp] A loop started by an external agent is running (pid {pid}); following it.":
+        "[mcp] Un bucle lanzado por un agente externo está en marcha "
+        "(pid {pid}); siguiéndolo.",
+    "A loop is already running for this project (started by {origen}). "
+    "Stop it before launching another.":
+        "Ya hay un bucle corriendo para este proyecto (lanzado por {origen}). "
+        "Deténlo antes de lanzar otro.",
+    "stopping the external loop (pid {pid})…":
+        "deteniendo el bucle externo (pid {pid})…",
     "# PLAN\n\n- [ ] your first task — criterion: ...\n":
         "# PLAN\n\n- [ ] tu primera tarea — criterio: ...\n",
     "(could not read the diff)": "(no se pudo leer el diff)",

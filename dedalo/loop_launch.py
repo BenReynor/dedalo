@@ -127,7 +127,7 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
     return env
 
 
-def preparar(conf, nav=None, environ=None, frozen=None):
+def preparar(conf, nav=None, environ=None, frozen=None, nombre="", origen=""):
     """Full engine launch plan.
 
     Returns a dict with:
@@ -135,6 +135,11 @@ def preparar(conf, nav=None, environ=None, frozen=None):
       · agente_tarea / agente_revisor / modelo_tarea / modelo_revisor
       · env: environment (dict) already with PATH, CLI_* and PYTHONPATH (if not frozen)
       · programa / argv: command to run
+
+    `nombre` (registry key) and `origen` ("gui"/"mcp") are exported to the
+    engine as `DEDALO_PROYECTO_NOMBRE`/`DEDALO_ORIGEN`: with them the engine
+    registers itself in the shared loop registry (`loops_estado`) under the
+    same name the panel uses, so both sides see the same running state.
     """
     if environ is None:
         environ = dict(os.environ)
@@ -146,6 +151,10 @@ def preparar(conf, nav=None, environ=None, frozen=None):
 
     detectados = modelos.agentes_operativos()
     env = construir_entorno(conf, nav, detectados, environ, frozen)
+    if nombre:
+        env["DEDALO_PROYECTO_NOMBRE"] = str(nombre)
+    if origen:
+        env["DEDALO_ORIGEN"] = str(origen)
     if not frozen:
         env["PYTHONPATH"] = raiz_codigo() + (
             os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
