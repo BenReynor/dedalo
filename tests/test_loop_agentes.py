@@ -19,6 +19,7 @@ pytestmark = pytest.mark.skipif(
     os.name == "nt",
     reason="motores de agente falsos en bash (POSIX): se valida en Linux")
 
+from dedalo import loop_agentes as la  # noqa: E402
 from dedalo.loop_agentes import (  # noqa: E402
     agente_ok,
     costo_por_modelo,
@@ -29,6 +30,7 @@ from dedalo.loop_agentes import (  # noqa: E402
     revisar_diff,
     run_agente,
     sin_autenticacion,
+    soporta_dir,
     tokens_agotados,
 )
 from dedalo.loop_args import parse_args  # noqa: E402
@@ -323,3 +325,97 @@ def test_revisar_diff_incluye_contexto_del_proyecto(tmp_path):
 
     prompt = _leer(str(tmp_path / "prompt_revisor.txt"))
     assert "MARCADOR_REVISOR_XYZ" in prompt, prompt[-2000:]
+
+
+# ------------------------------------------------------------------- --dir
+#
+# `opencode run` attaches to an already-running opencode server and executes in
+# THAT server's project, ignoring the cwd we pass: the agent would read and
+# edit the wrong repository. `--dir <proyecto>` pins it back to our project.
+
+
+def _opencode_falso(tmp_path, soporta=True, veredicto=""):
+    """Fake opencode: answers `run --help` advertising `--dir` (or not) and
+    writes its argv to $CAPTURA on a real run."""
+    ayuda = ("Usage: opencode run [options] [message..]\n"
+             "  --agent    agent to use\n"
+             + ("  --dir      directory to run in\n" if soporta else ""))
+    cuerpo = ("#!/usr/bin/env bash\n"
+              "if [ \"${1:-}\" = \"run\" ] && [ \"${2:-}\" = \"--help\" ]; then\n"
+              "  cat <<'AYUDA'\n" + ayuda + "AYUDA\n"
+              "  exit 0\n"
+              "fi\n"
+              "printf '%s\\n' \"$@\" > \"${CAPTURA:-/dev/null}\"\n"
+              + (f"echo '{veredicto}'\n" if veredicto else "")
+              + "exit 0\n")
+    bin_ = tmp_path / "bin" / "opencode"
+    bin_.parent.mkdir(parents=True, exist_ok=True)
+    bin_.write_text(cuerpo, encoding="utf-8")
+    bin_.chmod(0o755)
+    return bin_
+
+
+@pytest.fixture(autouse=True)
+def _limpiar_cache_dir():
+    la._DIR_SOPORTADO.clear()
+    yield
+    la._DIR_SOPORTADO.clear()
+
+
+def test_soporta_dir_detecta_la_capacidad(tmp_path):
+    assert soporta_dir(str(_opencode_falso(tmp_path, soporta=True)))
+    assert not soporta_dir(str(_opencode_falso(tmp_path / "viejo", soporta=False)))
+
+
+def test_soporta_dir_falso_si_el_binario_no_existe():
+    assert not soporta_dir("/no/existe/opencode")
+
+
+def test_run_agente_pasa_dir_al_opencode(tmp_path):
+    """argv must carry `--dir <proyecto>` so the agent works in OUR project."""
+    captura = tmp_path / "argv.txt"
+    bin_ = _opencode_falso(tmp_path, soporta=True)
+    cfg = _config(tmp_path, {"CLI_OPENCODE": str(bin_),
+                             "CAPTURA": str(captura)})
+    cfg.timeout_por_tarea = 30
+
+    rc, _vivo = run_agente(cfg, "opencode", str(tmp_path / "out"), "",
+                           "prompt", "t1", 1)
+    assert rc == 0
+    argv = captura.read_text(encoding="utf-8").splitlines()
+    assert "run" in argv and "--agent" in argv
+    assert "--dir" in argv, argv
+    assert argv[argv.index("--dir") + 1] == str(tmp_path)
+    assert argv[-1] == "prompt"
+
+
+def test_run_agente_sin_dir_en_opencode_antiguo(tmp_path):
+    """An older opencode without `--dir` must keep working (no flag added)."""
+    captura = tmp_path / "argv.txt"
+    bin_ = _opencode_falso(tmp_path, soporta=False)
+    cfg = _config(tmp_path, {"CLI_OPENCODE": str(bin_),
+                             "CAPTURA": str(captura)})
+    cfg.timeout_por_tarea = 30
+
+    rc, _vivo = run_agente(cfg, "opencode", str(tmp_path / "out"), "",
+                           "prompt", "t1", 1)
+    assert rc == 0
+    argv = captura.read_text(encoding="utf-8").splitlines()
+    assert "--dir" not in argv, argv
+    assert argv[-1] == "prompt"
+
+
+def test_revisor_tambien_recibe_dir(tmp_path):
+    """The reviewer runs through run_agente, so it inherits `--dir` too."""
+    captura = tmp_path / "argv.txt"
+    bin_ = _opencode_falso(tmp_path, soporta=True, veredicto="VERDICT: PASS")
+    cfg = _config(tmp_path, {"CLI_OPENCODE": str(bin_),
+                             "CAPTURA": str(captura)})
+    cfg.revisor = "opencode"
+    cfg.modelo_revisor = ""
+    cfg.timeout_por_tarea = 30
+
+    resultado, _fb = revisar_diff(cfg, "opencode", "t1", "diff")
+    assert resultado == "pass"
+    argv = captura.read_text(encoding="utf-8").splitlines()
+    assert argv[argv.index("--dir") + 1] == str(tmp_path)

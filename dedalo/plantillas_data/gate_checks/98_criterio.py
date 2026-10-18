@@ -19,6 +19,9 @@ CLIS = {
     "claude": "CLI_CLAUDE",
 }
 
+# Cache of the `opencode run --dir` capability, per binary.
+_DIR_SOPORTADO = {}
+
 
 def _cli(agente):
     return os.environ.get(CLIS[agente], agente)
@@ -69,9 +72,33 @@ def _prompt(env, criterio):
     )
 
 
-def _invocar(agente, cli, prompt, modelo, timeout):
+def _soporta_dir(cli):
+    """Does this `opencode run` accept `--dir`? Probed once, cached.
+
+    Without `--dir`, `opencode run` attaches to an already-running opencode
+    server and runs inside THAT server's directory (its project): the judge
+    would evaluate the wrong repository. Older builds lack the flag.
+    """
+    global _DIR_SOPORTADO
+    if cli in _DIR_SOPORTADO:
+        return _DIR_SOPORTADO[cli]
+    soportado = False
+    try:
+        p = subprocess.run([cli, "run", "--help"], capture_output=True,
+                           text=True, timeout=20)
+        soportado = "--dir" in (p.stdout or "") + (p.stderr or "")
+    except (OSError, subprocess.TimeoutExpired):
+        soportado = False
+    _DIR_SOPORTADO[cli] = soportado
+    return soportado
+
+
+def _invocar(agente, cli, prompt, modelo, timeout, proyecto):
     if agente == "opencode":
-        args = [cli, "run", "--agent", os.environ.get("OPENCODE_AGENT_JUEZ", "build")]
+        args = [cli, "run"]
+        if proyecto and _soporta_dir(cli):
+            args += ["--dir", proyecto]
+        args += ["--agent", os.environ.get("OPENCODE_AGENT_JUEZ", "build")]
         if modelo:
             args += ["--model", modelo]
         args.append(prompt)
@@ -84,7 +111,8 @@ def _invocar(agente, cli, prompt, modelo, timeout):
         args += os.environ.get("CLAUDE_FLAGS", "").split()
         args.append(prompt)
     try:
-        p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(args, capture_output=True, text=True,
+                           timeout=timeout, cwd=proyecto or None)
         return (p.stdout or "") + (p.stderr or ""), p.returncode
     except subprocess.TimeoutExpired:
         return "", 124
@@ -110,7 +138,8 @@ def run(env):
     if agente != "opencode":
         print(f"[GATE] juez: agente={agente} (MODELO_JUEZ no aplica a {agente})")
 
-    salida, rc = _invocar(agente, cli, _prompt(env, criterio), modelo, timeout)
+    salida, rc = _invocar(agente, cli, _prompt(env, criterio), modelo, timeout,
+                          getattr(env, "proyecto", "") or "")
     if rc == 124:
         env.aviso(f"juez agotó el timeout ({timeout}s); se omite (no bloqueante)")
         return 0

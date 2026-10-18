@@ -134,13 +134,26 @@ _juez_timeout() {
 # Invocation according to the judge's agent. The --model flag only exists in
 # opencode; codex and claude are configured on their own and do not accept the
 # flag, so MODELO_JUEZ is ignored for them.
+# `--dir` pins the judge to the project: without it, `opencode run` attaches to
+# an already-running opencode server and would evaluate ANOTHER repo (that
+# server's project), giving a verdict about the wrong tree. Only added when
+# this opencode build supports the flag.
+DIR_ARGS=()
+if [ "$AGENTE" = "opencode" ] && "$CLI" run --help 2>&1 | grep -q -- "--dir"; then
+    DIR_ARGS=(--dir "$PROYECTO_J")
+fi
+
 run_juez() {
     case "$AGENTE" in
         opencode)
             if [ -n "$MODELO_JUEZ" ]; then
-                _juez_timeout "$TIMEOUT_JUEZ" "$CLI" run --agent "$OPENCODE_AGENT" --model "$MODELO_JUEZ" "$PROMPT_JUEZ" 2>&1
+                _juez_timeout "$TIMEOUT_JUEZ" "$CLI" run \
+                    ${DIR_ARGS[@]+"${DIR_ARGS[@]}"} \
+                    --agent "$OPENCODE_AGENT" --model "$MODELO_JUEZ" "$PROMPT_JUEZ" 2>&1
             else
-                _juez_timeout "$TIMEOUT_JUEZ" "$CLI" run --agent "$OPENCODE_AGENT" "$PROMPT_JUEZ" 2>&1
+                _juez_timeout "$TIMEOUT_JUEZ" "$CLI" run \
+                    ${DIR_ARGS[@]+"${DIR_ARGS[@]}"} \
+                    --agent "$OPENCODE_AGENT" "$PROMPT_JUEZ" 2>&1
             fi
             ;;
         codex)

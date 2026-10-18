@@ -13,11 +13,15 @@ import json
 import os
 import re
 import shutil
+import subprocess
 
 from .loop_proceso import run_con_timeout
 from .loop_util import ahora_ms, logx
 
 UTC = datetime.timezone.utc
+
+# Cache of the `opencode run --dir` capability, per binary (probed once per process).
+_DIR_SOPORTADO = {}
 
 # HIGH-CONFIDENCE pattern of missing auth (no bare "401" nor
 # "unauthorized" in narrative). Same as sin_autenticacion().
@@ -67,6 +71,43 @@ def detectar_agente(cfg):
         if agente_ok(a, cfg):
             return a
     return ""
+
+
+def soporta_dir(binario):
+    """Does `opencode run` accept `--dir`? Probed once and cached per binary.
+
+    Without `--dir`, `opencode run` attaches to an already-running opencode
+    server and executes inside THAT server's directory (its project), ignoring
+    the cwd we pass: the agent would read and modify the wrong repository. With
+    `--dir <proyecto>` the run always targets the project we intend. Older
+    opencode builds lack the flag, so it is only added when the help lists it.
+    """
+    if binario in _DIR_SOPORTADO:
+        return _DIR_SOPORTADO[binario]
+    soportado = False
+    try:
+        p = subprocess.run([binario, "run", "--help"], capture_output=True,
+                           text=True, timeout=20)
+        soportado = "--dir" in (p.stdout or "") + (p.stderr or "")
+    except (OSError, subprocess.TimeoutExpired):
+        soportado = False
+    _DIR_SOPORTADO[binario] = soportado
+    return soportado
+
+
+def _argv_opencode(binario, cfg, subagente, modelo, prompt):
+    """argv for `opencode run`, pinning the working directory to the project.
+
+    Both the task agent and the reviewer go through here; the navigator builds
+    its own argv but follows the same rule.
+    """
+    args = [binario, "run", "--agent", subagente]
+    if soporta_dir(binario):
+        args += ["--dir", cfg.proyecto]
+    if modelo:
+        args += ["--model", modelo]
+    args.append(prompt)
+    return args
 
 
 def elegir_revisor(cfg):
@@ -193,14 +234,9 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion):
     claude_flags = (cfg.environ.get("CLAUDE_FLAGS") or "").split() \
         if agente == "claude" else []
     if agente == "opencode":
-        if modelo:
-            cmd = [binario, "run",
-                   "--agent", cfg.environ.get("OPENCODE_AGENT_TAREA") or "build",
-                   "--model", modelo, prompt]
-        else:
-            cmd = [binario, "run",
-                   "--agent", cfg.environ.get("OPENCODE_AGENT_TAREA") or "build",
-                   prompt]
+        cmd = _argv_opencode(
+            binario, cfg,
+            cfg.environ.get("OPENCODE_AGENT_TAREA") or "build", modelo, prompt)
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check",
                *flags, prompt]
@@ -237,9 +273,9 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
               "ENDPOINTS: GET /api/...\n"
               "MODELOS: Modulo.servicio")
     if agente == "opencode":
-        cmd = [binario, "run",
-               "--agent", cfg.environ.get("OPENCODE_AGENT_NAV") or "navigate",
-               "--model", modelo, prompt]
+        cmd = _argv_opencode(
+            binario, cfg,
+            cfg.environ.get("OPENCODE_AGENT_NAV") or "navigate", modelo, prompt)
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check", prompt]
     elif agente == "claude":

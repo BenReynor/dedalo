@@ -305,6 +305,25 @@ cli_agente() {
     esac
 }
 
+# `--dir <PROYECTO>` pins an opencode run to this project's directory. Without
+# it, `opencode run` attaches to an already-running opencode server and works
+# inside THAT server's project (the wrong repository), so the agent would read
+# and edit the wrong tree. Only used when the installed build advertises the
+# flag; the probe result is cached in _OPENCODE_DIR.
+_OPENCODE_DIR=""
+opencode_dir_ok() {
+    if [ -z "$_OPENCODE_DIR" ]; then
+        local bin
+        bin="$(cli_agente opencode)"
+        if [ -n "$bin" ] && "$bin" run --help 2>&1 | grep -q -- "--dir"; then
+            _OPENCODE_DIR="1"
+        else
+            _OPENCODE_DIR="0"
+        fi
+    fi
+    [ "$_OPENCODE_DIR" = "1" ]
+}
+
 agente_ok() {
     local bin
     bin="$(cli_agente "$1")" || return 1
@@ -520,12 +539,16 @@ run_agente() {
     local salida_err="${salida}.err"
     case "$agente" in
         opencode)
+            local -a dir_args=()
+            opencode_dir_ok && dir_args=(--dir "$PROYECTO")
             if [ -n "$modelo" ]; then
                 ejecutar_esperando _timeout "$TIMEOUT_POR_TAREA" "$bin" run \
+                    ${dir_args[@]+"${dir_args[@]}"} \
                     --agent "${OPENCODE_AGENT_TAREA:-build}" --model "$modelo" "$@" \
                     > "$salida" 2> "$salida_err"
             else
                 ejecutar_esperando _timeout "$TIMEOUT_POR_TAREA" "$bin" run \
+                    ${dir_args[@]+"${dir_args[@]}"} \
                     --agent "${OPENCODE_AGENT_TAREA:-build}" "$@" \
                     > "$salida" 2> "$salida_err"
             fi
@@ -613,7 +636,10 @@ MODELOS: Modulo.servicio"
     local salida_err="${salida}.err"
     case "$agente" in
         opencode)
+            local -a nav_dir=()
+            opencode_dir_ok && nav_dir=(--dir "$PROYECTO")
             ejecutar_esperando _timeout "$TIMEOUT_NAVEGADOR" "$bin" run \
+                ${nav_dir[@]+"${nav_dir[@]}"} \
                 --agent "${OPENCODE_AGENT_NAV:-navigate}" --model "$modelo" "$prompt" \
                 > "$salida" 2> "$salida_err"
             rc=$?
