@@ -53,6 +53,7 @@ def test_proyecto_desconocido_no_corre(aislado):
     assert le.estado("no-existe")["corriendo"] is False
 
 
+@pytest.mark.skipif(not le._POSIX, reason="fcntl/flock is POSIX-only")
 def test_lock_es_exclusivo(aislado):
     h1 = le.adquirir("p1")
     assert h1 is not None
@@ -62,6 +63,15 @@ def test_lock_es_exclusivo(aislado):
     h2 = le.adquirir("p1")
     assert h2 is not None
     le.liberar(h2)
+
+
+@pytest.mark.skipif(le._POSIX, reason="on POSIX the real lock is used")
+def test_lock_degradado_sin_flock(aislado):
+    """Without fcntl there is no real lock: it degrades to SIN_LOCK (truthy)."""
+    h1 = le.adquirir("p1")
+    h2 = le.adquirir("p1")
+    assert h1 is le.SIN_LOCK and h2 is le.SIN_LOCK
+    le.liberar(h1)
 
 
 def test_lock_por_nombre_es_independiente(aislado):
