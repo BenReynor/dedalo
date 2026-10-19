@@ -16,6 +16,11 @@ import pytest
 
 from tests.test_portabilidad import RAIZ
 
+# acceso.sh installs a Linux desktop shortcut (.desktop + xdg-user-dir): the
+# script makes no sense on Windows and Git Bash cannot run it there.
+pytestmark = pytest.mark.skipif(os.name == "nt",
+                                reason="Linux desktop shortcut installer")
+
 
 def _proyecto(base, nombre, version):
     """Fake checkout: the launcher only needs the markers and lanzar.sh."""
