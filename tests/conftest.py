@@ -18,6 +18,46 @@ import pytest  # noqa: E402
 from PySide6.QtCore import QCoreApplication, QEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from dedalo import configuracion as cfg  # noqa: E402
+from dedalo import consentimiento, loops_estado  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def config_aislada(tmp_path):
+    """Never let the suite touch the user's real `~/.config/dedalo`.
+
+    A GUI test (`test_quitar_proyecto_sin_ruta`) drives the real
+    `_quitar_proyecto()`, which saves the project list through
+    `proyectos.guardar()`. Without this redirection, running the suite deleted
+    the developer's `proyectos.json` (projects, models and webhook settings
+    included) — and the same for `loops.json` and `confianza.json`, which are
+    written just as silently.
+
+    Each test gets its own directory; the model catalog is symlinked so that
+    listing models keeps working offline.
+    """
+    real = cfg.CONFIG_DIR
+    aislado = str(tmp_path)
+    catalogo = os.path.join(real, "models_dev.json")
+    if os.path.exists(catalogo):
+        try:
+            os.symlink(catalogo, os.path.join(aislado, "models_dev.json"))
+        except OSError:
+            pass
+    cfg.CONFIG_DIR = aislado
+    cfg.REGISTRO = os.path.join(aislado, "proyectos.json")
+    cfg.CATALOGO_MODELOS = os.path.join(aislado, "models_dev.json")
+    consentimiento.CONFIG_DIR = aislado
+    loops_estado.RUTA = os.path.join(aislado, "loops.json")
+    loops_estado._RUTA_LEGACY = os.path.join(aislado, "mcp_loops.json")
+    yield
+    cfg.CONFIG_DIR = real
+    cfg.REGISTRO = os.path.join(real, "proyectos.json")
+    cfg.CATALOGO_MODELOS = os.path.join(real, "models_dev.json")
+    consentimiento.CONFIG_DIR = real
+    loops_estado.RUTA = os.path.join(real, "loops.json")
+    loops_estado._RUTA_LEGACY = os.path.join(real, "mcp_loops.json")
+
 
 def _drenar(app):
     """Collects cycles and drains Qt's deferred-delete queue."""
