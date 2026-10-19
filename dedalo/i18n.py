@@ -330,6 +330,8 @@ _ES: dict[str, str] = {
     "⚠ git not available: check that it is installed and your identity is configured (git config user.name/user.email)":
         "⚠ git no disponible: comprueba que está instalado y tu identidad configurada (git config user.name/user.email)",
     "✅ Loop finished": "✅ Loop finalizado",
+    "✅ Task completed (gate and reviewer passed)":
+        "✅ Tarea completada (gate y revisor OK)",
     "✓ .gitignore updated and {salidos} files stopped being tracked (left uncommitted; commit in the project's repo if you want to persist it)":
         "✓ .gitignore actualizado y {salidos} ficheros dejaron de rastrearse (quedan sin commitear; haz commit en el repo del proyecto si quieres persistirlo)",
     "✓ Approve and commit": "✓ Aprobar y commitear",
@@ -354,6 +356,10 @@ _ES: dict[str, str] = {
     "🔍 Automatic Navigator (finds context before each task)":
         "🔍 Navegador automático (busca contexto antes de cada tarea)",
     "🔔 Notifications": "🔔 Notificaciones",
+    "One message per task that ends green, with its commit.":
+        "Un mensaje por cada tarea que termina en verde, con su commit.",
+    "Only for loops launched outside the panel (MCP tools or command line).":
+        "Solo para loops lanzados fuera del panel (herramientas MCP o línea de comandos).",
     "🔥 Shut down due to overheating": "🔥 Apagado por sobrecalentamiento",
     "🔥 Shut down due to overheating. See you later.":
         "🔥 Apagado por sobrecalentamiento. Hasta luego.",
@@ -362,6 +368,7 @@ _ES: dict[str, str] = {
     "🗑 Clear": "🗑 Limpiar",
     "🗺 Map": "🗺 Mapa",
     "🚀 Loop started": "🚀 Loop iniciado",
+    "🚀 Started from MCP / CLI": "🚀 Iniciado por MCP / CLI",
     "🛡 Security": "🛡 Seguridad",
     "🟢 Internet: OK": "🟢 Internet: OK",
     "🧠 Lessons": "🧠 Lecciones",

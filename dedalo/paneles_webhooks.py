@@ -164,16 +164,23 @@ class PanelWebhooks(QWidget):
 
         self.chk_eventos = {}
         eventos = [
-            ("inicio", t("🚀 Loop started")),
-            ("bloqueada", t("⚠ Task blocked")),
-            ("fin", t("✅ Loop finished")),
-            ("tokens", t("💸 Tokens exhausted")),
-            ("error", t("💥 Critical error")),
+            ("inicio", t("🚀 Loop started"), ""),
+            ("externo", t("🚀 Started from MCP / CLI"),
+             t("Only for loops launched outside the panel "
+               "(MCP tools or command line).")),
+            ("tarea", t("✅ Task completed (gate and reviewer passed)"),
+             t("One message per task that ends green, with its commit.")),
+            ("bloqueada", t("⚠ Task blocked"), ""),
+            ("fin", t("✅ Loop finished"), ""),
+            ("tokens", t("💸 Tokens exhausted"), ""),
+            ("error", t("💥 Critical error"), ""),
         ]
         evt_config = self.config.get("eventos", {})
-        for i, (key, label) in enumerate(eventos):
+        for i, (key, label, ayuda) in enumerate(eventos):
             chk = QCheckBox(label)
             chk.setChecked(evt_config.get(key, True))
+            if ayuda:
+                chk.setToolTip(ayuda)
             gev.addWidget(chk, i // 3, i % 3)
             self.chk_eventos[key] = chk
 

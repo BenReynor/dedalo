@@ -29,7 +29,7 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, loops_estado, net
+from . import consentimiento, loops_estado, net, notificaciones
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
@@ -254,6 +254,16 @@ def restaurar_gate(dir_backup, cfg):
         shutil.copytree(backup_checks, os.path.join(cfg.proyecto, "gate_checks"))
 
 
+def _notificar(cfg, evento, **datos):
+    """Push notification for the project. Never raises: it must not stop the loop."""
+    try:
+        notificaciones.enviar(
+            evento, {"proyecto": cfg.nombre or os.path.basename(cfg.proyecto),
+                     **datos})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _run_gate(cfg, criterio):
     """`python -m dedalo.gate 2>&1 | tee "$GATE_OUT"`.
 
@@ -408,6 +418,11 @@ def run(cfg):
         return 2
 
     cfg.revisor = elegir_revisor(cfg)
+    inicio_run = time.time()
+    if cfg.origen != "gui":
+        _notificar(cfg, "externo", origen=cfg.origen,
+                   modelo_tarea=cfg.modelo_tarea or "auto",
+                   modelo_revisor=cfg.modelo_revisor or "ninguno")
     logx(cfg.log,
          f"== DEDALO INICIADO (agente={cfg.agente_tarea}, "
          f"modelo={cfg.modelo_tarea}, revisor={cfg.revisor or 'ninguno'}, "
@@ -791,10 +806,12 @@ def run(cfg):
 
         if hecho == 1:
             nuevos, _b = cambios_entre(before, after)
+            commit_msg = ""
             if nuevos:
                 subj = "dedalo: " + tarea[:40]
                 rc_c = commit_tarea(cfg.proyecto, nuevos, subj, tarea)
                 if rc_c == 0:
+                    commit_msg = subj
                     logx(cfg.log, f"commit en {rama_tarea}: {subj}")
                     print(f"[dedalo] ✔ commit: {subj}")
                 else:
@@ -810,6 +827,10 @@ def run(cfg):
                 _mapear(cfg)
                 logx(cfg.log, f"mapeo.txt actualizado tras {tarea}")
                 _marcar(cfg, "x")
+                _notificar(cfg, "tarea", tarea=tarea, iteracion=iteracion,
+                           rama=rama_run,
+                           commit=(f"\nCommit: `{commit_msg}`"
+                                   if commit_msg else ""))
             else:
                 mensaje(cfg, f"[dedalo] ⚠ merge fallido; rama {rama_tarea} "
                              "conservada y tarea marcada [B].")
@@ -832,6 +853,7 @@ def run(cfg):
             borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
             revertir(cfg.proyecto)
             _marcar(cfg, "B")
+            _notificar(cfg, "bloqueada", tarea=tarea)
             logx(cfg.log, f"tarea BLOQUEADA: {tarea} (rama {rama_tarea} "
                           "descartada)")
             print(f"[dedalo] ✗ tarea bloqueada tras {cfg.max_reintentos} "
@@ -911,6 +933,16 @@ def run(cfg):
     print("\n".join(_leer(cfg.log).splitlines()[-25:]))
     logx(cfg.log, f"== DEDALO FINALIZADO (iter={iteracion}, "
                   f"rama={rama_run}, costo≈{costo_total}) ==")
+    if cfg.origen != "gui":
+        try:
+            p_plan = Plan(cfg.plan_md)
+            p_plan.cargar()
+            pend, hechas, bloqueadas = p_plan.conteo()
+        except Exception:  # noqa: BLE001
+            pend = hechas = bloqueadas = 0
+        _notificar(cfg, "fin", hechas=hechas, total=pend + hechas + bloqueadas,
+                   coste=float(costo_total),
+                   duracion_min=(time.time() - inicio_run) / 60.0)
     alerta(cfg.voz, "Dédalo finalizado")
     return 0
 

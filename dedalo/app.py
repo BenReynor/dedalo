@@ -1162,8 +1162,8 @@ class Ventana(QMainWindow):
         except Exception:
             pass
 
-        # Webhook: blocked
-        self._webhook_enviar("bloqueada", {"tarea": tarea})
+        # The `bloqueada` webhook is sent by the engine (loop.py): it also
+        # covers loops started by MCP/CLI, which this window never sees.
 
     def _comprobar_revision_pendiente(self):
         """Detects whether dedalo.sh is waiting for a manual review."""
