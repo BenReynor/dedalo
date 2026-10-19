@@ -117,6 +117,9 @@ class Ventana(QMainWindow):
 
         self.loop = None
         self.gate = None
+        # Mirrors a loop started outside this GUI (MCP/CLI); read by
+        # _refrescar_loop_externo() before the first status sync.
+        self._loop_externo = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tail_log)
         self.timer_temp = QTimer(self)
