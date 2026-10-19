@@ -58,8 +58,32 @@ set -euo pipefail
 
 BASES=("$HOME/Escritorio" "$HOME/Desktop" "$HOME/Documentos" "$HOME")
 
+# Version of a checkout: `version = "x.y.z"` in its pyproject.toml (0 if absent).
+version_de() {
+    local f="$1/pyproject.toml" v
+    [ -f "$f" ] || { printf '0\n'; return; }
+    v="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$f" | head -n 1)"
+    printf '%s\n' "${v:-0}"
+}
+
+# Prints 1 when the first version is greater than the second.
+version_mayor() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, A, "."); m = split(b, B, ".")
+        k = (n > m ? n : m)
+        for (i = 1; i <= k; i++) {
+            x = A[i] + 0; y = B[i] + 0
+            if (x > y) { print 1; exit }
+            if (x < y) { print 0; exit }
+        }
+        print 0
+    }'
+}
+
+# With several checkouts on disk (e.g. an old copy kept around) prefer the
+# newest version instead of whichever `find` happens to list first.
 buscar_proyecto() {
-    local base dir proy
+    local base dir proy v mejor="" mejor_v=""
     for base in "${BASES[@]}"; do
         [ -d "$base" ] || continue
         while IFS= read -r dir; do
@@ -69,14 +93,18 @@ buscar_proyecto() {
             [ -f "$dir/__init__.py" ] || continue
             [ -f "$dir/icono.svg" ] || continue
             proy="$(dirname "$dir")"
-            
-            printf '%s\n' "$proy"
-            return 0
+            v="$(version_de "$proy")"
+            if [ -z "$mejor" ] || [ "$(version_mayor "$v" "$mejor_v")" = "1" ] \
+                    || { [ "$v" = "$mejor_v" ] && [ "$proy" -nt "$mejor" ]; }; then
+                mejor="$proy"
+                mejor_v="$v"
+            fi
         done < <(
             find "$base" -maxdepth 6 -type d -name dedalo -print 2>/dev/null
         )
     done
-    return 1
+    [ -n "$mejor" ] || return 1
+    printf '%s\n' "$mejor"
 }
 
 if ! PROYECTO="$(buscar_proyecto)"; then
