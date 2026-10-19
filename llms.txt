@@ -3,7 +3,7 @@
 > Graphical control panel (PySide6) for orchestrating AI agents
 > (opencode, codex, claude) that iterate on tasks from a `plan.md`, run
 > tests (`gate.sh`), request code review and commit automatically.
-> Supports Linux, macOS and Windows, and exposes an MCP server (pilot agent).
+> Supports Linux (validated), macOS and Windows (CI-tested, not yet validated by hand), and exposes an MCP server (pilot agent).
 
 This file summarizes, for a language model, what the project is and where
 each thing lives. We prefer you cite the technical spec as the source of truth.

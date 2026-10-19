@@ -5,7 +5,7 @@
 [![Latest release](https://img.shields.io/github/v/release/BenReynor/dedalo?sort=semver&color=blue)](https://github.com/BenReynor/dedalo/releases)
 [![License: MIT](https://img.shields.io/github/license/BenReynor/dedalo?color=green)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-informational)](#-compatibility)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20tested%20%7C%20macOS%20%26%20Windows%20untested-informational)](#-compatibility)
 
 Orchestrates AI agents (opencode, codex, claude) to iterate over tasks in `plan.md`, run tests, request code review, and commit automatically.
 
@@ -241,11 +241,19 @@ is kept as a reference and for manual runs in a POSIX terminal.
 
 ## 🖥️ Compatibility
 
+> **Only Linux has been validated by hand.** The full suite runs in CI on Linux,
+> macOS and Windows (headless), and the release workflow builds and boots the
+> packaged app on each platform. But Dédalo has not been used day to day on a
+> real Mac or a real Windows machine: the desktop shortcut, the tray, the
+> thermal sensor and unattended loop runs have only been exercised on Linux.
+> Treat macOS and Windows as **untested in practice** and report whatever
+> breaks.
+
 | OS | Status |
 |----|--------|
-| **Linux** | ✅ Works. It's the reference environment and where CI runs. |
-| **macOS** | ⚠️ Partial. No longer requires GNU coreutils: `timeout` → `_timeout` (GNU/gtimeout/bash fallback returning 124) and `sed -i "0,/…/"` → `marcar_plan` (awk+cat, preserves permissions), with tests that prevent regressions. Remaining: the thermal sensor (`/sys/class/thermal`, Linux-only; degrades to "no data") and validation on a real Mac plus the `.dmg`. |
-| **Windows** | ✅ Native GUI + loop + gate. Both the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are Python engines that the GUI launches with its own interpreter: **Git Bash is no longer required** (PATH via `os.pathsep`, CLIs with `.exe`/`.cmd` suffix, suite in CI on `windows-latest`). The gate runs the `*.py` checks in `gate_checks/` and, if bash is available, prefers the equivalent `*.sh`. Bash remains only for the project map (`mapear.sh`) and the optional bash engine (`dedalo.sh`). |
+| **Linux** | ✅ **Tested.** Reference environment: daily use plus the CI suite. |
+| **macOS** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `macos-latest` (arm64) and the `.dmg` is built, and the known GNU-isms are gone (`timeout` → `_timeout` with a 124 fallback; `sed -i "0,/…/"` → `marcar_plan` in awk+cat, preserving permissions). Not exercised by hand: the thermal sensor is Linux-only (`/sys/class/thermal`, it degrades to "no data") and the `.dmg` is unsigned. |
+| **Windows** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is still needed for the project map (`mapear.sh`) and the optional bash engine (`dedalo.sh`). |
 
 What's already OS-independent: the line endings of `.sh` files
 (`.gitattributes` forces `eol=lf`, so a `clone` on Windows with `autocrlf`

@@ -22,7 +22,7 @@ depend on the GUI: it can be driven from the CLI or over MCP.
 | Requirement | Value |
 |-----------|-------|
 | Python | ≥ 3.10 |
-| Operating system | Linux (reference), macOS (arm64), native Windows (WSL2/Git Bash not needed) |
+| Operating system | Linux (reference, validated by hand), macOS (arm64) and native Windows (CI-tested only, not validated on real hardware) |
 | Graphical interface | Qt (X11/Wayland on Linux, native on macOS/Windows) |
 | Network | Outbound only (model API, remote `git`, webhooks); opens no ports |
 
