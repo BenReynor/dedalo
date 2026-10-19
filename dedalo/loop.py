@@ -29,7 +29,7 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, loops_estado, net, notificaciones
+from . import consentimiento, loops_estado, net, notificaciones, rutas
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
@@ -75,14 +75,14 @@ class Config:
         self.environ = env
         self.proyecto = str(proyecto) if proyecto else os.getcwd()
         self.plan_md = args.plan
-        self.gate = os.path.join(self.proyecto, "gate.sh")
-        self.mapear = os.path.join(self.proyecto, "mapear.sh")
-        self.mapa = os.path.join(self.proyecto, "mapeo.txt")
-        self.log = os.path.join(self.proyecto, "progreso.log")
-        self.lecciones = os.path.join(self.proyecto, "lecciones.md")
-        self.contexto = os.path.join(self.proyecto, "CONTEXTO.md")
-        self.incidencias = os.path.join(self.proyecto, "incidencias.jsonl")
-        self.metrics = os.path.join(self.proyecto, "metrics.jsonl")
+        self.gate = rutas.gate_sh(self.proyecto)
+        self.mapear = rutas.mapear_sh(self.proyecto)
+        self.mapa = rutas.mapeo(self.proyecto)
+        self.log = rutas.log(self.proyecto)
+        self.lecciones = rutas.proyecto_archivo(self.proyecto, "lecciones.md")
+        self.contexto = rutas.proyecto_archivo(self.proyecto, "CONTEXTO.md")
+        self.incidencias = rutas.incidencias(self.proyecto)
+        self.metrics = rutas.metrics(self.proyecto)
         self.ultimo_motivo = None  # dict of the last failure of the current task
 
         self.max_iter = int(env.get("MAX_ITER", "40"))
@@ -210,7 +210,7 @@ def backup_gate(cfg):
     dir_backup = tempfile.mkdtemp(prefix="dedalo-gate-")
     if os.path.exists(cfg.gate):
         shutil.copyfile(cfg.gate, os.path.join(dir_backup, "gate.sh"))
-    src = os.path.join(cfg.proyecto, "gate_checks")
+    src = rutas.gate_checks(cfg.proyecto)
     if os.path.isdir(src):
         shutil.copytree(src, os.path.join(dir_backup, "gate_checks"))
     return dir_backup
@@ -224,7 +224,7 @@ def gate_intacto(dir_backup, cfg):
     if os.path.exists(cfg.gate) and not filecmp.cmp(
             cfg.gate, backup_gate_sh, shallow=False):
         return False
-    proyecto_checks = os.path.join(cfg.proyecto, "gate_checks")
+    proyecto_checks = rutas.gate_checks(cfg.proyecto)
     backup_checks = os.path.join(dir_backup, "gate_checks")
     if not os.path.isdir(backup_checks):
         return True
@@ -249,9 +249,9 @@ def restaurar_gate(dir_backup, cfg):
         shutil.copyfile(backup_gate_sh, cfg.gate)
     backup_checks = os.path.join(dir_backup, "gate_checks")
     if os.path.isdir(backup_checks):
-        shutil.rmtree(os.path.join(cfg.proyecto, "gate_checks"),
-                      ignore_errors=True)
-        shutil.copytree(backup_checks, os.path.join(cfg.proyecto, "gate_checks"))
+        destino = rutas.gate_checks(cfg.proyecto)
+        shutil.rmtree(destino, ignore_errors=True)
+        shutil.copytree(backup_checks, destino)
 
 
 def _notificar(cfg, evento, **datos):
@@ -1058,7 +1058,7 @@ def _esperar_revision_manual(cfg, tarea):
     (aborts the run like the script's `exit 4`)."""
     if cfg.revision_manual != "1":
         return 0
-    dir_rev = os.path.join(cfg.proyecto, ".dedalo_review")
+    dir_rev = rutas.dir_review(cfg.proyecto)
     os.makedirs(dir_rev, exist_ok=True)
     _, diff_all, _ = run_git(cfg.proyecto, "diff", "--stat")
     _, diff_full, _ = run_git(cfg.proyecto, "diff")

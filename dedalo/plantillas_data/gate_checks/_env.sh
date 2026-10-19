@@ -23,10 +23,25 @@
 
 if [ -z "${PROYECTO:-}" ] || [ "$PROYECTO" = "" ]; then
     PROYECTO="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+    # <proyecto>/.dedalo/scripts/gate_checks/_env.sh (new) or
+    # <proyecto>/gate_checks/_env.sh (legacy)
     [ "$(basename "$PROYECTO")" = "gate_checks" ] && PROYECTO="$(dirname "$PROYECTO")"
+    if [ "$(basename "$PROYECTO")" = "scripts" ] && \
+       [ "$(basename "$(dirname "$PROYECTO")")" = ".dedalo" ]; then
+        PROYECTO="$(dirname "$(dirname "$PROYECTO")")"
+    fi
     PROYECTO="${PROYECTO:-$(pwd)}"
 fi
-export PROYECTO
+if [ -d "$PROYECTO/.dedalo" ]; then
+    SCRIPTS_DIR="${SCRIPTS_DIR:-$PROYECTO/.dedalo/scripts}"
+    ESTADO_DIR="${ESTADO_DIR:-$PROYECTO/.dedalo/estado}"
+    REVIEW_DIR="${REVIEW_DIR:-$PROYECTO/.dedalo/review}"
+else
+    SCRIPTS_DIR="${SCRIPTS_DIR:-$PROYECTO}"
+    ESTADO_DIR="${ESTADO_DIR:-$PROYECTO}"
+    REVIEW_DIR="${REVIEW_DIR:-$PROYECTO/.dedalo_review}"
+fi
+export PROYECTO SCRIPTS_DIR ESTADO_DIR REVIEW_DIR
 
 # ---- Backend / Frontend ----
 BACKEND_DIR="${BACKEND_DIR:-}"

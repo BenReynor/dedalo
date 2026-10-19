@@ -10,6 +10,8 @@ import re
 from datetime import datetime
 from typing import Any
 
+from . import rutas
+
 # Timestamp format in log: [YYYY-MM-DD HH:MM:SS]
 TIMESTAMP_RE = r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]"
 
@@ -282,7 +284,7 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
 
 def _leer_metrics_jsonl(ruta_proyecto: str) -> list[dict]:
     """Reads metrics.jsonl and returns a list of dicts with real metrics per agent call."""
-    ruta = os.path.join(ruta_proyecto, "metrics.jsonl")
+    ruta = rutas.metrics(ruta_proyecto)
     if not os.path.isfile(ruta):
         return []
     out = []

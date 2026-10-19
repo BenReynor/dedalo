@@ -32,6 +32,7 @@ from . import (
     net,
     plantillas,
     proyectos,
+    rutas,
 )
 from .gate import argv_gate
 
@@ -152,7 +153,13 @@ def _leer_jsonl(ruta):
 
 
 def _ruta_de_fichero(nombre, fichero):
-    return os.path.join(_ruta_de(nombre), fichero)
+    """Resolves a project file to its current location (`.dedalo/` or legacy)."""
+    proyecto = _ruta_de(nombre)
+    if fichero in rutas.PROYECTO or fichero == ".gitignore":
+        return rutas.proyecto_archivo(proyecto, fichero)
+    if fichero in rutas.ESTADO_LEGACY:
+        return rutas.estado(proyecto, fichero)
+    return os.path.join(proyecto, fichero)
 
 
 def _estado_loop(nombre):
@@ -163,7 +170,7 @@ def _estado_loop(nombre):
     GUI (not just this process's own children).
     """
     est = loops_estado.estado(nombre)
-    fondo = os.path.join(_ruta_de(nombre), ".dedalo_review")
+    fondo = rutas.dir_review(_ruta_de(nombre))
     pendiente = os.path.isfile(os.path.join(fondo, "waiting"))
     tarea = ""
     tarea_ruta = os.path.join(fondo, "tarea.txt")
@@ -200,11 +207,11 @@ def estado_proyecto(nombre: str) -> str:
     """Summary of a project: plan, lessons, context and loop state."""
     ruta = _ruta_de(nombre)
     from .plan import Plan as _Plan
-    p = _Plan(os.path.join(ruta, "plan.md"))
+    p = _Plan(rutas.proyecto_archivo(ruta, "plan.md"))
     p.cargar()
     pend, hechas, bloq = p.conteo()
-    lecciones = os.path.join(ruta, "lecciones.md")
-    contexto = os.path.join(ruta, "CONTEXTO.md")
+    lecciones = rutas.proyecto_archivo(ruta, "lecciones.md")
+    contexto = rutas.proyecto_archivo(ruta, "CONTEXTO.md")
     return json.dumps({
         "nombre": nombre,
         "ruta": ruta,
@@ -245,7 +252,7 @@ def leer_incidencias(nombre: str, limite: int = 50) -> str:
 
 
 def _leer_incidencias(nombre, limite):
-    ruta = os.path.join(_ruta_de(nombre), "incidencias.jsonl")
+    ruta = _ruta_de_fichero(nombre, "incidencias.jsonl")
     incidencias = _leer_jsonl(ruta)
     for inc in incidencias:
         inc.pop("_crudo", None)
@@ -255,7 +262,7 @@ def _leer_incidencias(nombre, limite):
 def resumen_metricas(nombre: str) -> str:
     """Project metrics summary (progreso.log + metrics.jsonl)."""
     from .metricas import parsear_log as _parsear
-    ruta = os.path.join(_ruta_de(nombre), "progreso.log")
+    ruta = _ruta_de_fichero(nombre, "progreso.log")
     datos = _parsear(ruta)
     return json.dumps({
         "resumen": datos.get("resumen", {}),
@@ -265,7 +272,7 @@ def resumen_metricas(nombre: str) -> str:
 
 def cola_log(nombre: str, lineas: int = 60) -> str:
     """Last `lineas` lines of progreso.log."""
-    ruta = os.path.join(_ruta_de(nombre), "progreso.log")
+    ruta = _ruta_de_fichero(nombre, "progreso.log")
     if not os.path.isfile(ruta):
         return ""
     return _cola(_leer_fichero(nombre, "progreso.log"), lineas)
@@ -393,7 +400,7 @@ def resolver_revision(nombre: str, decision: str, motivo: str = "") -> str:
     decision = decision.strip().upper()
     if decision not in ("APPROVE", "REJECT"):
         raise ValueError("decision debe ser APPROVE o REJECT")
-    fondo = os.path.join(_ruta_de(nombre), ".dedalo_review")
+    fondo = rutas.dir_review(_ruta_de(nombre))
     os.makedirs(fondo, exist_ok=True)
     texto = ("APPROVE" if decision == "APPROVE"
              else "REJECT " + (motivo or "").strip()) + "\n# origen=mcp\n"

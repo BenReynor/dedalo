@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 
-from . import gate_env
+from . import gate_env, rutas
 
 
 def _proteger_salidas():
@@ -60,7 +60,7 @@ def argv_gate(frozen=None):
 
 def _grupos(proyecto):
     """Groups gate_checks by prefix. None if the directory does not exist."""
-    dir_checks = os.path.join(proyecto, "gate_checks")
+    dir_checks = rutas.gate_checks(proyecto)
     if not os.path.isdir(dir_checks):
         return None
     grupos = {}
@@ -108,7 +108,7 @@ def _correr_py(check, entorno):
 
 def _correr_sh(proyecto, check, bash):
     """Runs a .sh check with bash, sourcing _env.sh first (like gate.sh)."""
-    env_sh = os.path.join(proyecto, "gate_checks", "_env.sh")
+    env_sh = os.path.join(rutas.gate_checks(proyecto), "_env.sh")
     partes = []
     if os.path.isfile(env_sh):
         partes.append(f'source "{env_sh}"')
@@ -140,7 +140,7 @@ def correr(proyecto, bash=None):
         bash = shutil.which("bash")
     grupos = _grupos(proyecto)
     if grupos is None:
-        print(f"[GATE] ⚠ No existe {os.path.join(proyecto, 'gate_checks')} — "
+        print(f"[GATE] ⚠ No existe {rutas.gate_checks(proyecto)} — "
               "se asume OK")
         return 0
     if not grupos:

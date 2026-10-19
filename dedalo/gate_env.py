@@ -17,6 +17,8 @@ import subprocess
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from . import rutas
+
 
 def _es_local(url):
     """True if `url` points at the local machine (where the dev server runs)."""
@@ -204,7 +206,7 @@ def _python_de(base):
 
 def _endpoints(proyecto, endpoints):
     """endpoints.txt in the root wins; otherwise, the ENDPOINTS list."""
-    ruta = os.path.join(proyecto, "endpoints.txt")
+    ruta = rutas.endpoints(proyecto)
     if os.path.isfile(ruta):
         with open(ruta, encoding="utf-8", errors="replace") as f:
             lineas = f.read().splitlines()

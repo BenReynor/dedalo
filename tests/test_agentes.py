@@ -823,7 +823,11 @@ def test_json_de_metrice_es_una_linea(tmp_path):
     """run_agente writes metrics.jsonl with one JSON line per call."""
     r = _harness_run_agente(tmp_path, 'echo "hecho"\n')
     assert r.returncode == 0, r.stderr
-    metricas = tmp_path / "metrics.jsonl"
+    from pathlib import Path
+
+    from dedalo import rutas
+
+    metricas = Path(rutas.metrics(tmp_path))
     lineas = [x for x in metricas.read_text().splitlines() if x.strip()]
     assert len(lineas) == 1
     reg = json.loads(lineas[0])

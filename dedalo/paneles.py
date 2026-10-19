@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import configuracion as cfg
-from . import modelos, plan
+from . import modelos, plan, rutas
 from .i18n import t
 from .modelos import PROVEEDORES_CATALOGO
 from .paneles_webhooks import PanelWebhooks
@@ -969,6 +969,7 @@ class PanelMapa(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._ruta = None
+        self._proyecto = None
         v = QVBoxLayout(self)
         v.setSpacing(8)
         v.setContentsMargins(0, 0, 0, 0)
@@ -992,7 +993,11 @@ class PanelMapa(QWidget):
         h.addWidget(b_regenerar)
         v.addLayout(h)
 
-    def cargar(self, ruta=None):
+    def cargar(self, ruta=None, proyecto=None):
+        if proyecto is not None:
+            self._proyecto = proyecto
+        elif ruta is None:
+            self._proyecto = None
         if ruta is not None:
             self._ruta = ruta or None
         if not self._ruta or not os.path.isfile(self._ruta):
@@ -1008,13 +1013,20 @@ class PanelMapa(QWidget):
         if not self._ruta:
             return
         import subprocess
-        dir_proy = os.path.dirname(self._ruta)
-        mapear_sh = os.path.join(dir_proy, "mapear.sh")
+        dir_proy = self._proyecto or os.path.dirname(self._ruta)
+        mapear_sh = rutas.mapear_sh(dir_proy)
         if not os.path.isfile(mapear_sh):
             self.lbl_estado.setText(t("mapear.sh not found in the project"))
             return
         try:
-            subprocess.run(["bash", mapear_sh], cwd=dir_proy, check=True, capture_output=True)
+            salida = subprocess.run(["bash", mapear_sh], cwd=dir_proy,
+                                    check=True, capture_output=True, text=True)
+            # The bundled mapear.sh prints the map; a custom one may write the
+            # file itself (as before), so only overwrite it with real output.
+            if salida.stdout.strip():
+                os.makedirs(os.path.dirname(self._ruta) or ".", exist_ok=True)
+                with open(self._ruta, "w", encoding="utf-8") as f:
+                    f.write(salida.stdout)
             self.cargar()
             self.lbl_estado.setText(
                 t("mapeo.txt regenerated ({ruta})", ruta=self._ruta))

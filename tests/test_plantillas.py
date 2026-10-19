@@ -9,7 +9,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dedalo import plantillas
+from dedalo import plantillas, rutas
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYPROJECT = os.path.join(RAIZ, "pyproject.toml")
@@ -177,15 +177,16 @@ def test_instalar_propaga_checks_nuevos_sin_pisar_custom():
     try:
         plantillas.instalar(tmp)
         # The user creates their own check with content different from the template
-        custom = os.path.join(tmp, "gate_checks", "99_custom.sh")
+        custom = os.path.join(rutas.gate_checks(tmp), "99_custom.sh")
         with open(custom, "w", encoding="utf-8") as f:
             f.write("echo 'check custom'\n")
         # "Old" project: without the new template check
-        os.remove(os.path.join(tmp, "gate_checks", "98_criterio.sh"))
+        os.remove(os.path.join(rutas.gate_checks(tmp), "98_criterio.sh"))
 
         creados = plantillas.instalar(tmp)
 
-        assert "gate_checks/98_criterio.sh" in creados, "check nuevo se propaga"
+        assert ".dedalo/scripts/gate_checks/98_criterio.sh" in creados, (
+            "check nuevo se propaga")
         with open(custom, encoding="utf-8") as f:
             assert f.read() == "echo 'check custom'\n", "custom no se sobreescribe"
     finally:
@@ -200,10 +201,10 @@ def test_actualizar_no_toca_gate_checks_custom():
         plantillas.instalar(tmp)
 
         # Customize a check and force a difference in dedalo.sh
-        custom = os.path.join(tmp, "gate_checks", "99_custom.sh")
+        custom = os.path.join(rutas.gate_checks(tmp), "99_custom.sh")
         with open(custom, "w", encoding="utf-8") as f:
             f.write("echo 'check custom'\n")
-        script = os.path.join(tmp, "dedalo.sh")
+        script = rutas.dedalo_sh(tmp)
         with open(script, encoding="utf-8") as f:
             original = f.read()
         with open(script, "w", encoding="utf-8") as f:
@@ -234,11 +235,7 @@ def test_instalar_crea_gitignore_del_framework():
         with open(ruta, encoding="utf-8") as f:
             contenido = f.read()
         # The project's repo must never commit/push Dédalo files
-        for entrada in ("dedalo.sh", "gate.sh", "gate_checks/", "plan.md",
-                        "lecciones.md", "CONTEXTO.md", "progreso.log",
-                        "metrics.jsonl", "incidencias.jsonl",
-                        ".dedalo_review/"):
-            assert entrada in contenido, f"falta entrada {entrada!r}"
+        assert ".dedalo/" in contenido, "falta la entrada .dedalo/"
     finally:
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
@@ -272,15 +269,11 @@ def test_asegurar_gitignore_anade_bloque_existente():
         with open(ruta, encoding="utf-8") as f:
             contenido = f.read()
         assert "node_modules/" in contenido, "lo del usuario no se toca"
-        for entrada in ("dedalo.sh", "gate.sh", "gate_checks/", "plan.md",
-                        "lecciones.md", "CONTEXTO.md", "progreso.log",
-                        "metrics.jsonl", "incidencias.jsonl",
-                        ".dedalo_review/"):
-            assert entrada in contenido, f"falta entrada {entrada!r}"
+        assert ".dedalo/" in contenido, "falta la entrada .dedalo/"
         # Idempotent: the second call does not duplicate
         assert plantillas.asegurar_gitignore(tmp) is False
         with open(ruta, encoding="utf-8") as f:
-            assert f.read().count("dedalo.sh") == 1
+            assert f.read().count(".dedalo/") == 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -389,3 +382,29 @@ if __name__ == "__main__":
     test_asegurar_gitignore_crea_si_falta()
     test_quitar_framework_del_git()
     print("\n🎉 Todos los tests de plantillas.py PASARON")
+
+
+def test_asegurar_gitignore_migra_el_bloque_antiguo():
+    """An old per-file block is replaced by `.dedalo/` (and plan.md is tracked)."""
+    import shutil
+    tmp = tempfile.mkdtemp()
+    try:
+        ruta = os.path.join(tmp, ".gitignore")
+        with open(ruta, "w", encoding="utf-8") as f:
+            f.write("# node\nnode_modules/\n\n"
+                    "# Dédalo: archivos del framework (NO deben ir al repo del proyecto)\n"
+                    "dedalo.sh\ngate.sh\ngate_checks/\nplan.md\nlecciones.md\n"
+                    "CONTEXTO.md\nprogreso.log\n\n"
+                    "# Entorno / secretos (nunca subir)\n.env\n")
+        assert plantillas.asegurar_gitignore(tmp) is True
+        with open(ruta, encoding="utf-8") as f:
+            contenido = f.read()
+        assert "node_modules/" in contenido, "lo del usuario no se toca"
+        assert ".env" in contenido, "el bloque de entorno se conserva"
+        assert ".dedalo/" in contenido
+        assert "\nplan.md\n" not in contenido, "plan.md ya no se ignora"
+        assert "gate_checks/" not in contenido, (
+            "la ruta del framework cambió a .dedalo/")
+        assert contenido.count("# Dédalo:") == 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)

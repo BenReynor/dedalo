@@ -6,9 +6,12 @@ import shutil
 import subprocess
 from datetime import datetime
 
+from . import rutas
+
 PLANTILLA_DIR = os.path.join(os.path.dirname(__file__), "plantillas_data")
 SCRIPTS = ("dedalo.sh", "gate.sh", "mapear.sh")
-ARCHIVOS = SCRIPTS + ("plan.md", "lecciones.md", "CONTEXTO.md")
+MEMORIA = ("plan.md", "lecciones.md", "CONTEXTO.md")
+ARCHIVOS = SCRIPTS + MEMORIA
 GATE_CHECKS_DIR = "gate_checks"
 GATE_CHECKS = tuple(
     # Relative names ALWAYS with "/": the listing from `instalar()` (which the GUI
@@ -25,21 +28,55 @@ GATE_CHECKS = tuple(
 def quitar(ruta):
     """Deletes the files the app installed. Returns the deleted ones.
 
-    Only touches dedalo.sh, gate.sh, mapear.sh, plan.md, lecciones.md,
-    CONTEXTO.md, progreso.log and gate_checks/: never the rest of the project.
+    Only touches the framework scripts, gate_checks/, plan.md, lecciones.md,
+    CONTEXTO.md and the run state under `.dedalo/`: never the rest of the
+    project. Legacy (root) layouts are cleaned too, so removing an old project
+    from the list keeps working.
     """
     eliminados = []
-    log = os.path.join(ruta, "progreso.log")
-    nombres = list(ARCHIVOS) + (["progreso.log"] if os.path.exists(log) else [])
-    for nombre in nombres:
+    for nombre in SCRIPTS:
+        for destino in (os.path.join(ruta, nombre),
+                        os.path.join(rutas.dir_scripts(ruta), nombre)):
+            if os.path.isfile(destino):
+                os.remove(destino)
+                if nombre not in eliminados:
+                    eliminados.append(nombre)
+    for nombre in MEMORIA:
         destino = os.path.join(ruta, nombre)
         if os.path.exists(destino):
             os.remove(destino)
             eliminados.append(nombre)
-    dir_checks = os.path.join(ruta, GATE_CHECKS_DIR)
-    if os.path.isdir(dir_checks):
-        shutil.rmtree(dir_checks)
-        eliminados.append(GATE_CHECKS_DIR + "/")
+    for dir_checks in (rutas.gate_checks(ruta),
+                       os.path.join(ruta, GATE_CHECKS_DIR)):
+        if os.path.isdir(dir_checks):
+            shutil.rmtree(dir_checks)
+            if GATE_CHECKS_DIR + "/" not in eliminados:
+                eliminados.append(GATE_CHECKS_DIR + "/")
+    # Run state (new layout) and anything left at the root of an old project
+    for directorio in (rutas.dir_estado(ruta), rutas.dir_review(ruta)):
+        if os.path.isdir(directorio):
+            shutil.rmtree(directorio, ignore_errors=True)
+    for nombre in ("progreso.log", "metrics.jsonl", "incidencias.jsonl",
+                   "mapeo.txt", "endpoints.txt", ".dedalo_review"):
+        destino = os.path.join(ruta, nombre)
+        if os.path.isdir(destino):
+            shutil.rmtree(destino, ignore_errors=True)
+        elif os.path.exists(destino):
+            os.remove(destino)
+    # Remove the framework directories (then .dedalo/) only if they are empty:
+    # never delete anything the user put there.
+    for directorio in (rutas.dir_scripts(ruta), rutas.dir_estado(ruta),
+                       os.path.join(ruta, rutas.DIR, rutas.REVIEW)):
+        try:
+            os.rmdir(directorio)
+        except OSError:
+            pass
+    dedalo_dir = rutas.dir_dedalo(ruta)
+    if os.path.isdir(dedalo_dir):
+        try:
+            os.rmdir(dedalo_dir)
+        except OSError:
+            pass
     return eliminados
 
 
@@ -106,29 +143,45 @@ def _desactualizados(ruta):
     diff = []
     for nombre in SCRIPTS:
         src = os.path.join(PLANTILLA_DIR, nombre)
-        dst = os.path.join(ruta, nombre)
+        dst = rutas.script(ruta, nombre)
         if os.path.exists(dst) and os.path.exists(src):
             if not filecmp.cmp(src, dst, shallow=False):
                 diff.append(nombre)
     return diff
 
 
+def _destino(ruta, nombre):
+    """Where a template goes: scripts and checks under `.dedalo/`, rest at root."""
+    if nombre in SCRIPTS:
+        return os.path.join(rutas.dir_scripts(ruta), nombre)
+    if nombre.startswith(GATE_CHECKS_DIR + "/"):
+        return os.path.join(rutas.dir_scripts(ruta), nombre)
+    return os.path.join(ruta, nombre)
+
+
 def instalar(ruta):
-    """Copies the templates (scripts + gate_checks) that are missing. Returns the created ones."""
+    """Copies the templates (scripts + gate_checks) that are missing.
+
+    Projects installed with an older version are migrated first: their
+    framework files move from the project root into `.dedalo/`. Returns the
+    project-relative paths of the created files.
+    """
+    habia_log = (os.path.exists(os.path.join(ruta, "progreso.log"))
+                 or os.path.exists(os.path.join(rutas.dir_estado(ruta),
+                                                "progreso.log")))
+    rutas.asegurar(ruta)
+    log = rutas.log(ruta)
     creados = []
+    if not habia_log and os.path.exists(log):
+        creados.append(os.path.relpath(log, ruta).replace("\\", "/"))
     for nombre in list(ARCHIVOS) + list(GATE_CHECKS) + [".gitignore"]:
-        destino = os.path.join(ruta, nombre)
+        destino = _destino(ruta, nombre)
         if not os.path.exists(destino):
             os.makedirs(os.path.dirname(destino), exist_ok=True)
             shutil.copy2(os.path.join(PLANTILLA_DIR, nombre), destino)
             if nombre.endswith(".sh"):
                 os.chmod(destino, 0o755)
-            creados.append(nombre)
-    log = os.path.join(ruta, "progreso.log")
-    if not os.path.exists(log):
-        with open(log, "w", encoding="utf-8") as f:
-            f.write("# progreso.log — Dédalo\n")
-        creados.append("progreso.log")
+            creados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
     return creados
 
 
@@ -158,8 +211,25 @@ def asegurar_gitignore(ruta):
         return True
     with open(destino, encoding="utf-8") as f:
         contenido = f.read()
-    if "Dédalo:" in contenido:
+    lineas = contenido.splitlines()
+    # Projects installed before the `.dedalo/` layout already have the old
+    # per-file block (with its "Dédalo:" header). Only the new directory entry
+    # matters now, so check the actual pattern instead of the header.
+    if any(linea.strip() in (".dedalo/", ".dedalo") for linea in lineas):
         return False
+    inicio = next((i for i, linea in enumerate(lineas)
+                   if linea.startswith("# Dédalo:")), None)
+    if inicio is not None:
+        # Replace the old framework block (plan.md/lecciones.md/CONTEXTO.md
+        # were ignored back then; they are project content now) and keep the
+        # user's own entries and the environment block untouched.
+        fin = next((j for j in range(inicio + 1, len(lineas))
+                    if lineas[j].startswith("# Entorno")), len(lineas))
+        bloque = _bloque_framework_gitignore().rstrip("\n").splitlines()
+        lineas[inicio:fin] = bloque + [""]
+        with open(destino, "w", encoding="utf-8") as f:
+            f.write("\n".join(lineas).rstrip("\n") + "\n")
+        return True
     with open(destino, "a", encoding="utf-8") as f:
         if not contenido.endswith("\n"):
             f.write("\n")
@@ -176,10 +246,9 @@ def quitar_framework_del_git(ruta):
     """
     if not _es_repo_git(ruta):
         return []
-    patrones = list(ARCHIVOS) + [GATE_CHECKS_DIR] + ["progreso.log", "metrics.jsonl",
-                                                    "incidencias.jsonl",
-                                                    "mapeo.txt", "endpoints.txt",
-                                                    ".dedalo_review"]
+    patrones = [rutas.DIR] + list(ARCHIVOS) + [GATE_CHECKS_DIR] + [
+        "progreso.log", "metrics.jsonl", "incidencias.jsonl", "mapeo.txt",
+        "endpoints.txt", ".dedalo_review"]
     try:
         out = subprocess.run(
             ["git", "ls-files"] + patrones, cwd=ruta, capture_output=True,
@@ -207,7 +276,7 @@ def actualizar(ruta):
     """
     actualizados = []
     for nombre in _desactualizados(ruta):
-        dst = os.path.join(ruta, nombre)
+        dst = rutas.script(ruta, nombre)
         # Timestamped backup before overwriting
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup = f"{dst}.bak.{ts}"
@@ -222,5 +291,6 @@ def actualizar(ruta):
 
 def faltan(ruta):
     """Scripts and memory that are missing (lecciones.md/CONTEXTO.md are created if they do not exist)."""
-    return [s for s in SCRIPTS + ("lecciones.md", "CONTEXTO.md")
-            if not os.path.exists(os.path.join(ruta, s))]
+    faltantes = [s for s in MEMORIA if not os.path.exists(os.path.join(ruta, s))]
+    faltantes += [s for s in SCRIPTS if not os.path.exists(rutas.script(ruta, s))]
+    return faltantes

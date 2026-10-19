@@ -1,17 +1,5 @@
-# Dédalo: archivos del framework (NO deben ir al repo del proyecto)
-dedalo.sh
-gate.sh
-mapear.sh
-gate_checks/
-plan.md
-lecciones.md
-CONTEXTO.md
-mapeo.txt
-endpoints.txt
-progreso.log
-metrics.jsonl
-incidencias.jsonl
-.dedalo_review/
+# Dédalo: framework code and run state (never commit; the app recreates it)
+.dedalo/
 
 # Entorno / secretos (nunca subir)
 .env

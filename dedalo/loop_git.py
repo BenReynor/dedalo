@@ -28,9 +28,9 @@ _CACHES = re.compile(
 # agent's. Comes from the script's CONTROL variable. When used it is anchored
 # `^(?P<control>...)$` so that "plan.md" does not swallow "docs/plan.md".
 CONTROL = (
-    r"plan\.md|lecciones\.md|progreso\.log|gate\.sh|dedalo\.sh|mapear\.sh"
-    r"|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl|gate_checks(/.*)?"
-    r"|\.dedalo_review(/.*)?")
+    r"plan\.md|lecciones\.md|CONTEXTO\.md|progreso\.log|gate\.sh|dedalo\.sh"
+    r"|mapear\.sh|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl"
+    r"|gate_checks(/.*)?|\.dedalo(/.*)?|\.dedalo_review(/.*)?")
 
 
 def run_git(proyecto, *args, timeout=60):

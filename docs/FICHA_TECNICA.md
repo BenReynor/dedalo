@@ -63,8 +63,8 @@ There is also `install.sh` (environment + desktop shortcut).
 | `dedalo/plantillas_data/gate.sh`, `mapear.sh` | Gate and mapping for the user's project. |
 | `dedalo/plantillas_data/` | Templates copied into every project: `plan.md`, `lecciones.md`, `CONTEXTO.md`, `gate_checks/`, icon. |
 
-Installing the templates into a project creates `dedalo.sh`, `gate.sh`, `mapear.sh`,
-`gate_checks/`, `CONTEXTO.md` and tweaks the `.gitignore` to keep the framework
+Installing the templates into a project creates `.dedalo/scripts/{dedalo.sh,gate.sh,mapear.sh,gate_checks/}`,
+`plan.md`, `lecciones.md`, `CONTEXTO.md` and tweaks the `.gitignore` to keep the framework
 out of the user's repo.
 
 ## CLI usage
@@ -94,9 +94,10 @@ etc.) can control Dédalo without the GUI. Protocol `2024-11-05`.
   (what it is, how the loop works, project files and the usage flow) that the
   client hands to the model as startup context.
 - **Resources**:
-  - `dedalo://{nombre}/{fichero}` — allowed files: `plan.md`,
+  - `dedalo://{nombre}/{fichero}` — allowed names: `plan.md`,
     `lecciones.md`, `CONTEXTO.md`, `progreso.log`, `metrics.jsonl`,
-    `incidencias.jsonl`, `mapeo.txt`.
+    `incidencias.jsonl`, `mapeo.txt` (run-state names resolve under
+    `.dedalo/estado/`).
   - `dedalo://manual` — the full manual on demand.
 
 Example configuration in an MCP client (opencode):
@@ -119,7 +120,8 @@ Example configuration in an MCP client (opencode):
 |------|-----------|
 | `~/.config/dedalo/proyectos.json` | Project registry (+ webhook tokens). |
 | `~/.config/dedalo/models_dev.json` | Model catalog. |
-| `<proyecto>/plan.md`, `lecciones.md`, `progreso.log` | Per-project state. |
+| `<proyecto>/plan.md`, `lecciones.md`, `CONTEXTO.md` | Project-owned files. |
+| `<proyecto>/.dedalo/estado/` | Run state (`progreso.log`, `metrics.jsonl`, ...). |
 
 The config directory is created with `0700` permissions.
 
@@ -168,7 +170,7 @@ Implemented:
 - **Manual review is not self-approvable**: by default an agent's `APPROVE`
   is ignored (`REVISION_APRUEBA_AGENTE=1` opts in) and the loop keeps waiting
   for a human. Every decision is audited in `progreso.log` with its origin
-  (`gui`/`mcp`/`humano`); `.dedalo_review/decision` is written `0o600`.
+  (`gui`/`mcp`/`humano`); `.dedalo/review/decision` is written `0o600`.
 - **Push safety**: `--push` only pushes the work branch (`dedalo/*`), aborts if
   the branch resolves to the base/`main`/`master`, and prints the target origin
   URL before pushing.
@@ -189,7 +191,7 @@ Implemented:
   --strict` on `requirements.lock` + a check that the lock is up to date.
 - Dependency lock with hashes (`requirements.lock`).
 - `_sanitizar()` masks tokens (telegram/whatsapp/discord) in errors.
-- The gate restores `gate.sh`/`gate_checks/` if the agent modifies them.
+- The gate restores `.dedalo/scripts/{gate.sh,gate_checks/}` if the agent modifies them.
 - **Supply chain**: GitHub Actions pinned by commit SHA; every Release carries
   keyless **build provenance** (Sigstore via GitHub OIDC), verifiable with
   `gh attestation verify <file> --repo BenReynor/dedalo`.

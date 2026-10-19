@@ -223,6 +223,7 @@ def test_registrar_metrica_escribe_json_valido(tmp_path):
         "export LC_ALL=C",              # the export, exactly as in the template
         'num() { LC_ALL=C awk "$@"; }',  # and the helper, in case it is sourced
         f'PROYECTO="{tmp_path}"',
+        f'ESTADO_DIR="{tmp_path}"',
         "iter=1",
         'TAREA="#1 prueba"',
         funcion,
@@ -263,6 +264,7 @@ def test_registrar_metrica_falla_sin_lc_all_c(tmp_path):
         "set -uo pipefail",
         'num() { LC_ALL=C awk "$@"; }',
         f'PROYECTO="{tmp_path}"',
+        f'ESTADO_DIR="{tmp_path}"',
         "iter=1",
         'TAREA="#1 prueba"',
         funcion,

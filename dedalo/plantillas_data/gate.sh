@@ -20,7 +20,10 @@ else
     # fail/ok are also mandatory: without them, a failing check causes
     # "fail: command not found" (rc=127) which the loop ignores (no set -e)
     # and the gate ended up printing "✅ TODO OK" with rc=0.
-    PROYECTO="$SCRIPT_DIR"
+    case "$SCRIPT_DIR" in
+        */.dedalo/scripts) PROYECTO="$(dirname "$(dirname "$SCRIPT_DIR")")" ;;
+        *) PROYECTO="$SCRIPT_DIR" ;;
+    esac
     fail() { echo "[GATE] ✗ $1"; exit 1; }
     ok()   { echo "[GATE] ✓ $1"; }
 fi

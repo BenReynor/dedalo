@@ -1,7 +1,5 @@
 """Metrics panel with pyqtgraph: 4 charts + summary table."""
 
-import os
-
 import pyqtgraph as pg
 from pyqtgraph import PlotWidget, mkBrush, mkPen
 from PySide6.QtCore import Qt, QTimer
@@ -19,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import configuracion as cfg
+from . import rutas
 from .i18n import t
 from .metricas import parsear_log
 from .paneles import _BtnGhost, _fuente_monospace, _fuente_ui, _LabelMuted
@@ -172,7 +171,7 @@ class PanelMetricas(QWidget):
     def _actualizar(self):
         if not self._ruta_proyecto:
             return
-        log = os.path.join(self._ruta_proyecto, "progreso.log")
+        log = rutas.log(self._ruta_proyecto)
         datos = parsear_log(log)
         self._pintar(datos)
 
@@ -257,7 +256,7 @@ class PanelMetricas(QWidget):
         if not ruta:
             return
         import csv
-        log = os.path.join(self._ruta_proyecto, "progreso.log")
+        log = rutas.log(self._ruta_proyecto)
         datos = parsear_log(log)
         with open(ruta, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)

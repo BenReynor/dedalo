@@ -10,6 +10,7 @@ import io
 import os
 import re
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -191,14 +192,20 @@ def test_run_gate_rc_distinto_de_cero(tmp_path):
 # ----------------------------------------------------- manual review
 
 
+def _dir_rev(tmp_path):
+    from dedalo import rutas
+
+    return Path(rutas.dir_review(str(tmp_path)))
+
+
 def test_manual_desactivada_devuelve_0(tmp_path):
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "0"})
     assert _esperar_revision_manual(cfg, "t1") == 0
 
 
 def test_manual_aprobada(tmp_path):
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("APPROVE\n", encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1"})
 
@@ -213,8 +220,8 @@ def test_manual_aprobada(tmp_path):
 
 
 def test_manual_rechazada_rellena_motivo(tmp_path):
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("REJECT\nmalisimo\n", encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1"})
     _RECHAZO_MOTIVO["txt"] = ""
@@ -228,8 +235,8 @@ def test_manual_rechazada_rellena_motivo(tmp_path):
 
 def test_manual_aprobacion_de_agente_ignorada_por_defecto(tmp_path, monkeypatch):
     """An APPROVE with origen=mcp does not settle the review if there is no opt-in."""
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("APPROVE\n# origen=mcp\n", encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1",
                           "TIMEOUT_REVISION_MANUAL": "2"})
@@ -246,8 +253,8 @@ def test_manual_aprobacion_de_agente_ignorada_por_defecto(tmp_path, monkeypatch)
 
 def test_manual_aprobacion_de_agente_permitida_con_opt_in(tmp_path, monkeypatch):
     """With REVISION_APRUEBA_AGENTE=1 the APPROVE from origen=mcp is accepted."""
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("APPROVE\n# origen=mcp\n", encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1",
                           "REVISION_APRUEBA_AGENTE": "1"})
@@ -260,8 +267,8 @@ def test_manual_aprobacion_de_agente_permitida_con_opt_in(tmp_path, monkeypatch)
 
 def test_manual_aprobacion_gui_siempre_valida(tmp_path):
     """The GUI (origen=gui) approves like a person, without opt-in."""
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("APPROVE\n# origen=gui\n", encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1"})
 
@@ -273,8 +280,8 @@ def test_manual_aprobacion_gui_siempre_valida(tmp_path):
 
 def test_manual_rechazo_de_agente_no_se_bloquea(tmp_path):
     """An agent REJECT is respected (it is not self-approval)."""
-    dir_rev = tmp_path / ".dedalo_review"
-    dir_rev.mkdir(exist_ok=True)
+    dir_rev = _dir_rev(tmp_path)
+    dir_rev.mkdir(parents=True, exist_ok=True)
     (dir_rev / "decision").write_text("REJECT\nmejora tests\n# origen=mcp\n",
                                       encoding="utf-8")
     cfg = _cfg(tmp_path, {"REVISION_MANUAL": "1"})

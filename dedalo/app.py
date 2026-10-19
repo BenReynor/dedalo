@@ -38,6 +38,7 @@ from . import (
     modelos,
     net,
     plantillas,
+    rutas,
     sensor,
 )
 from .gate import argv_gate
@@ -106,8 +107,8 @@ class Ventana(QMainWindow):
             # GUI's own folder. Prevents starting inside the app's repo from
             # registering itself as a "project" (source of confusion).
             parece_proyecto = (
-                os.path.isfile(os.path.join(candidato, "plan.md"))
-                and os.path.isfile(os.path.join(candidato, "dedalo.sh"))
+                os.path.isfile(rutas.proyecto_archivo(candidato, "plan.md"))
+                and os.path.isfile(rutas.dedalo_sh(candidato))
                 and os.path.isdir(os.path.join(candidato, ".git"))
             )
             dir_gui = os.path.dirname(os.path.abspath(__file__))
@@ -252,8 +253,8 @@ class Ventana(QMainWindow):
             self.pan_ejec.b_iniciar.setEnabled(True)
             self.pan_ejec.b_detener.setEnabled(False)
             self._set_fase_loop(0, 0, corriendo=False)
-            self.pan_plan.cargar(os.path.join(p[1], "plan.md"))
-            self.pan_lecciones.cargar(os.path.join(p[1], "lecciones.md"))
+            self.pan_plan.cargar(rutas.proyecto_archivo(p[1], "plan.md"))
+            self.pan_lecciones.cargar(rutas.proyecto_archivo(p[1], "lecciones.md"))
             self.pan_git.cargar(p[1])
 
     def _refrescar_plan(self):
@@ -421,7 +422,7 @@ class Ventana(QMainWindow):
     def _set_fase_loop(self, iter_actual=0, total=0, corriendo=True):
         """Updates the pipeline stepper and the loop status pill."""
         p = self._proyecto_actual()
-        ruta_log = os.path.join(p[1], "progreso.log") if p else ""
+        ruta_log = rutas.log(p[1]) if p else ""
         fase = fase_actual(ruta_log) if corriendo else ""
         self.pan_ejec.pipeline.setFase(fase)
         if not corriendo:
@@ -604,11 +605,14 @@ class Ventana(QMainWindow):
             self.pan_lecciones.cargar(None)
             self.pan_incidencias.cargar(None)
             self.pan_git.cargar(None)
-            self.pan_mapa.cargar(None)
+            self.pan_mapa.cargar(None, None)
             self.pan_logs.panel_loop.clear()
             self.pan_logs.panel_gate.clear()
             return
         nombre, ruta = p
+        # Migrate old projects (framework files at the root) to `.dedalo/`
+        # BEFORE loading the panels, so they read the final locations.
+        rutas.asegurar(ruta)
         self._nombre_activo = nombre
         self._log_tam = 0
         self._cargar_config_proyecto(nombre)
@@ -619,11 +623,11 @@ class Ventana(QMainWindow):
         self.pan_seg.aplicar_config(self.seguridad, self.webhooks_config)
         self._iniciar_vigilancia()
         self.estado.setText(t("Project: {nombre} — {ruta}", nombre=nombre, ruta=ruta))
-        self.pan_plan.cargar(os.path.join(ruta, "plan.md"))
-        self.pan_lecciones.cargar(os.path.join(ruta, "lecciones.md"))
-        self.pan_incidencias.cargar(os.path.join(ruta, "incidencias.jsonl"))
+        self.pan_plan.cargar(rutas.proyecto_archivo(ruta, "plan.md"))
+        self.pan_lecciones.cargar(rutas.proyecto_archivo(ruta, "lecciones.md"))
+        self.pan_incidencias.cargar(rutas.incidencias(ruta))
         self.pan_git.cargar(ruta)
-        self.pan_mapa.cargar(os.path.join(ruta, "mapeo.txt"))
+        self.pan_mapa.cargar(rutas.mapeo(ruta), ruta)
         self.pan_ejec.actualizar_ramas(ruta)
         self.pan_ejec.aplicar_config(self._lanzamiento)
         self.pan_logs.panel_gate.clear()
@@ -642,8 +646,8 @@ class Ventana(QMainWindow):
                   lista=", ".join(creados)))
             # If plan.md/lecciones.md were missing, reload them into the UI
             if "plan.md" in creados or "lecciones.md" in creados:
-                self.pan_plan.cargar(os.path.join(ruta, "plan.md"))
-                self.pan_lecciones.cargar(os.path.join(ruta, "lecciones.md"))
+                self.pan_plan.cargar(rutas.proyecto_archivo(ruta, "plan.md"))
+                self.pan_lecciones.cargar(rutas.proyecto_archivo(ruta, "lecciones.md"))
 
         desactualizados = plantillas._desactualizados(ruta)
         if desactualizados:
@@ -653,7 +657,7 @@ class Ventana(QMainWindow):
                   lista=", ".join(desactualizados)))
 
         self.pan_ejec.b_gate.setEnabled(
-            os.path.exists(os.path.join(ruta, "gate.sh")))
+            os.path.exists(rutas.gate_sh(ruta)))
         if not self.loop or self.loop.state() != QProcess.Running:
             self.pan_ejec.b_iniciar.setEnabled(True)
         self._aplicar_sel_modelos()
@@ -990,17 +994,17 @@ class Ventana(QMainWindow):
         self.pan_ejec.b_detener.setEnabled(False)
         if p:
             self.pan_ejec.b_gate.setEnabled(
-                os.path.exists(os.path.join(p[1], "gate.sh")))
+                os.path.exists(rutas.gate_sh(p[1])))
         self.cmb.setEnabled(True)
         self.timer.stop()
         self._revision_pendiente = False
         self.pan_ejec.panel_revision.ocultar()
         self._set_fase_loop(0, 0, corriendo=False)
         if p:
-            self.pan_plan.cargar(os.path.join(p[1], "plan.md"))
-            self.pan_lecciones.cargar(os.path.join(p[1], "lecciones.md"))
+            self.pan_plan.cargar(rutas.proyecto_archivo(p[1], "plan.md"))
+            self.pan_lecciones.cargar(rutas.proyecto_archivo(p[1], "lecciones.md"))
             self.pan_git.cargar(p[1])
-            self.pan_mapa.cargar(os.path.join(p[1], "mapeo.txt"))
+            self.pan_mapa.cargar(rutas.mapeo(p[1]), p[1])
 
         # Webhook: end
         if self._inicio_loop_ts:
@@ -1009,7 +1013,7 @@ class Ventana(QMainWindow):
             duracion_min = 0.0
         # Parse the log for the summary (only THIS run: from _log_inicio)
         if p:
-            log = os.path.join(p[1], "progreso.log")
+            log = rutas.log(p[1])
             try:
                 with open(log, "rb") as f:
                     f.seek(self._log_inicio)
@@ -1079,7 +1083,7 @@ class Ventana(QMainWindow):
         p = self._proyecto_actual()
         if not p:
             return
-        log = os.path.join(p[1], "progreso.log")
+        log = rutas.log(p[1])
         try:
             tam = os.path.getsize(log)
         except OSError:
@@ -1136,7 +1140,7 @@ class Ventana(QMainWindow):
     def _tam_log(self, ruta):
         """Size of progreso.log in bytes (0 if it does not exist)."""
         try:
-            return os.path.getsize(os.path.join(ruta, "progreso.log"))
+            return os.path.getsize(rutas.log(ruta))
         except OSError:
             return 0
 
@@ -1178,7 +1182,7 @@ class Ventana(QMainWindow):
         if not p:
             return
         ruta = p[1]
-        dir_revision = os.path.join(ruta, ".dedalo_review")
+        dir_revision = rutas.dir_review(ruta)
         archivo_esperando = os.path.join(dir_revision, "waiting")
         archivo_diff = os.path.join(dir_revision, "diff.txt")
         archivo_tarea = os.path.join(dir_revision, "tarea.txt")
@@ -1314,8 +1318,8 @@ class Ventana(QMainWindow):
             p = self._proyecto_actual()
             if p:
                 self.pan_git.cargar(p[1])
-                self.pan_plan.cargar(os.path.join(p[1], "plan.md"))
-                self.pan_mapa.cargar(os.path.join(p[1], "mapeo.txt"))
+                self.pan_plan.cargar(rutas.proyecto_archivo(p[1], "plan.md"))
+                self.pan_mapa.cargar(rutas.mapeo(p[1]), p[1])
                 self._tail_log()
         else:
             self.estado.setText(t("✗ Error reverting {sha}", sha=sha[:8]))

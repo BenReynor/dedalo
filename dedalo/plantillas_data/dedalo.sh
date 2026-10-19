@@ -80,11 +80,26 @@ set -uo pipefail
 # the `sort` of file lists comparable.
 export LC_ALL=C
 
-PROYECTO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GATE="$PROYECTO/gate.sh"
-MAPEAR="$PROYECTO/mapear.sh"
-MAPA="$PROYECTO/mapeo.txt"
-LOG="$PROYECTO/progreso.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Current layout: <proyecto>/.dedalo/scripts/dedalo.sh
+# Legacy layout:  <proyecto>/dedalo.sh
+case "$SCRIPT_DIR" in
+    */.dedalo/scripts) PROYECTO="$(dirname "$(dirname "$SCRIPT_DIR")")" ;;
+    *) PROYECTO="$SCRIPT_DIR" ;;
+esac
+if [ -d "$PROYECTO/.dedalo" ]; then
+    SCRIPTS_DIR="$PROYECTO/.dedalo/scripts"
+    ESTADO_DIR="$PROYECTO/.dedalo/estado"
+    REVIEW_DIR="$PROYECTO/.dedalo/review"
+else
+    SCRIPTS_DIR="$PROYECTO"
+    ESTADO_DIR="$PROYECTO"
+    REVIEW_DIR="$PROYECTO/.dedalo_review"
+fi
+GATE="$SCRIPTS_DIR/gate.sh"
+MAPEAR="$SCRIPTS_DIR/mapear.sh"
+MAPA="$ESTADO_DIR/mapeo.txt"
+LOG="$ESTADO_DIR/progreso.log"
 PLAN="$PROYECTO/plan.md"
 LECCIONES="$PROYECTO/lecciones.md"
 MAX_ITER="${MAX_ITER:-40}"
@@ -110,7 +125,7 @@ COSTO_POR_ITER="${COSTO_POR_ITER:-0.50}"
 RAMA_BASE="${RAMA_BASE:-master}"
 PUSH=""
 HASTA=""
-CONTROL="plan\.md|lecciones\.md|progreso\.log|gate\.sh|dedalo\.sh|mapear\.sh|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl|gate_checks(/.*)?|\.dedalo_review(/.*)?"
+CONTROL="plan\.md|lecciones\.md|CONTEXTO\.md|progreso\.log|gate\.sh|dedalo\.sh|mapear\.sh|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl|gate_checks(/.*)?|\.dedalo(/.*)?|\.dedalo_review(/.*)?"
 
 # ---------------------------------------------------------------------------
 # POSIX utilities (work the same on GNU/Linux and BSD/macOS)
@@ -584,7 +599,7 @@ run_agente() {
 
 _registrar_metrica() {
     local agente="$1" modelo="$2" dur_ms="$3" rc="$4" salida="$5"
-    local metric_file="$PROYECTO/metrics.jsonl"
+    local metric_file="${ESTADO_DIR:-$PROYECTO}/metrics.jsonl"
     local tokens_in=0 tokens_out=0 costo=0
     case "$agente" in
         opencode)
@@ -844,7 +859,7 @@ backup_gate() {
     rm -rf "$GATE_BACKUP_DIR"
     mkdir -p "$GATE_BACKUP_DIR"
     cp -f "$GATE" "$GATE_BACKUP_DIR/" 2>/dev/null
-    [ -d "$PROYECTO/gate_checks" ] && cp -rf "$PROYECTO/gate_checks" "$GATE_BACKUP_DIR/" 2>/dev/null
+    [ -d "$SCRIPTS_DIR/gate_checks" ] && cp -rf "$SCRIPTS_DIR/gate_checks" "$GATE_BACKUP_DIR/" 2>/dev/null
 }
 
 gate_intacto() {
@@ -862,7 +877,7 @@ gate_intacto() {
 # Opt-in via environment (DEDALO_GATE_CONSENT=1, ideal in CI) or via terminal.
 # The native engine (loop.py) also remembers the approval by content hash.
 consentimiento_gate() {
-    local dir="$PROYECTO/gate_checks"
+    local dir="$SCRIPTS_DIR/gate_checks"
     [ -d "$dir" ] || return 0
     if [ "${DEDALO_GATE_CONSENT:-0}" = "1" ]; then
         logx "GATE: checks aprobados por entorno (DEDALO_GATE_CONSENT=1)"
@@ -887,7 +902,7 @@ consentimiento_gate() {
 
 restaurar_gate() {
     cp -f "$GATE_BACKUP_DIR/gate.sh" "$GATE" 2>/dev/null
-    [ -d "$GATE_BACKUP_DIR/gate_checks" ] && cp -rf "$GATE_BACKUP_DIR/gate_checks/." "$PROYECTO/gate_checks/" 2>/dev/null
+    [ -d "$GATE_BACKUP_DIR/gate_checks" ] && cp -rf "$GATE_BACKUP_DIR/gate_checks/." "$SCRIPTS_DIR/gate_checks/" 2>/dev/null
 }
 
 # Project memory: adds a lesson to lecciones.md (single-error
@@ -944,7 +959,7 @@ esperar_revision_manual() {
     # Only if REVISION_MANUAL=1
     [ "$REVISION_MANUAL" = "1" ] || return 0
 
-    local dir_revision="$PROYECTO/.dedalo_review"
+    local dir_revision="${REVIEW_DIR:-$PROYECTO/.dedalo_review}"
     mkdir -p "$dir_revision"
 
     # Write diff and task for the GUI

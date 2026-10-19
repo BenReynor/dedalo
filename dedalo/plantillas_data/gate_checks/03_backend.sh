@@ -22,7 +22,7 @@ fi
 # endpoints.txt at the root wins
 EPS=()
 if [ -f "${PROYECTO:-}/endpoints.txt" ]; then
-    while IFS= read -r e; do [ -n "$e" ] && EPS+=("$e"); done < "$PROYECTO/endpoints.txt"
+    while IFS= read -r e; do [ -n "$e" ] && EPS+=("$e"); done < "${ESTADO_DIR:-$PROYECTO}/endpoints.txt"
 else
     # ENDPOINTS comes from _env.sh, space-separated
     for e in ${ENDPOINTS:-}; do EPS+=("$e"); done

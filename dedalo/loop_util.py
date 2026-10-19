@@ -9,6 +9,7 @@ also by hand with `python -m dedalo.loop`).
 """
 
 import json
+import os
 import subprocess
 import time
 from decimal import ROUND_HALF_UP, Decimal
@@ -41,6 +42,9 @@ def ahora_ms():
 def logx(log, mensaje):
     """Append to `log` with a local timestamp, script format:
     `[YYYY-MM-DD HH:MM:SS] <mensaje>`."""
+    directorio = os.path.dirname(log)
+    if directorio:
+        os.makedirs(directorio, exist_ok=True)
     with open(log, "a", encoding="utf-8") as f:
         f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {mensaje}\n")
 

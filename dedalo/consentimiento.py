@@ -16,13 +16,14 @@ import json
 import os
 import tempfile
 
+from . import rutas
 from .configuracion import CONFIG_DIR
 
 CONSENT_ENV = "DEDALO_GATE_CONSENT"
 
 
 def _dir_checks(proyecto):
-    return os.path.join(proyecto, "gate_checks")
+    return rutas.gate_checks(proyecto)
 
 
 def ficheros(proyecto):

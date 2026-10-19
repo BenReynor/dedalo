@@ -8,12 +8,14 @@ a tmp_path, without starting the stdio transport.
 import asyncio
 import json
 import os
+from pathlib import Path
 
 import pytest
 
 pytest.importorskip("mcp")
 
-from dedalo import mcp_server as m  # noqa: E402
+from dedalo import mcp_server as m
+from dedalo import rutas  # noqa: E402
 
 
 @pytest.fixture
@@ -72,18 +74,18 @@ def test_cola_log_devuelve_ultimas(proyecto):
 
 def test_resolver_revision_escribe_decision(proyecto):
     m.resolver_revision("p1", "approve")
-    decision = (proyecto / ".dedalo_review" / "decision").read_text(encoding="utf-8")
+    decision = (Path(rutas.dir_review(str(proyecto))) / "decision").read_text(encoding="utf-8")
     assert decision == "APPROVE\n# origen=mcp\n"
     m.resolver_revision("p1", "REJECT", "no me convence")
-    decision = (proyecto / ".dedalo_review" / "decision").read_text(encoding="utf-8")
+    decision = (Path(rutas.dir_review(str(proyecto))) / "decision").read_text(encoding="utf-8")
     assert decision == "REJECT no me convence\n# origen=mcp\n"
     with pytest.raises(ValueError):
         m.resolver_revision("p1", "quizas")
 
 
 def test_estado_loop_detecta_revision_pendiente(proyecto):
-    fondo = proyecto / ".dedalo_review"
-    fondo.mkdir()
+    fondo = Path(rutas.dir_review(str(proyecto)))
+    fondo.mkdir(parents=True)
     (fondo / "waiting").write_text("", encoding="utf-8")
     (fondo / "tarea.txt").write_text("Tarea 3\n", encoding="utf-8")
     datos = json.loads(m.estado_loop("p1"))
