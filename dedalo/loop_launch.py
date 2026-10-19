@@ -87,6 +87,22 @@ def raiz_codigo():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def entorno_python(env, frozen=False):
+    """Point PYTHONPATH at THIS framework checkout, replacing inherited entries.
+
+    The engine and the gate start with cwd=<project>, where the `dedalo`
+    package is not importable, so they need the framework root on the path.
+    The inherited value is discarded on purpose: if the parent exported an old
+    checkout (another copy of `dedalo`), it would be imported instead of the
+    installed package and the engine would run stale code.
+    """
+    if frozen:
+        env.pop("PYTHONPATH", None)
+    else:
+        env["PYTHONPATH"] = raiz_codigo()
+    return env
+
+
 def argv_motor(frozen, args):
     """Command (program, argv) that launches the loop engine.
 
@@ -214,9 +230,7 @@ def preparar(conf, nav=None, environ=None, frozen=None, nombre="", origen=""):
         env["DEDALO_PROYECTO_NOMBRE"] = str(nombre)
     if origen:
         env["DEDALO_ORIGEN"] = str(origen)
-    if not frozen:
-        env["PYTHONPATH"] = raiz_codigo() + (
-            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    entorno_python(env, frozen)
     agente_tarea, agente_revisor = resolver_agentes(conf, detectados)
     programa, argv = argv_motor(frozen, args_cli(conf))
     modelo_tarea = (conf.get("agente", "") if "/" in conf.get("agente", "")

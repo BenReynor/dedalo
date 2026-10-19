@@ -73,7 +73,7 @@ def detectar_agente(cfg):
     return ""
 
 
-def soporta_dir(binario):
+def soporta_dir(binario, cwd=None):
     """Does `opencode run` accept `--dir`? Probed once and cached per binary.
 
     Without `--dir`, `opencode run` attaches to an already-running opencode
@@ -87,7 +87,7 @@ def soporta_dir(binario):
     soportado = False
     try:
         p = subprocess.run([binario, "run", "--help"], capture_output=True,
-                           text=True, timeout=20)
+                           text=True, timeout=20, cwd=cwd or None)
         soportado = "--dir" in (p.stdout or "") + (p.stderr or "")
     except (OSError, subprocess.TimeoutExpired):
         soportado = False
@@ -102,7 +102,7 @@ def _argv_opencode(binario, cfg, subagente, modelo, prompt):
     its own argv but follows the same rule.
     """
     args = [binario, "run", "--agent", subagente]
-    if soporta_dir(binario):
+    if soporta_dir(binario, cfg.proyecto or None):
         args += ["--dir", cfg.proyecto]
     if modelo:
         args += ["--model", modelo]

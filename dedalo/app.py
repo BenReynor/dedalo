@@ -1220,10 +1220,7 @@ class Ventana(QMainWindow):
         programa, args = argv_gate(getattr(sys, "frozen", False))
         panel.appendPlainText("> " + " ".join([programa, *args]))
         env = loop_launch.filtrar_entorno(os.environ)
-        if not getattr(sys, "frozen", False):
-            env["PYTHONPATH"] = _raiz_codigo() + (
-                os.pathsep + env["PYTHONPATH"]
-                if env.get("PYTHONPATH") else "")
+        loop_launch.entorno_python(env, getattr(sys, "frozen", False))
         self.gate = Proceso(panel)
         self.gate.setWorkingDirectory(ruta)
         self.gate.setEnvironment([f"{k}={v}" for k, v in env.items()])

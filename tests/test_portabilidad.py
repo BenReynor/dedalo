@@ -411,4 +411,7 @@ def test_gui_une_el_path_con_pathsep():
     PENDIENTES_WINDOWS, so this test prevents it from coming back."""
     app = (RAIZ / "dedalo" / "app.py").read_text(encoding="utf-8")
     assert 'env["PATH"] = ":"' not in app, "usa os.pathsep para unir el PATH"
-    assert "os.pathsep" in app
+    # The join moved to loop_launch.construir_entorno, shared by the GUI and
+    # the MCP server; it is still the place where the PATH is assembled.
+    launch = (RAIZ / "dedalo" / "loop_launch.py").read_text(encoding="utf-8")
+    assert "os.pathsep" in launch, "usa os.pathsep para unir el PATH"

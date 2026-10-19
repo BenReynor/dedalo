@@ -273,9 +273,10 @@ def _run_gate(cfg, criterio):
     if not getattr(sys, "frozen", False):
         # `python -m dedalo.gate` starts with cwd=project: without this,
         # an interpreter without the installed package (development) won't find it.
-        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        env["PYTHONPATH"] = raiz + (
-            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        # Inherited entries are replaced so a stale copy of the package is never
+        # imported instead of this checkout.
+        env["PYTHONPATH"] = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))
     with open(gate_out, "wb") as ftee:
         rc, _salida, _t = run_con_timeout(
             argv_gate(), GATE_TIMEOUT, env=env, cwd=cfg.proyecto,

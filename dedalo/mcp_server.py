@@ -306,9 +306,7 @@ def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     ruta = _ruta_de(nombre)
     programa, argv = argv_gate(getattr(sys, "frozen", False))
     env = loop_launch.filtrar_entorno(os.environ)
-    if not getattr(sys, "frozen", False):
-        env["PYTHONPATH"] = loop_launch.raiz_codigo() + (
-            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    loop_launch.entorno_python(env, getattr(sys, "frozen", False))
     try:
         out = subprocess.run([programa] + argv, cwd=ruta, env=env,
                              capture_output=True, text=True,

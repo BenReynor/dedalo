@@ -99,10 +99,13 @@ def limpiar_sesiones(binario, proyecto, desde_ms, log, log_resultado=None):
     """
     if not binario or not os.path.exists(binario):
         return 0
+    if not proyecto or not os.path.isdir(str(proyecto)):
+        return 0
 
     def _session_list():
         rc, salida, _t = run_con_timeout(
             [binario, "session", "list", "--format", "json"], 20,
+            cwd=str(proyecto),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if rc != 0 and not salida[0]:
             return []
@@ -124,6 +127,7 @@ def limpiar_sesiones(binario, proyecto, desde_ms, log, log_resultado=None):
             if not sid:
                 continue
             run_con_timeout([binario, "session", "delete", str(sid)], 20,
+                            cwd=str(proyecto),
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL)
             borradas += 1

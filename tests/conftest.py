@@ -23,7 +23,7 @@ from dedalo import consentimiento, loops_estado  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def config_aislada(tmp_path):
+def config_aislada(tmp_path, monkeypatch):
     """Never let the suite touch the user's real `~/.config/dedalo`.
 
     A GUI test (`test_quitar_proyecto_sin_ruta`) drives the real
@@ -38,6 +38,9 @@ def config_aislada(tmp_path):
     """
     real = cfg.CONFIG_DIR
     aislado = str(tmp_path)
+    # Child processes (the gate, `main` re-execs) do not see the module globals
+    # patched below; the env var carries the isolation across `subprocess`.
+    monkeypatch.setenv("DEDALO_CONFIG_DIR", aislado)
     catalogo = os.path.join(real, "models_dev.json")
     if os.path.exists(catalogo):
         try:

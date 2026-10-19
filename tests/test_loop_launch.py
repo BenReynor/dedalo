@@ -72,3 +72,30 @@ def test_preparar_exporta_identidad_y_filtra(monkeypatch):
     # Frozen (packaged) → no PYTHONPATH injected; argv uses the exe entrypoint.
     assert "PYTHONPATH" not in plan["env"]
     assert plan["argv"][0] == "--dedalo-loop"
+
+
+def test_preparar_reemplaza_un_pythonpath_viejo(monkeypatch):
+    """A stale checkout exported by the parent must not shadow this one.
+
+    Without this, the engine started with cwd=<project> imports whatever
+    `dedalo` the inherited PYTHONPATH exposes: an old copy runs the loop.
+    """
+    monkeypatch.setattr(ll.modelos, "agentes_operativos", lambda: [])
+    monkeypatch.setattr(ll.modelos, "ruta_binario", lambda clave: "")
+    plan = ll.preparar(_conf(), {},
+                       {"PATH": "/usr/bin",
+                        "PYTHONPATH": "/otro/checkout/viejo"},
+                       frozen=False)
+    assert plan["env"]["PYTHONPATH"] == ll.raiz_codigo()
+
+
+def test_entorno_python_quita_la_variable_si_es_frozen():
+    env = {"PYTHONPATH": "/viejo"}
+    ll.entorno_python(env, frozen=True)
+    assert "PYTHONPATH" not in env
+
+
+def test_el_directorio_de_configuracion_llega_a_los_hijos():
+    """Child processes (gate, engine) must see the isolated config dir too."""
+    out = ll.filtrar_entorno({"PATH": "/usr/bin", "DEDALO_CONFIG_DIR": "/tmp/cfg"})
+    assert out["DEDALO_CONFIG_DIR"] == "/tmp/cfg"

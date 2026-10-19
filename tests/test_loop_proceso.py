@@ -111,6 +111,7 @@ def test_limpiar_sesiones_filtra_y_borra(tmp_path):
     if not shutil.which("bash"):
         pytest.skip("bash obligatorio para el stub")
     proy = str(tmp_path / "proyecto")
+    (tmp_path / "proyecto").mkdir()
     log_ruta = str(tmp_path / "deleted.log")
     stub = _stub_opencode(
         tmp_path / "bin", {
@@ -142,3 +143,22 @@ def test_limpiar_sesiones_json_invalido_no_revienta(tmp_path):
         "#!/usr/bin/env bash\necho 'no-soy-json'\nexit 0\n", encoding="utf-8")
     binario.chmod(0o755)
     assert limpiar_sesiones(str(binario), "/proy", 0, None) == 0
+
+
+def test_limpiar_sesiones_corre_en_el_proyecto(tmp_path):
+    """The CLI is invoked with cwd=<project>: opencode scopes its sessions by
+    the working directory, so running from the caller's cwd lists (and could
+    delete) sessions of an unrelated project."""
+    if not shutil.which("bash"):
+        pytest.skip("bash obligatorio para el stub")
+    proy = tmp_path / "proyecto"
+    proy.mkdir()
+    cwd_log = tmp_path / "cwd.log"
+    binario = tmp_path / "opencode"
+    binario.write_text(
+        "#!/usr/bin/env bash\n"
+        f'printf \'%s\\n\' "$PWD" >> "{cwd_log}"\n'
+        'echo "[]"\n', encoding="utf-8")
+    binario.chmod(0o755)
+    limpiar_sesiones(str(binario), str(proy), 0, None)
+    assert cwd_log.read_text(encoding="utf-8").split() == [str(proy)]

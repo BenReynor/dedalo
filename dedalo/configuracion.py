@@ -7,7 +7,11 @@ Edit here instead of scattered throughout the code.
 import os
 
 APLICACION = "dedalo"
-CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", APLICACION)
+# `DEDALO_CONFIG_DIR` lets tests (and portable installs) keep the panel
+# settings out of the real home; child processes inherit it through the
+# environment, unlike an in-process monkeypatch.
+CONFIG_DIR = (os.environ.get("DEDALO_CONFIG_DIR")
+              or os.path.join(os.path.expanduser("~"), ".config", APLICACION))
 REGISTRO = os.path.join(CONFIG_DIR, "proyectos.json")
 CATALOGO_MODELOS = os.path.join(CONFIG_DIR, "models_dev.json")
 
