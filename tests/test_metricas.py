@@ -341,6 +341,7 @@ def test_ramas_del_motor_python_con_hora():
         assert result["resumen"]["total"] == 3
         assert result["resumen"]["hechas"] == 3
         assert result["resumen"]["pendientes"] == 0
+        assert result["resumen"]["duracion_min"] == 5.9
     finally:
         os.unlink(log_path)
         invalidar_cache_metricas(log_path)

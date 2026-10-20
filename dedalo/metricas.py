@@ -141,13 +141,22 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
     coste_por_iter: dict[int, float] = {}  # Exact cost per iteration (new format)
     gate_ok = gate_fail = 0
     rev_pass = rev_fail = 0
+    inicio_ts = ""
+    fin_ts = ""
 
     for linea in lineas:
         linea = linea.rstrip("\n")
 
+        m = LINEA_FIN.search(linea)
+        if m:
+            fin_ts = m.group(1)
+            continue
+
         # Start of iteration
         m = _inicio_iteracion(linea)
         if m:
+            if not inicio_ts:
+                inicio_ts = m[0]
             if iter_actual:
                 iteraciones.append(iter_actual)
             fecha, num, tarea = m
@@ -283,7 +292,8 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
             "bloqueadas": bloqueadas,
             "pendientes": max(0, total - hechas - bloqueadas),
             "coste_total": coste_total,
-            "duracion_min": 0.0,  # Computed in the UI if there are timestamps
+            "duracion_min": (round(_diff_seg(inicio_ts, fin_ts) / 60.0, 1)
+                             if inicio_ts and fin_ts else 0.0),
         },
     }
 
