@@ -242,7 +242,8 @@ def test_instalar_crea_gitignore_del_framework():
 
 
 def test_instalar_no_pisa_gitignore_existente():
-    """If the project already has its own .gitignore, it is respected (not overwritten)."""
+    """If the project has its own .gitignore, its entries are kept and the
+    framework block is appended (install must exclude .dedalo/ right away)."""
     import shutil
     tmp = _proyecto_tmp()
     try:
@@ -252,7 +253,9 @@ def test_instalar_no_pisa_gitignore_existente():
         creados = plantillas.instalar(tmp)
         assert ".gitignore" not in creados
         with open(ruta, encoding="utf-8") as f:
-            assert f.read() == "# node\nnode_modules/\n"
+            contenido = f.read()
+        assert contenido.startswith("# node\nnode_modules/\n")
+        assert ".dedalo/" in contenido
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

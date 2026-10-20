@@ -174,6 +174,7 @@ def test_env_sh_detecta_la_raiz_desde_dedalo_scripts():
 def test_gate_sh_funciona_desde_dedalo_scripts():
     tmp = _proyecto()
     try:
+        subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
         plantillas.instalar(tmp)
         gate = rutas.gate_sh(tmp)
         r = subprocess.run(["bash", gate], capture_output=True, text=True,
@@ -193,6 +194,7 @@ def test_mapear_sh_usa_la_raiz_del_proyecto():
         r = subprocess.run(["bash", mapear], capture_output=True, text=True,
                            timeout=60)
         assert r.returncode == 0, r.stderr
-        assert os.path.realpath(tmp) in r.stdout
+        # macOS /var is a symlink to /private/var: accept both forms.
+        assert tmp in r.stdout or os.path.realpath(tmp) in r.stdout
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

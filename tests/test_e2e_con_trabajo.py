@@ -34,6 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RAIZ = Path(__file__).resolve().parent.parent
 PLANTILLAS = RAIZ / "dedalo" / "plantillas_data"
 
+from dedalo import plantillas, rutas  # noqa: E402
+
 pytestmark = pytest.mark.skipif(
     shutil.which("bash") is None or os.name == "nt",
     reason="el e2e ejecuta dedalo.sh con bash (no disponible en Windows)")
@@ -90,15 +92,11 @@ def _escenario(tmp_path, con_trabajo: bool):
     (proyecto / "plan.md").write_text(
         "# PLAN\n\n- [ ] t1: crear modulo nuevo\n"
         "      criterio: existe src/nuevo.py\n", encoding="utf-8")
-    # The .gitignore is part of the real installation (plantillas.asegurar_gitignore):
-    # it excludes gate_checks/ and the rest of the framework. Without it, the gate's
-    # `ruff check .` would lint the port's .py files and the baseline would abort.
-    for nombre in ("dedalo.sh", "gate.sh", "mapear.sh", "lecciones.md",
-                   ".gitignore"):
-        origen = PLANTILLAS / nombre
-        if origen.exists():
-            shutil.copy2(origen, proyecto / nombre)
-    shutil.copytree(PLANTILLAS / "gate_checks", proyecto / "gate_checks")
+    # Real installation: scripts and checks under `.dedalo/`. The generated
+    # .gitignore keeps them out of the repo, so the gate's `ruff check .` does
+    # not lint the port's .py checks and the baseline does not abort.
+    plantillas.instalar(str(proyecto))
+    plantillas.asegurar_gitignore(str(proyecto))
     _git("add", "-A", cwd=proyecto)
     _git("commit", "-q", "-m", "base", cwd=proyecto)
 
@@ -129,7 +127,8 @@ def _entorno(dir_bin):
 
 def _correr(proyecto, env):
     return subprocess.run(
-        ["bash", "dedalo.sh", "plan.md"], cwd=str(proyecto), env=env,
+        ["bash", rutas.dedalo_sh(str(proyecto)), "plan.md"],
+        cwd=str(proyecto), env=env,
         capture_output=True, text=True, timeout=120)
 
 
@@ -138,7 +137,7 @@ def test_iteracion_con_trabajo_completa_el_run(tmp_path):
     proyecto, dir_bin = _escenario(tmp_path, con_trabajo=True)
 
     proc = _correr(proyecto, _entorno(dir_bin))
-    log_path = proyecto / "progreso.log"
+    log_path = Path(rutas.log(str(proyecto)))
     log = log_path.read_text(errors="replace") if log_path.exists() else ""
     combinado = proc.stdout + proc.stderr + log
 
@@ -168,7 +167,7 @@ def test_iteracion_sin_trabajo_no_crashea(tmp_path):
     proyecto, dir_bin = _escenario(tmp_path, con_trabajo=False)
 
     proc = _correr(proyecto, _entorno(dir_bin))
-    log_path = proyecto / "progreso.log"
+    log_path = Path(rutas.log(str(proyecto)))
     log = log_path.read_text(errors="replace") if log_path.exists() else ""
     combinado = proc.stdout + proc.stderr + log
 

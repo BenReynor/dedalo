@@ -169,9 +169,16 @@ def instalar(ruta):
     habia_log = (os.path.exists(os.path.join(ruta, "progreso.log"))
                  or os.path.exists(os.path.join(rutas.dir_estado(ruta),
                                                 "progreso.log")))
+    habia_gitignore = os.path.exists(os.path.join(ruta, ".gitignore"))
     rutas.asegurar(ruta)
+    # Also here (not only when the GUI closes): MCP installs and any other
+    # caller need the framework excluded from git before inicializar_git()
+    # commits the project, or `ruff check .` would lint the .py checks.
+    asegurar_gitignore(ruta)
     log = rutas.log(ruta)
     creados = []
+    if not habia_gitignore and os.path.exists(os.path.join(ruta, ".gitignore")):
+        creados.append(".gitignore")
     if not habia_log and os.path.exists(log):
         creados.append(os.path.relpath(log, ruta).replace("\\", "/"))
     for nombre in list(ARCHIVOS) + list(GATE_CHECKS) + [".gitignore"]:
