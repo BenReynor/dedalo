@@ -21,14 +21,20 @@ TIMESTAMP_RE = r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]"
 # (required by the template). That suffix is optional here: without it, the
 # regex required ") ==" right after the branch, did NOT match any normal
 # iteration and the panel lost the total, the done count and the cost.
+# The run's base branch includes the start time:
+# dedalo/2026-10-20_00-57-47/t1 (Python engine) or dedalo/tareas/<date>/tN
+# (bash engine); the date-only form is tolerated too.
+_FECHA_RAMA = r"\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?"
 LINEA_ITER_NUEVO = re.compile(
     TIMESTAMP_RE
-    + r" == Iteración (\d+): (.+?) \(rama dedalo/(?:tareas/)?\d{4}-\d{2}-\d{2}/t(\d+)\)"
+    + r" == Iteración (\d+): (.+?) \(rama dedalo/(?:tareas/)?"
+    + _FECHA_RAMA + r"/t(\d+)\)"
     + r"(?: \| criterio:.*?)? =="
 )
 # Tolerated alternative format: [TS] [N/MAX] TAREA -> dedalo/.../tN
 LINEA_ITER_LEGACY = re.compile(
-    TIMESTAMP_RE + r" \[(\d+)/(\d+)\] (.+?) -> dedalo/(?:tareas/)?\d{4}-\d{2}-\d{2}/t(\d+)"
+    TIMESTAMP_RE + r" \[(\d+)/(\d+)\] (.+?) -> dedalo/(?:tareas/)?"
+    + _FECHA_RAMA + r"/t(\d+)"
 )
 # Iteration closing lines after the timestamp (commit / completada / BLOQUEADA)
 LINEA_ESTADO = re.compile(TIMESTAMP_RE + r"\s*(?:✔|✗)?\s*(.+)")

@@ -314,3 +314,33 @@ if __name__ == "__main__":
     test_coste_con_coma_decimal()
     test_coste_por_iteracion()
     print("\n🎉 Todos los tests de metricas.py PASARON")
+
+
+def test_ramas_del_motor_python_con_hora():
+    """The Python engine names the run branch with the start time.
+
+    Real branch: dedalo/2026-10-20_00-57-47 (and dedalo/tareas/<same>/t1).
+    The regex only accepted dedalo/<date>/tN, so a real Python run showed
+    0 iterations, 0 done and 0 cost in the GUI and in resumen_metricas.
+    """
+    log = """[2026-10-20 00:57:47] == DEDALO INICIADO (agente=opencode, dual=1, max_iter=3) ==
+[2026-10-20 00:57:47] == Iteración 1: #1 Crear index.html (rama dedalo/tareas/2026-10-20_00-57-47/t1) | criterio: existe index.html ==
+[2026-10-20 00:58:35] ✔ commit: dedalo: #1 Crear index.html
+[2026-10-20 00:59:05] == Iteración 2: #2 Crear styles.css (rama dedalo/tareas/2026-10-20_00-57-47/t2) | criterio: existe styles.css ==
+[2026-10-20 01:02:09] ✔ commit: dedalo: #2 Crear styles.css
+[2026-10-20 01:02:09] == Iteración 3: #3 Crear README.md (rama dedalo/tareas/2026-10-20_00-57-47/t3) | criterio: existe README.md ==
+[2026-10-20 01:03:38] ✔ commit: dedalo: #3 Crear README.md
+[2026-10-20 01:03:41] == DEDALO FINALIZADO (iter=3, rama=dedalo/2026-10-20_00-57-47, costo≈1.50) ==
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(log)
+        log_path = f.name
+    try:
+        result = parsear_log(log_path)
+        assert [it["iter"] for it in result["iteraciones"]] == [1, 2, 3]
+        assert result["resumen"]["total"] == 3
+        assert result["resumen"]["hechas"] == 3
+        assert result["resumen"]["pendientes"] == 0
+    finally:
+        os.unlink(log_path)
+        invalidar_cache_metricas(log_path)
