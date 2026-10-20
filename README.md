@@ -406,8 +406,10 @@ MCP client configuration (example for `opencode`/Claude Desktop):
 `leer_fichero`, `leer_incidencias`, `resumen_metricas`, `cola_log`,
 `estado_agentes`, `listar_modelos`.
 
-**Action tools:** `instalar_proyecto`, `correr_gate`, `iniciar_loop`
-(background), `estado_loop`, `detener_loop`, `resolver_revision`.
+**Action tools:** `instalar_proyecto`, `confiar_gate`, `correr_gate`,
+`iniciar_loop` (background), `estado_loop`, `detener_loop`,
+`resolver_revision`. `confiar_gate` approves a repo's `gate_checks` (the same
+consent the GUI asks for) before a headless loop can run its gate.
 
 **Shared state:** the MCP server, the GUI and the loop engine share a single
 running-state registry (`dedalo/loops_estado.py`, `~/.config/dedalo/loops.json`)

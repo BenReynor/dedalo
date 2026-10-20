@@ -85,11 +85,11 @@ A **stdio** server (JSON-RPC), designed so that an MCP client (opencode,
 etc.) can control Dédalo without the GUI. Protocol `2024-11-05`.
 
 - **Launch**: `python -m dedalo.mcp_server`
-- **17 tools**: `listar_proyectos`, `estado_proyecto`, `leer_fichero`,
+- **18 tools**: `listar_proyectos`, `estado_proyecto`, `leer_fichero`,
   `leer_plan`, `leer_lecciones`, `leer_contexto`, `leer_incidencias`,
   `resumen_metricas`, `cola_log`, `estado_agentes`, `listar_modelos`,
-  `instalar_proyecto`, `correr_gate`, `iniciar_loop`, `estado_loop`,
-  `detener_loop`, `resolver_revision`.
+  `instalar_proyecto`, `confiar_gate`, `correr_gate`, `iniciar_loop`,
+  `estado_loop`, `detener_loop`, `resolver_revision`.
 - **Instructions** (`instructions` of the `initialize`): a curated Dédalo manual
   (what it is, how the loop works, project files and the usage flow) that the
   client hands to the model as startup context.
