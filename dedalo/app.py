@@ -37,6 +37,7 @@ from . import (
     loops_estado,
     modelos,
     net,
+    notificaciones,
     plantillas,
     rutas,
     sensor,
@@ -513,7 +514,7 @@ class Ventana(QMainWindow):
         self.seguridad = seg
         wb = leer_webhooks()
         wb.update(local.get("webhooks") or {})
-        self.webhooks_config = wb
+        self.webhooks_config = notificaciones.normalizar(wb)
         mod = leer_modelos()
         mod.update(local.get("modelos") or {})
         self._sel_modelos = mod

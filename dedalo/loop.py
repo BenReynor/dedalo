@@ -256,10 +256,16 @@ def restaurar_gate(dir_backup, cfg):
 
 def _notificar(cfg, evento, **datos):
     """Push notification for the project. Never raises: it must not stop the loop."""
+    if getattr(cfg, "origen", "") == "gui" and evento in (
+            "inicio", "fin", "tokens", "error", "bloqueada"):
+        # The GUI already derives these from the log it is tailing; sending
+        # them from the engine too would duplicate every message.
+        return
     try:
         notificaciones.enviar(
             evento, {"proyecto": cfg.nombre or os.path.basename(cfg.proyecto),
-                     **datos})
+                     **datos},
+            proyecto=cfg.nombre or "")
     except Exception:  # noqa: BLE001
         pass
 
@@ -436,6 +442,7 @@ def run(cfg):
                      f"encontrado (busqué '{binario}'). Instálalo o configura "
                      f"el PATH (o CLI_{cli_env}) y relanza.")
         logx(cfg.log, f"ABORTADO: agente no disponible ({cfg.agente_tarea})")
+        _notificar(cfg, "error", detalle=f"agente no disponible: {cfg.agente_tarea}")
         _incidencia(cfg, "aborto_agente",
                     f"agente '{cfg.agente_tarea}' no disponible en el PATH")
         return 2
@@ -465,6 +472,7 @@ def run(cfg):
         print("[dedalo] ✗ SIN INTERNET. Los modelos IA no pueden "
               "responder; abortando.")
         logx(cfg.log, "ABORTADO: sin internet")
+        _notificar(cfg, "error", detalle="sin conexión a internet")
         _incidencia(cfg, "aborto_internet", "sin conexión a internet")
         alerta(cfg.voz, "Sin internet, se aborta el dedalo")
         return 4
@@ -485,6 +493,7 @@ def run(cfg):
             else:
                 mensaje(cfg, "[dedalo] ✗ gate no aprobado; abortando.")
                 logx(cfg.log, "ABORTADO: gate_checks sin consentimiento")
+                _notificar(cfg, "error", detalle="gate_checks sin consentimiento")
                 _incidencia(cfg, "aborto_consentimiento",
                             "el usuario no aprobó los gate_checks")
                 return 3
@@ -492,6 +501,7 @@ def run(cfg):
             print(f"[dedalo] ✗ gate_checks sin consentimiento (sin terminal). "
                   f"Aprueba con {consentimiento.CONSENT_ENV}=1 o desde la GUI.")
             logx(cfg.log, "ABORTADO: gate_checks sin consentimiento")
+            _notificar(cfg, "error", detalle="gate_checks sin consentimiento (no interactivo)")
             _incidencia(cfg, "aborto_consentimiento",
                         "gate_checks sin consentimiento (no interactivo)")
             return 3
@@ -502,6 +512,7 @@ def run(cfg):
     if rc_base != 0:
         print("El repo NO pasa la verificación baseline. Corrige y relanza.")
         logx(cfg.log, "ABORTADO: baseline falló")
+        _notificar(cfg, "error", detalle="el repo no pasa el gate baseline")
         _incidencia(cfg, "aborto_baseline", "el repo no pasa el gate baseline")
         alerta(cfg.voz, "Baseline falló, el dedalo no arranca")
         return 1
@@ -521,6 +532,7 @@ def run(cfg):
         print(m)
     if rama_trabajo is None:
         logx(cfg.log, "ABORTADO: no se pudo crear la rama base")
+        _notificar(cfg, "error", detalle="no se pudo crear la rama base")
         _incidencia(cfg, "aborto_rama", "no se pudo crear la rama base")
         return 1
     logx(cfg.log, f"Rama base: {rama_run}")
@@ -543,6 +555,7 @@ def run(cfg):
             print(f"[dedalo] 💸 Presupuesto agotado ({costo_total}/"
                   f"{cfg.max_costo} USD).")
             alerta(cfg.voz, "Presupuesto agotado")
+            _notificar(cfg, "error", detalle="presupuesto agotado")
             break
         if not net.hay_internet():
             logx(cfg.log, "SIN INTERNET: loop detenido para no lanzar tareas "
@@ -550,6 +563,7 @@ def run(cfg):
             print("[dedalo] ✗ SIN INTERNET. Deteniendo el loop "
                   "(los modelos IA no responden).")
             alerta(cfg.voz, "Sin internet, se detiene el dedalo")
+            _notificar(cfg, "error", detalle="sin internet (loop detenido)")
             break
 
         tarea = proxima_tarea(cfg.plan_md)
@@ -623,20 +637,23 @@ def run(cfg):
             memoria_ctx = ("MEMORIA DEL PROYECTO (lecciones aprendidas, evita "
                            "repetir estos errores):\n" + lecciones_ctx + "\n"
                            if lecciones_ctx else "")
+            rel_log = os.path.relpath(cfg.log, cfg.proyecto)
+            rel_mapa = os.path.relpath(cfg.mapa, cfg.proyecto)
+            rel_scripts = os.path.relpath(os.path.dirname(cfg.gate), cfg.proyecto)
             prompt = (f"Estás en MODO DEDALO. Usa únicamente las skills que "
                       f"tu sesión ya tenga cargadas; no intentes cargar ninguna "
                       f"otra.\nTarea actual (solo esta): {tarea}\n"
                       f"{pre}Criterio de aceptación que debe cumplir tu trabajo "
                       f"(el gate lo verificará): {criterio_texto}\n"
-                      "Lee plan.md y progreso.log antes de tocar nada. Lee también "
-                      "mapeo.txt (mapa módulos→tests): localiza el/los test del "
+                      f"Lee plan.md y {rel_log} antes de tocar nada. Lee también "
+                      f"{rel_mapa} (mapa módulos→tests): localiza el/los test del "
                       "código que vas a tocar y úsalos como contrato.\n"
                       f"{nav_ctx}{contexto_block}{memoria_ctx}"
                       "Ejecuta ÚNICAMENTE esta tarea.\n"
                       "NO hagas commits, NO crees, cambies ni borres ramas: el "
                       "script gestiona git.\n"
-                      "NO edites dedalo.sh, gate.sh, mapear.sh, mapeo.txt, "
-                      "plan.md, progreso.log, lecciones.md, CONTEXTO.md, "
+                      f"NO edites {rel_scripts}/*, plan.md, {rel_log}, "
+                      "lecciones.md, CONTEXTO.md, "
                       "endpoints.txt, .env ni SECURITY.md.\n"
                       "Al terminar, responde con un resumen conciso de qué "
                       "cambiaste y qué tests corriste.")
@@ -652,6 +669,7 @@ def run(cfg):
                              f"ejecutar (rc={rc}): binario no encontrado o sin "
                              f"permisos de ejecución.")
                 logx(cfg.log, f"ABORTADO: agente no ejecutable (rc={rc})")
+                _notificar(cfg, "error", detalle=f"agente no ejecutable (rc={rc})")
                 _incidencia(cfg, "aborto_agente_ejecucion",
                             f"{cfg.agente_tarea} no ejecutable (rc={rc})",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
@@ -677,6 +695,7 @@ def run(cfg):
                              f"auth login' · claude: '/login' · codex: 'codex "
                              f"login').")
                 logx(cfg.log, f"ABORTADO: agente sin autenticacion ({cfg.agente_tarea})")
+                _notificar(cfg, "error", detalle=f"agente sin autenticación: {cfg.agente_tarea}")
                 _incidencia(cfg, "aborto_autenticacion",
                             f"{cfg.agente_tarea} sin sesión iniciada",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
@@ -686,6 +705,7 @@ def run(cfg):
                 mensaje(cfg, "[dedalo] ✗ Tokens/cuota agotados del proveedor "
                              "IA — deteniendo loop")
                 logx(cfg.log, "ABORTADO: tokens/cuota agotados")
+                _notificar(cfg, "tokens")
                 _incidencia(cfg, "aborto_tokens", "tokens/cuota agotados",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
                 alerta(cfg.voz, "Tokens agotados, se detiene el dedalo")
@@ -696,6 +716,7 @@ def run(cfg):
                 mensaje(cfg, "[dedalo] ✗✗ el agente cambió de rama. "
                              "Abortando: requiere revisión humana.")
                 logx(cfg.log, "ABORTADO: se detectó cambio de rama no autorizado")
+                _notificar(cfg, "error", detalle="el agente cambió de rama")
                 _incidencia(cfg, "aborto_rama_agente",
                             "el agente cambió de rama (requiere revisión humana)",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
@@ -725,6 +746,7 @@ def run(cfg):
                         mensaje(cfg, f"[dedalo] ✗✗ revisor ({cfg.revisor}) "
                                      "no está autenticado — deteniendo loop")
                         logx(cfg.log, f"ABORTADO: revisor sin autenticacion ({cfg.revisor})")
+                        _notificar(cfg, "error", detalle=f"revisor sin autenticación: {cfg.revisor}")
                         _incidencia(cfg, "aborto_autenticacion",
                                     f"revisor {cfg.revisor} sin sesión iniciada",
                                     tarea=tarea, iteracion=iteracion,
@@ -735,6 +757,7 @@ def run(cfg):
                         mensaje(cfg, "[dedalo] ✗ Tokens/cuota agotados del "
                                      "proveedor IA (revisor) — deteniendo loop")
                         logx(cfg.log, "ABORTADO: tokens/cuota agotados (revisor)")
+                        _notificar(cfg, "tokens")
                         _incidencia(cfg, "aborto_tokens",
                                     "tokens/cuota agotados (revisor)",
                                     tarea=tarea, iteracion=iteracion,
@@ -901,7 +924,7 @@ def run(cfg):
 
         _commit_memoria(cfg, tarea, iteracion)
 
-        costo_total = suma_coste(costo_total, cfg.costo_por_iter)
+        costo_total = suma_coste(costo_total, costo_iter)
         logx(cfg.log, f"Costo estimado acumulado: {costo_total} USD")
         print(f"[dedalo] 💰 Costo estimado acumulado: {costo_total} USD")
         for f in (before, after, out, out + ".err"):
@@ -1106,6 +1129,7 @@ def _esperar_revision_manual(cfg, tarea):
                 mensaje(cfg, "[dedalo] ✗ sin internet durante la revisión "
                              "manual: abortando.")
                 logx(cfg.log, "ABORTADO: sin internet durante revisión manual")
+                _notificar(cfg, "error", detalle="sin internet durante la revisión manual")
                 alerta(cfg.voz, "Sin internet, se aborta el dedalo")
                 for f in ("waiting", "decision"):
                     try:

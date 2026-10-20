@@ -102,6 +102,14 @@ MAPA="$ESTADO_DIR/mapeo.txt"
 LOG="$ESTADO_DIR/progreso.log"
 PLAN="$PROYECTO/plan.md"
 LECCIONES="$PROYECTO/lecciones.md"
+LOG_REL="${LOG#"$PROYECTO"/}"
+MAPA_REL="${MAPA#"$PROYECTO"/}"
+SCRIPTS_REL="${SCRIPTS_DIR#"$PROYECTO"/}"
+if [ "$SCRIPTS_REL" = "." ]; then
+    SCRIPTS_REL="dedalo.sh, gate.sh, mapear.sh y gate_checks/"
+else
+    SCRIPTS_REL="${SCRIPTS_REL}/*"
+fi
 MAX_ITER="${MAX_ITER:-40}"
 TIMEOUT_POR_TAREA="${TIMEOUT_POR_TAREA:-900}"
 TIMEOUT_NAVEGADOR="${TIMEOUT_NAVEGADOR:-60}"
@@ -1247,13 +1255,13 @@ while (( iter < MAX_ITER )); do
         PROMPT="Estás en MODO DEDALO. Usa únicamente las skills que tu sesión ya tenga cargadas; no intentes cargar ninguna otra.
 Tarea actual (solo esta): ${TAREA}
 ${PRE}Criterio de aceptación que debe cumplir tu trabajo (el gate lo verificará): ${CRITERIO:-<sin criterio explícito; usa los tests/mapeo.txt como contrato>}
-Lee plan.md y progreso.log antes de tocar nada. Lee también mapeo.txt (mapa módulos→tests): localiza el/los test del código que vas a tocar y úsalos como contrato.
+Lee plan.md y ${LOG_REL} antes de tocar nada. Lee también ${MAPA_REL} (mapa módulos→tests): localiza el/los test del código que vas a tocar y úsalos como contrato.
 ${NAV_CONTEXTO}${LECCIONES_CONTEXTO:+MEMORIA DEL PROYECTO (lecciones aprendidas, evita repetir estos errores):
 ${LECCIONES_CONTEXTO}
 }
 Ejecuta ÚNICAMENTE esta tarea.
 NO hagas commits, NO crees, cambies ni borres ramas: el script gestiona git.
-NO edites dedalo.sh, gate.sh, mapear.sh, mapeo.txt, plan.md, progreso.log, lecciones.md, endpoints.txt, .env ni SECURITY.md.
+NO edites ${SCRIPTS_REL}, plan.md, ${LOG_REL}, lecciones.md, endpoints.txt, .env ni SECURITY.md.
 Al terminar, responde con un resumen conciso de qué cambiaste y qué tests corriste."
 
         run_agente "$AGENTE_TAREA" "$OUT" "$MODELO_TAREA" "$PROMPT"
@@ -1451,7 +1459,7 @@ Al terminar, responde con un resumen conciso de qué cambiaste y qué tests corr
 
     commit_memoria
 
-    COSTO_TOTAL="$(num -v t="$COSTO_TOTAL" -v a="$COSTO_POR_ITER" 'BEGIN{printf "%.2f", t+a}')"
+    COSTO_TOTAL="$(num -v t="$COSTO_TOTAL" -v a="$COSTO_ITER_ACTUAL" 'BEGIN{printf "%.2f", t+a}')"
     logx "Costo estimado acumulado: $COSTO_TOTAL USD"
     echo "[dedalo] 💰 Costo estimado acumulado: ${COSTO_TOTAL} USD"
 

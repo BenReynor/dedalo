@@ -47,11 +47,22 @@ def normalizar(config: dict[str, Any] | None) -> dict[str, Any]:
     return normal
 
 
-def leer_config() -> dict[str, Any]:
-    """Global webhook configuration (the GUI and the engine share it)."""
-    from .proyectos import leer_webhooks
+def leer_config(proyecto: str | None = None) -> dict[str, Any]:
+    """Webhook configuration: global, with the project's overrides on top.
 
-    return normalizar(leer_webhooks())
+    The GUI saves project-level settings; the engine must honor them too, so a
+    loop started from MCP/CLI notifies like the same loop started from the GUI.
+    """
+    from .proyectos import leer_config_proyecto, leer_webhooks
+
+    config = dict(leer_webhooks() or {})
+    if proyecto:
+        local = (leer_config_proyecto(proyecto) or {}).get("webhooks") or {}
+        eventos = dict(config.get("eventos") or {})
+        eventos.update(local.get("eventos") or {})
+        config.update(local)
+        config["eventos"] = eventos
+    return normalizar(config)
 
 
 def esta_activo(config: dict[str, Any], evento: str) -> bool:
@@ -170,12 +181,13 @@ def enviar_texto(config: dict[str, Any], texto: str,
 
 
 def enviar(evento: str, datos: dict[str, Any] | None = None,
-           config: dict[str, Any] | None = None) -> list[tuple[str, str]]:
+           config: dict[str, Any] | None = None,
+           proyecto: str | None = None) -> list[tuple[str, str]]:
     """Formats and sends an event. Silent no-op when it is disabled or fails."""
     datos = dict(datos or {})
     if config is None:
         try:
-            config = leer_config()
+            config = leer_config(proyecto)
         except Exception:
             return []
     if not esta_activo(config, evento):

@@ -113,3 +113,34 @@ def test_normalizar_activa_los_eventos_nuevos_por_defecto():
     apagado = notificaciones.normalizar(
         {**viejo, "eventos": {"externo": False}})
     assert not notificaciones.esta_activo(apagado, "externo")
+
+
+def test_config_del_proyecto_hereda_y_sobrescribe(monkeypatch):
+    from dedalo import proyectos
+
+    monkeypatch.setattr(proyectos, "leer_webhooks", lambda: {
+        "telegram_token": "tok", "telegram_chat_id": "1",
+        "eventos": {"inicio": True, "tarea": True}})
+    monkeypatch.setattr(proyectos, "leer_config_proyecto", lambda nombre: {
+        "webhooks": {"eventos": {"tarea": False}}})
+    config = notificaciones.leer_config("p1")
+    assert config["eventos"]["inicio"] is True
+    assert config["eventos"]["tarea"] is False
+    assert config["eventos"]["bloqueada"] is True
+
+
+def test_el_motor_no_duplica_los_eventos_de_la_gui(monkeypatch):
+    enviados = []
+    monkeypatch.setattr(notificaciones, "enviar",
+                        lambda ev, datos=None, **k: enviados.append(ev))
+
+    class Cfg:
+        nombre = "p1"
+        proyecto = "/tmp/p1"
+        origen = "gui"
+
+    for evento in ("inicio", "fin", "tokens", "error", "bloqueada"):
+        loop._notificar(Cfg(), evento)
+    assert enviados == []
+    loop._notificar(Cfg(), "tarea", tarea="t")
+    assert enviados == ["tarea"]

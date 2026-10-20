@@ -171,8 +171,14 @@ def test_tarea_que_no_pasa_el_gate_se_bloquea(tmp_path, capsys):
     gitlog = subprocess.run(
         ["git", "log", "--all", "--format=%s"], cwd=str(proyecto),
         capture_output=True, text=True, check=True)
-    assert not any(linea.startswith("dedalo:") for linea in gitlog.stdout.splitlines()), \
-        "no debe haber commit de una tarea bloqueada"
+    asuntos = [linea for linea in gitlog.stdout.splitlines()
+               if linea.startswith("dedalo:")]
+    assert asuntos == ["dedalo: plan y lecciones (iter 1)"], asuntos
+    # The blocked task's work is not committed, but the [B] mark and the lesson are.
+    en_commit = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"], cwd=str(proyecto),
+        capture_output=True, text=True, check=True).stdout.split()
+    assert "plan.md" in en_commit and "lecciones.md" in en_commit
 
     # incidencias.jsonl records each gate_fail and the final block, and the
     # block inherits the real reason (gate_fail), not a generic text.
@@ -201,12 +207,20 @@ def test_gate_sin_consentimiento_aborta_con_3(tmp_path, monkeypatch):
     env = _entorno(bin_falso)
     env["DEDALO_GATE_CONSENT"] = "0"
 
+    eventos = []
+
+    def enviar_falso(evento, datos=None, config=None, proyecto=None):
+        eventos.append(evento)
+
+    monkeypatch.setattr("dedalo.loop.notificaciones.enviar", enviar_falso)
     rc, _cfg = _correr(proyecto, env)
     log = (proyecto / "progreso.log").read_text(
         encoding="utf-8", errors="replace")
 
     assert rc == 3, log[-3000:]
     assert "sin consentimiento" in log
+    # The engine (not only the GUI) reports aborts.
+    assert "error" in eventos, eventos
 
 
 def test_sin_agente_aborta_con_2(tmp_path):
