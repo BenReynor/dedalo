@@ -338,3 +338,47 @@ def test_proteger_salidas_sustituye_stream_none_por_devnull(monkeypatch):
     print("ok")
     assert sys.stdout is not None
     sys.stdout.close()
+
+
+def test_commit_memoria_incluye_plan_y_lecciones(tmp_path):
+    """After marking, plan.md and lecciones.md are committed on the run branch."""
+    import subprocess
+    from types import SimpleNamespace
+
+    from dedalo.loop import _commit_memoria, _marcar
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for clave, valor in (("user.email", "t@t"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(tmp_path), "config", clave, valor],
+                       check=True)
+    plan = tmp_path / "plan.md"
+    lecciones = tmp_path / "lecciones.md"
+    plan.write_text("- [ ] una\n- [ ] dos\n", encoding="utf-8")
+    lecciones.write_text("# Lecciones\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"],
+                   check=True)
+
+    cfg = SimpleNamespace(proyecto=str(tmp_path), plan_md=str(plan),
+                          lecciones=str(lecciones),
+                          log=str(tmp_path / "progreso.log"))
+    assert _marcar(cfg, "x") is True
+    lecciones.write_text("# Lecciones\n\n- nueva\n", encoding="utf-8")
+    _commit_memoria(cfg, "una", 1)
+
+    listado = subprocess.check_output(
+        ["git", "-C", str(tmp_path), "show", "--name-only", "--format=%s"],
+        text=True)
+    assert "plan y lecciones (iter 1)" in listado
+    assert "plan.md" in listado and "lecciones.md" in listado
+    estado = subprocess.check_output(
+        ["git", "-C", str(tmp_path), "status", "--porcelain", "--",
+         "plan.md", "lecciones.md"], text=True)
+    assert estado.strip() == ""
+
+    antes = subprocess.check_output(
+        ["git", "-C", str(tmp_path), "rev-list", "--count", "HEAD"], text=True)
+    _commit_memoria(cfg, "una", 1)
+    despues = subprocess.check_output(
+        ["git", "-C", str(tmp_path), "rev-list", "--count", "HEAD"], text=True)
+    assert antes == despues

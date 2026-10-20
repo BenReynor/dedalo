@@ -362,6 +362,29 @@ def _marcar(cfg, estado):
     return p.marcar_primera(estado)
 
 
+def _commit_memoria(cfg, tarea, iteracion):
+    """Commits plan marks and lessons on the run branch.
+
+    `_marcar` and `registrar_leccion` run after the task commit, so without
+    this the remote plan keeps every task as pending and the working tree
+    stays dirty after a successful run.
+    """
+    archivos = []
+    for ruta in (cfg.plan_md, cfg.lecciones):
+        if os.path.exists(ruta):
+            archivos.append(os.path.relpath(ruta, cfg.proyecto))
+    if not archivos:
+        return
+    rc, salida, _ = run_git(cfg.proyecto, "status", "--porcelain", "--",
+                            *archivos)
+    if rc != 0 or not salida.strip():
+        return
+    asunto = f"dedalo: plan y lecciones (iter {iteracion})"
+    if commit_tarea(cfg.proyecto, archivos, asunto, tarea) == 0:
+        logx(cfg.log, f"memoria commiteada: {asunto}")
+        print(f"[dedalo] ✔ commit: {asunto}")
+
+
 def _resumen_bloqueadas(cfg):
     """Summary lines of the [B] tasks in plan.md with their last reason.
 
@@ -875,6 +898,8 @@ def run(cfg):
                 "Reformular la tarea en plan.md, dividirla en pasos más "
                 "pequeños o revisar los criterios.")
             logx(cfg.log, "lección registrada en lecciones.md (tarea bloqueada)")
+
+        _commit_memoria(cfg, tarea, iteracion)
 
         costo_total = suma_coste(costo_total, cfg.costo_por_iter)
         logx(cfg.log, f"Costo estimado acumulado: {costo_total} USD")

@@ -458,6 +458,22 @@ marcar_plan() {
     rm -f "$tmp"
 }
 
+# Commits the plan marks and the lessons on the run branch.
+#
+# `marcar_plan` and `registrar_leccion` run after the task commit; without this
+# the remote plan keeps every task as pending and the work tree stays dirty.
+commit_memoria() {
+    local asunto cambios
+    asunto="dedalo: plan y lecciones (iter $iter)"
+    cambios="$(cd "$PROYECTO" && git status --porcelain -- plan.md lecciones.md 2>/dev/null)"
+    [ -n "$cambios" ] || return 0
+    if ( cd "$PROYECTO" && git add -- plan.md lecciones.md \
+        && git commit -q -m "$asunto" ); then
+        logx "memoria commiteada: $asunto"
+        echo "[dedalo] ✔ commit: $asunto"
+    fi
+}
+
 # Runs a command in the background and waits for it to finish.
 #
 # It is the key point of the bug: with the child in the FOREGROUND, bash defers the trap
@@ -1432,6 +1448,8 @@ Al terminar, responde con un resumen conciso de qué cambiaste y qué tests corr
             "Reformular la tarea en plan.md, dividirla en pasos más pequeños o revisar los criterios."
         logx "lección registrada en lecciones.md (tarea bloqueada)"
     fi
+
+    commit_memoria
 
     COSTO_TOTAL="$(num -v t="$COSTO_TOTAL" -v a="$COSTO_POR_ITER" 'BEGIN{printf "%.2f", t+a}')"
     logx "Costo estimado acumulado: $COSTO_TOTAL USD"
