@@ -186,3 +186,16 @@ def test_correr_gate_pasa_el_argv_completo(monkeypatch, tmp_path):
     assert datos["rc"] == 0
     assert vistos["cmd"] == m.argv_gate(False)
     assert vistos["kwargs"]["cwd"] == str(tmp_path)
+
+
+def test_confiar_gate_habilita_el_gate(monkeypatch, tmp_path):
+    from dedalo import consentimiento
+
+    checks = tmp_path / ".dedalo" / "scripts" / "gate_checks"
+    checks.mkdir(parents=True)
+    (checks / "01_x.sh").write_text("exit 0\n", encoding="utf-8")
+    monkeypatch.setattr(consentimiento, "CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setattr(m, "_ruta_de", lambda nombre: str(tmp_path))
+    assert consentimiento.concedido(str(tmp_path), {}) is False
+    datos = json.loads(m.confiar_gate("p1"))
+    assert datos["gate_confiado"] is True

@@ -25,6 +25,7 @@ import subprocess
 import sys
 
 from . import (
+    consentimiento,
     loop_launch,
     loop_proceso,
     loops_estado,
@@ -80,10 +81,11 @@ TYPICAL FLOW WITH THESE TOOLS
 1. listar_proyectos / estado_proyecto: what's there and in what state.
 2. leer_plan / leer_contexto / leer_lecciones / cola_log: context.
 3. instalar_proyecto: create and register a new project (optional).
-4. iniciar_loop: start the loop in background (returns pid).
-5. estado_loop / cola_log: follow progress.
-6. resolver_revision(APPROVE|REJECT): resolve a pending review.
-7. correr_gate: validate manually; detener_loop: stop the loop.
+4. confiar_gate: approve the gate of a repo whose checks you trust.
+5. iniciar_loop: start the loop in background (returns pid).
+6. estado_loop / cola_log: follow progress.
+7. resolver_revision(APPROVE|REJECT): resolve a pending review.
+8. correr_gate: validate manually; detener_loop: stop the loop.
 
 The full text of this manual is in the resource `dedalo://manual`.
 """
@@ -308,6 +310,19 @@ def instalar_proyecto(ruta: str, nombre: str = "") -> str:
                       ensure_ascii=False, indent=2)
 
 
+def confiar_gate(nombre: str) -> str:
+    """Approves the project's gate_checks (the consent `iniciar_loop` needs).
+
+    The engine refuses to run a repo's gate without consent and the GUI asks
+    the user; a headless MCP client has no terminal, so it needs this tool.
+    """
+    ruta = _ruta_de(nombre)
+    consentimiento.confiar(ruta)
+    return json.dumps({"proyecto": nombre,
+                       "gate_confiado": consentimiento.concedido(ruta)},
+                      ensure_ascii=False, indent=2)
+
+
 def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     """Runs the project gate (blocking, with timeout) and returns its output."""
     ruta = _ruta_de(nombre)
@@ -452,7 +467,8 @@ def _registrar(server):
     for fn in (listar_proyectos, estado_proyecto, leer_fichero, leer_plan,
                leer_lecciones, leer_contexto, leer_incidencias, resumen_metricas,
                cola_log, estado_agentes, listar_modelos, instalar_proyecto,
-               correr_gate, iniciar_loop, estado_loop, detener_loop,
+               confiar_gate, correr_gate, iniciar_loop, estado_loop,
+               detener_loop,
                resolver_revision):
         server.tool()(fn)
     server.resource("dedalo://{nombre}/{fichero}",
