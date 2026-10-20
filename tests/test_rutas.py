@@ -14,6 +14,12 @@ import pytest  # noqa: E402
 from dedalo import plantillas, rutas  # noqa: E402
 from dedalo.loop import Config  # noqa: E402
 
+# On Windows `bash` is usually the WSL stub (no distribution) and these scripts
+# are POSIX; the rest of the module is portable Python.
+SIN_BASH = pytest.mark.skipif(
+    shutil.which("bash") is None or os.name == "nt",
+    reason="requiere bash POSIX")
+
 
 def _proyecto():
     return tempfile.mkdtemp(prefix="dedalo-rutas-")
@@ -149,7 +155,7 @@ def test_quitar_limpia_el_arbol_nuevo():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="requiere bash")
+@SIN_BASH
 def test_env_sh_detecta_la_raiz_desde_dedalo_scripts():
     tmp = _proyecto()
     try:
@@ -164,7 +170,7 @@ def test_env_sh_detecta_la_raiz_desde_dedalo_scripts():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="requiere bash")
+@SIN_BASH
 def test_gate_sh_funciona_desde_dedalo_scripts():
     tmp = _proyecto()
     try:
@@ -178,7 +184,7 @@ def test_gate_sh_funciona_desde_dedalo_scripts():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="requiere bash")
+@SIN_BASH
 def test_mapear_sh_usa_la_raiz_del_proyecto():
     tmp = _proyecto()
     try:

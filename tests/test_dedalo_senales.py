@@ -30,8 +30,9 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 RAIZ = Path(__file__).resolve().parent.parent
-PLANTILLAS = RAIZ / "dedalo" / "plantillas_data"
 TMPDIR = Path(os.environ.get("TMPDIR", "/tmp"))
+
+from dedalo import plantillas, rutas  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     # On Windows the module has no os.killpg/os.getpgid and processes have no
@@ -84,15 +85,11 @@ def _escenario(tmp_path, agente_rapido=False):
     (proyecto / "plan.md").write_text(
         "# PLAN\n\n- [ ] #1 hacer algo\n      criterio: algo existe\n",
         encoding="utf-8")
-    # The .gitignore is part of the real installation (plantillas.asegurar_gitignore):
-    # it excludes gate_checks/ and the rest of the framework. Without it, the gate's
-    # `ruff check .` would lint the port's .py files and the baseline would abort.
-    for nombre in ("dedalo.sh", "gate.sh", "mapear.sh", "plan.md",
-                   "lecciones.md", ".gitignore"):
-        origen = PLANTILLAS / nombre
-        if origen.exists():
-            shutil.copy2(origen, proyecto / nombre)
-    shutil.copytree(PLANTILLAS / "gate_checks", proyecto / "gate_checks")
+    # Real installation: scripts and checks go under `.dedalo/` and the
+    # generated .gitignore keeps the whole directory out of the repo (the
+    # gate's `ruff check .` would otherwise lint the port's .py checks and the
+    # baseline would abort). The plan.md written above is never overwritten.
+    plantillas.instalar(str(proyecto))
     _git("add", "-A", cwd=proyecto)
     _git("commit", "-q", "-m", "base", cwd=proyecto)
 
@@ -135,7 +132,8 @@ def _entorno(dir_bin):
 def _arrancar(proyecto, env, marca):
     """Starts dedalo.sh and waits for the `marca` file to appear."""
     proc = subprocess.Popen(
-        ["bash", "dedalo.sh", "plan.md"], cwd=str(proyecto), env=env,
+        ["bash", rutas.dedalo_sh(str(proyecto)), "plan.md"],
+        cwd=str(proyecto), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         # Own session: this way SIGTERM reaches the script and its whole family without
         # touching pytest, which shares a process group with this test.
@@ -222,7 +220,7 @@ def test_una_sola_limpieza_por_senal(tmp_path):
     rc, salida, _ = _parar(proc, signal.SIGTERM)
     assert rc == 143, salida[-2000:]
 
-    log = proyecto / "progreso.log"
+    log = Path(rutas.log(str(proyecto)))
     texto = log.read_text(errors="replace") if log.exists() else ""
     # With the previous bug two cleanups appeared: one from the signal's trap and
     # another from the EXIT that came after.
@@ -263,7 +261,7 @@ def test_gate_interruptible_no_deja_huerfanos(tmp_path):
     # Slow gate. It is replaced BEFORE starting so gate_intacto accepts it
     # (it compares against the copy the script makes at startup).
     pids_gate = tmp_path / "gate_pids.txt"
-    (proyecto / "gate.sh").write_text(
+    Path(rutas.gate_sh(str(proyecto))).write_text(
         "#!/usr/bin/env bash\n"
         + _script_que_registra_y_espera(pids_gate), encoding="utf-8")
 
