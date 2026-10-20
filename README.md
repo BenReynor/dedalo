@@ -26,6 +26,7 @@ Orchestrates AI agents (opencode, codex, claude) to iterate over tasks in `plan.
 - [Keyboard Shortcuts](#-keyboard-shortcuts)
 - [Themes (9 curated)](#-themes-9-curated)
 - [Persistent Settings](#-persistent-settings)
+- [Notifications](#-notifications)
 - [Adding a Project That Already Has Content](#-adding-a-project-that-already-has-content)
 - [Model Catalog](#-model-catalog)
 - [Managed Project Requirements](#-managed-project-requirements)
@@ -78,6 +79,10 @@ python -m dedalo
 
 > **Python**: Requires 3.10+.
 
+> **Repair or start fresh**: `rm -rf .venv && bash install.sh` rebuilds the
+> environment from scratch in one command, keeping your projects, models and
+> notification settings untouched.
+
 ---
 
 ## 🎯 What It Does
@@ -86,6 +91,7 @@ python -m dedalo
 |---------|-------------|
 | **Plan** | Kanban + Markdown editor for `plan.md` (tasks `- [ ]`, done `- [x]`, blocked `- [B]`). |
 | **Lessons** | Editor for `lecciones.md` (project memory): injected into the agent before each task, and an entry is added when a task gets blocked. |
+| **Progress** | Every completed task is committed together with its updated `plan.md` and `lecciones.md` — the branch tells the whole story, not just the code. |
 | **Incidents** | Table for `incidencias.jsonl` (time, iteration, task, type, reason): failures, aborts, and blocks with their actual cause. |
 | **Run** | Launches the loop: agent → gate → reviewer → commit. Parameters: deadline, iterations, base branch, max cost, dual/manual review. |
 | **Logs** | Live output of `progreso.log` (loop) and `gate.sh`. Collapsible (⛶) with a permanently visible header. Auto-scroll. |
@@ -183,6 +189,32 @@ two ways out:
   you reopen, it warns you again instead of silently losing the registry.
 - **Start from scratch**: only then is the original discarded, and the copy is
   kept in case something needs recovering by hand.
+
+---
+
+## 🔔 Notifications
+
+A loop is only useful if you can walk away from it. Dédalo pings you on
+**Telegram, Discord or WhatsApp** at the moments that matter — whether the
+loop was launched from the panel, from an MCP pilot agent or from the CLI.
+
+| Event | What you get |
+|---|---|
+| Loop started | Project, models and origin (GUI, MCP or CLI). |
+| Task completed | Task name, iteration, branch and commit. |
+| Task blocked | The task that needs your attention. |
+| Loop finished | Tasks done/total, estimated cost and duration. |
+| Tokens/quota exhausted | The loop stopped because the model ran dry. |
+| Critical error | The exact reason the run aborted. |
+
+- **Per-project routing.** Set channels once and override them per project: one
+  project can ping your phone while another stays silent.
+- **No duplicates.** Panel and engine agree on who reports what, so a GUI run
+  never sends every event twice.
+- **No silent failures.** If a channel rejects a message (bad token, wrong chat
+  id), the reason lands in `progreso.log` instead of being swallowed.
+
+Notifications are **best effort**: a broken webhook never stops the loop.
 
 ---
 
