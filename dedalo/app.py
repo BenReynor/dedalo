@@ -713,7 +713,7 @@ class Ventana(QMainWindow):
                 self, t("Remove project"),
                 t("Remove the project from the list?\n\nIts dedalo files will "
                   "also be deleted from disk:\n"
-                  "  · dedalo.sh, gate.sh, mapear.sh\n"
+                  "  · .dedalo/ (scripts and run state)\n"
                   "  · plan.md, lecciones.md and progreso.log\n\n"
                   "The rest of the project's code is NOT touched."),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -1336,8 +1336,8 @@ class Ventana(QMainWindow):
             self, t("Framework out of git"),
             t("It will run:\n"
               "1) Add the Dédalo block to the project's .gitignore\n"
-              "2) git rm --cached of dedalo.sh, gate.sh, gate_checks/, plan.md,\n"
-              "   lecciones.md, mapeo.txt, progreso.log, metrics.jsonl, etc.\n\n"
+              "2) git rm --cached of .dedalo/, gate.sh, gate_checks/,\n"
+              "   progreso.log, metrics.jsonl, mapeo.txt, etc.\n\n"
               "The files REMAIN on disk (dedalo needs them); they just stop "
               "being in the git repo.\nContinue?"),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)

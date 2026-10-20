@@ -159,7 +159,7 @@ _ES: dict[str, str] = {
     "It may be truncated or hand-edited. A full copy has been saved to:\n{copia}\n\nIf you quit now, the file stays where it is and you can repair it or restore it by hand. If you prefer to continue, the project list will start empty (your data is still in the copy).":
         "Puede estar truncado o editado a mano. Se ha guardado una copia completa en:\n{copia}\n\nSi sales ahora, el fichero se queda donde está y puedes repararlo o restaurarlo a mano. Si prefieres continuar, la lista de proyectos empezará vacía (tus datos siguen en la copia).",
     "It will run:\n1) Add the Dédalo block to the project's .gitignore\n2) git rm --cached of dedalo.sh, gate.sh, gate_checks/, plan.md,\n   lecciones.md, mapeo.txt, progreso.log, metrics.jsonl, etc.\n\nThe files REMAIN on disk (dedalo needs them); they just stop being in the git repo.\nContinue?":
-        "Ejecutará:\n1) Añadir el bloque de Dédalo al .gitignore del proyecto\n2) git rm --cached de dedalo.sh, gate.sh, gate_checks/, plan.md,\n   lecciones.md, mapeo.txt, progreso.log, metrics.jsonl, etc.\n\nLos ficheros PERMANECEN en disco (dedalo los necesita); simplemente dejan de estar en el repo git.\n¿Continuar?",
+        "Ejecutará:\n1) Añadir el bloque de Dédalo al .gitignore del proyecto\n2) git rm --cached de .dedalo/, gate.sh, gate_checks/,\n   progreso.log, metrics.jsonl, mapeo.txt, etc.\n\nLos ficheros PERMANECEN en disco (dedalo los necesita); simplemente dejan de estar en el repo git.\n¿Continuar?",
     "Iter": "Iter",
     "Iteration": "Iteración",
     "Language": "Idioma",
@@ -212,7 +212,7 @@ _ES: dict[str, str] = {
     "Remove": "Quitar",
     "Remove project": "Quitar proyecto",
     "Remove the project from the list?\n\nIts dedalo files will also be deleted from disk:\n  · dedalo.sh, gate.sh, mapear.sh\n  · plan.md, lecciones.md and progreso.log\n\nThe rest of the project's code is NOT touched.":
-        "¿Quitar el proyecto de la lista?\n\nTambién se borrarán de disco sus ficheros de dedalo:\n  · dedalo.sh, gate.sh, mapear.sh\n  · plan.md, lecciones.md y progreso.log\n\nEl resto del código del proyecto NO se toca.",
+        "¿Quitar el proyecto de la lista?\n\nTambién se borrarán de disco sus ficheros de dedalo:\n  · .dedalo/ (scripts y estado)\n  · plan.md, lecciones.md y progreso.log\n\nEl resto del código del proyecto NO se toca.",
     "Removed from the list and deleted:\n  · {lista}":
         "Quitado de la lista y borrado:\n  · {lista}",
     "Removed from the list.": "Quitado de la lista.",

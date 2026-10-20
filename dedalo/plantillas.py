@@ -240,15 +240,16 @@ def asegurar_gitignore(ruta):
 def quitar_framework_del_git(ruta):
     """Removes the framework files from git tracking (without deleting them).
 
-    The project keeps dedalo.sh, gate.sh, gate_checks/, plan.md,
-    etc. on disk (dedalo needs them), but they are no longer in the repo.
+    The project keeps the scripts, gate_checks/ and the run state on disk
+    (dedalo needs them), but they are no longer in the repo. plan.md,
+    lecciones.md and CONTEXTO.md are project content and stay tracked.
     Returns the list of files that git stopped tracking.
     """
     if not _es_repo_git(ruta):
         return []
-    patrones = [rutas.DIR] + list(ARCHIVOS) + [GATE_CHECKS_DIR] + [
-        "progreso.log", "metrics.jsonl", "incidencias.jsonl", "mapeo.txt",
-        "endpoints.txt", ".dedalo_review"]
+    patrones = ([rutas.DIR, GATE_CHECKS_DIR] + list(SCRIPTS)
+                + ["progreso.log", "metrics.jsonl", "incidencias.jsonl",
+                   "mapeo.txt", "endpoints.txt", ".dedalo_review"])
     try:
         out = subprocess.run(
             ["git", "ls-files"] + patrones, cwd=ruta, capture_output=True,

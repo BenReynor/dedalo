@@ -316,7 +316,8 @@ def test_quitar_framework_del_git():
 
         assert "dedalo.sh" in salidos
         assert "gate_checks/01_db.sh" in salidos
-        assert "CONTEXTO.md" in salidos
+        assert "CONTEXTO.md" not in salidos, "la memoria es del proyecto"
+        assert "plan.md" not in salidos, "la memoria es del proyecto"
         assert "readme.md" not in salidos, "lo del usuario no se toca"
         # They are still on disk
         assert os.path.exists(os.path.join(tmp, "dedalo.sh"))
@@ -326,7 +327,8 @@ def test_quitar_framework_del_git():
                              text=True, check=True)
         trackeados = out.stdout.splitlines()
         assert "dedalo.sh" not in trackeados
-        assert "plan.md" not in trackeados
+        assert "CONTEXTO.md" in trackeados
+        assert "plan.md" in trackeados
         assert "readme.md" in trackeados
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
