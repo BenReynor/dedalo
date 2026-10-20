@@ -164,3 +164,25 @@ def test_iniciar_loop_no_duplica_si_ya_corre(proyecto, monkeypatch):
     datos = json.loads(m.iniciar_loop("p1"))
     assert datos["iniciado"] is False
     assert "corriendo" in datos["motivo"]
+
+
+def test_correr_gate_pasa_el_argv_completo(monkeypatch, tmp_path):
+    """argv_gate returns a list; correr_gate must not try to unpack 2 values."""
+    monkeypatch.setattr(m, "_ruta_de", lambda nombre: str(tmp_path))
+    vistos = {}
+
+    class Resultado:
+        returncode = 0
+        stdout = "TODO OK"
+        stderr = ""
+
+    def run_falso(cmd, **kwargs):
+        vistos["cmd"] = cmd
+        vistos["kwargs"] = kwargs
+        return Resultado()
+
+    monkeypatch.setattr(m.subprocess, "run", run_falso)
+    datos = json.loads(m.correr_gate("p1", timeout_s=5))
+    assert datos["rc"] == 0
+    assert vistos["cmd"] == m.argv_gate(False)
+    assert vistos["kwargs"]["cwd"] == str(tmp_path)

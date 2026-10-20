@@ -311,11 +311,11 @@ def instalar_proyecto(ruta: str, nombre: str = "") -> str:
 def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     """Runs the project gate (blocking, with timeout) and returns its output."""
     ruta = _ruta_de(nombre)
-    programa, argv = argv_gate(getattr(sys, "frozen", False))
+    argv = argv_gate(getattr(sys, "frozen", False))
     env = loop_launch.filtrar_entorno(os.environ)
     loop_launch.entorno_python(env, getattr(sys, "frozen", False))
     try:
-        out = subprocess.run([programa] + argv, cwd=ruta, env=env,
+        out = subprocess.run(argv, cwd=ruta, env=env,
                              capture_output=True, text=True,
                              timeout=max(1, int(timeout_s)))
         return json.dumps({"rc": out.returncode, "stdout": out.stdout,

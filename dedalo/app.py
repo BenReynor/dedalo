@@ -1224,7 +1224,8 @@ class Ventana(QMainWindow):
         _, ruta = p
         panel = self.pan_logs.panel_gate
         panel.clear()
-        programa, args = argv_gate(getattr(sys, "frozen", False))
+        argv = argv_gate(getattr(sys, "frozen", False))
+        programa, args = argv[0], argv[1:]
         panel.appendPlainText("> " + " ".join([programa, *args]))
         env = loop_launch.filtrar_entorno(os.environ)
         loop_launch.entorno_python(env, getattr(sys, "frozen", False))
