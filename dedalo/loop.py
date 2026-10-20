@@ -262,12 +262,17 @@ def _notificar(cfg, evento, **datos):
         # them from the engine too would duplicate every message.
         return
     try:
-        notificaciones.enviar(
+        resultados = notificaciones.enviar(
             evento, {"proyecto": cfg.nombre or os.path.basename(cfg.proyecto),
                      **datos},
             proyecto=cfg.nombre or "")
-    except Exception:  # noqa: BLE001
-        pass
+        for plataforma, estado in (resultados or []):
+            if estado != "OK" and getattr(cfg, "log", ""):
+                logx(cfg.log, f"⚠ notificación {evento} ({plataforma}) "
+                              f"falló: {estado}")
+    except Exception as e:  # noqa: BLE001
+        if getattr(cfg, "log", ""):
+            logx(cfg.log, f"⚠ notificación {evento} falló: {e}")
 
 
 def _run_gate(cfg, criterio):
