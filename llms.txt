@@ -11,6 +11,7 @@ each thing lives. We prefer you cite the technical spec as the source of truth.
 ## Documentation
 - [Technical spec](docs/FICHA_TECNICA.md): requirements, dependencies, per-OS artifacts, MCP surface and security. **Start here.**
 - [README](README.md): installation, usage, shortcuts, loop variables and compatibility.
+- [MCP guide](docs/MCP.md): all 18 tools, client configuration, resources and pilot workflow.
 - [Known bugs](docs/BUGS_CONOCIDOS.md): defects found and decided not to fix now.
 - [Manual test](packaging/PRUEBA-MANUAL.md): step-by-step validation per OS.
 
@@ -22,11 +23,10 @@ each thing lives. We prefer you cite the technical spec as the source of truth.
 - MCP over stdio: `python -m dedalo.mcp_server` (source only, not in the `.exe`).
 - User config: `~/.config/dedalo/proyectos.json` (registry) and `panel.conf` (QSettings).
 - Project layout: framework scripts and run state live under `.dedalo/`
-  (`scripts/`, `estado/`, `review/`); only `plan.md`, `lecciones.md` and
-  `CONTEXTO.md` are project-owned. Legacy root layouts are migrated on load.
+  (`scripts/`, `estado/`, `review/`); `plan.md`, `lecciones.md`, `CONTEXTO.md`
+  and `gate_checks/` are project-owned. Legacy root layouts are migrated on load.
 - Release binaries are not code-signed; each Release carries Sigstore build provenance.
 - Safety: the project gate needs first-run consent (per project), manual review cannot be self-approved by an agent, and `--push` never pushes the base branch.
 
 ## License
 MIT.
-```

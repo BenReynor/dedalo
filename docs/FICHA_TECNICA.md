@@ -84,6 +84,9 @@ environment variables (see the table in the [README](../README.md#-loop-environm
 A **stdio** server (JSON-RPC), designed so that an MCP client (opencode,
 etc.) can control Dédalo without the GUI. Protocol `2024-11-05`.
 
+Full tool reference, client configuration and worked examples:
+[`docs/MCP.md`](MCP.md).
+
 - **Launch**: `python -m dedalo.mcp_server`
 - **18 tools**: `listar_proyectos`, `estado_proyecto`, `leer_fichero`,
   `leer_plan`, `leer_lecciones`, `leer_contexto`, `leer_incidencias`,
