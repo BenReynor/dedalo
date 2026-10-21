@@ -122,10 +122,10 @@ The first three live at the project root. The four run artifacts live under
 |---|---|---|
 | `instalar_proyecto` | `ruta`, `nombre=""` | Creates the folder if needed, installs the Dédalo templates, initializes git (if absent), and registers the project. Returns `{nombre, ruta, creados, git}`. |
 | `confiar_gate` | `nombre` | Records consent for the project's current `gate_checks` (same as the GUI prompt). Required before a headless loop can run its gate. Returns `{proyecto, gate_confiado}`. |
-| `correr_gate` | `nombre`, `timeout_s=1800` | Runs the gate **blocking** and returns `{rc, stdout, stderr}`; on timeout returns `{rc: -1, timeout: true, ...}`. |
-| `iniciar_loop` | `nombre` | Starts the engine in the background. Returns `{nombre, pid, agente_tarea, agente_revisor, revision_manual}`. Refuses if the loop is already running, there is no internet, or no agent has a session. |
+| `correr_gate` | `nombre`, `timeout_s=1800` | Runs the gate **blocking** and returns `{rc, stdout, stderr}`; on timeout returns `{rc: -1, timeout: true, ...}`. Without gate consent it returns `rc: 3` and does not execute the checks. |
+| `iniciar_loop` | `nombre` | Starts the engine in the background. Returns `{nombre, pid, agente_tarea, agente_revisor, revision_manual}`. Refuses if the loop is already running, there is no internet, the gate is not trusted, or no agent has a session. |
 | `estado_loop` | `nombre` | `{nombre, corriendo, pid, origen, revision_pendiente, tarea_en_revision}`. Reflects loops started by the GUI too. |
-| `detener_loop` | `nombre`, `espera_s=5` | Stops the loop's whole process group (TERM, then KILL). Returns `{nombre, pid, detenido}`; `detenido: false` if it was not running. |
+| `detener_loop` | `nombre`, `espera_s=5` | Stops the loop's whole process group (TERM, then KILL). Returns `{nombre, pid, detenido}`; `detenido: false` if it was not running or the process could not be stopped. |
 | `resolver_revision` | `nombre`, `decision`, `motivo=""` | Writes `APPROVE` or `REJECT <motivo>` plus `# origen=mcp` to `.dedalo/review/decision` (mode `0600`). |
 
 `decision` is case-insensitive and must be `APPROVE` or `REJECT`.
@@ -172,9 +172,9 @@ model starts with Dédalo's vocabulary and file layout already loaded.
 ## Consent, review and safety
 
 - **Gate consent** is per project and tied to the contents of `gate_checks/`.
-  `confiar_gate` is the headless equivalent of the GUI's first-run prompt. If
-  consent is missing and no one can answer, the engine aborts with exit code
-  `3`.
+  `confiar_gate` is the headless equivalent of the GUI's first-run prompt.
+  `correr_gate` returns `rc: 3` without it, and the engine aborts with exit
+  code `3` if it runs out of options to ask.
 - **Manual review:** with `REVISION_MANUAL=1` the loop pauses before each
   commit. An agent's `APPROVE` (`origen=mcp`) is **ignored by default**; the
   loop keeps waiting for a human. Set `REVISION_APRUEBA_AGENTE=1` to allow a

@@ -43,9 +43,14 @@ fi
 # A 000 means there was no HTTP response (connection refused, timeout...).
 HTTP_CODE="000"
 HTTP_BODY=""
+_TIMEOUT_CONEXION=2
+_TIMEOUT_TOTAL=5
 _http() {
     local salida
-    salida="$(curl -s -w $'\n%{http_code}' "$@" 2>/dev/null)"
+    # The caps matter for the port probe: a listener that accepts but never
+    # answers would otherwise hang the whole gate forever.
+    salida="$(curl -s --connect-timeout "$_TIMEOUT_CONEXION" \
+        --max-time "$_TIMEOUT_TOTAL" -w $'\n%{http_code}' "$@" 2>/dev/null)"
     HTTP_CODE="${salida##*$'\n'}"
     HTTP_BODY="${salida%$'\n'*}"
     [ -n "$HTTP_CODE" ] || HTTP_CODE="000"
@@ -65,23 +70,64 @@ _responde() {
     [ "$HTTP_CODE" != "000" ]
 }
 
-# Free the SERVE_URL port if it is occupied by another gate process
-PUERTO="$(echo "$SERVE_URL" | sed -E 's|.*:([0-9]+).*|\1|')"
-if [ "$PUERTO" = "$SERVE_URL" ]; then PUERTO=""; fi
-if [ -n "$PUERTO" ] && command -v lsof >/dev/null 2>&1; then
-    if lsof -ti :"$PUERTO" >/dev/null 2>&1; then
-        echo "[GATE] ⚠ puerto $PUERTO ocupado, liberando"
-        lsof -ti :"$PUERTO" | xargs kill -9 2>/dev/null
+# Do not kill by port: that would take down the user's own backend (or the
+# test runner) when it happens to listen on SERVE_URL. Reuse a healthy server;
+# fail if the port is occupied but does not answer HTTP.
+BASE_URL="${SERVE_URL:-http://localhost:8000}"
+PUERTO="$(echo "$BASE_URL" | sed -E 's|.*:([0-9]+).*|\1|')"
+if [ "$PUERTO" = "$BASE_URL" ]; then PUERTO=""; fi
+
+_es_local() {
+    case "${1:-}" in
+        http://localhost[:/]*|https://localhost[:/]*|\
+        http://127.0.0.1[:/]*|https://127.0.0.1[:/]*|\
+        http://0.0.0.0[:/]*|https://0.0.0.0[:/]*|\
+        http://\[::1\][:/]*|https://\[::1\][:/]*) return 0 ;;
+    esac
+    return 1
+}
+
+BPID=""
+_parar_backend() {
+    [ -n "${BPID:-}" ] || return 0
+    set +m
+    kill -TERM -- -"$BPID" 2>/dev/null || kill -TERM "$BPID" 2>/dev/null
+    _i=0
+    while [ "$_i" -lt 5 ] && kill -0 "$BPID" 2>/dev/null; do
+        _i=$((_i + 1))
         sleep 1
+    done
+    if kill -0 "$BPID" 2>/dev/null; then
+        kill -KILL -- -"$BPID" 2>/dev/null || kill -KILL "$BPID" 2>/dev/null
     fi
+    wait "$BPID" 2>/dev/null
+    BPID=""
+}
+
+REUTILIZAR=0
+if _responde "$BASE_URL/"; then
+    echo "[GATE] ⚠ ya hay un backend respondiendo en $BASE_URL; se reutiliza sin liberar el puerto"
+    REUTILIZAR=1
 fi
 
-eval "$SERVE_CMD" >/dev/null 2>&1 &
-BPID=$!
-trap 'kill $BPID 2>/dev/null; wait $BPID 2>/dev/null' EXIT
+if [ "$REUTILIZAR" -eq 0 ]; then
+    if [ -n "$PUERTO" ] && _es_local "$BASE_URL" && command -v lsof >/dev/null 2>&1; then
+        PIDS="$(lsof -ti :"$PUERTO" 2>/dev/null | tr '\n' ' ')"
+        if [ -n "$PIDS" ]; then
+            echo "[GATE] ✗ puerto $PUERTO ocupado por PID(s) $PIDS y no responde HTTP en $BASE_URL"
+            echo "[GATE]   libéralo o cambia SERVE_URL; el gate no mata procesos por puerto"
+            exit 1
+        fi
+    fi
+    # Job control puts the backend in its OWN process group, so cleanup can
+    # kill the server and its children without touching any other process.
+    set -m
+    eval "$SERVE_CMD" >/dev/null 2>&1 &
+    BPID=$!
+    trap _parar_backend EXIT
+fi
 
 # Wait for it to respond (up to 15 s). `seq` does not exist on BSD/macOS.
-BASE_URL="${SERVE_URL:-http://localhost:8000}"
 _espera=0
 while [ "$_espera" -lt 15 ]; do
     _responde "$BASE_URL/" && break

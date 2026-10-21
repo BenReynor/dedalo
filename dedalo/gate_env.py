@@ -13,6 +13,7 @@ the environment is run with a shell.
 
 import os
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -86,16 +87,77 @@ class Entorno:
         return p.returncode, (p.stdout or "") + (p.stderr or "")
 
     def lanzar(self, cmd):
-        """Starts the command in the background. Returns the Popen or None."""
+        """Starts the command in its own session/group. Returns the Popen or None.
+
+        The backend check must be able to stop the server AND the children it
+        spawns (reloaders, workers...). A new session on POSIX (a new process
+        group on Windows) makes `detener` safe: it only kills what this check
+        started, never another process that happens to hold the port.
+        """
         if cmd is None:
             return None
-        if cmd.shell is not None:
-            return subprocess.Popen(
-                cmd.shell, shell=True, cwd=cmd.cwd or self.proyecto,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return subprocess.Popen(
-            cmd.argv, cwd=cmd.cwd or self.proyecto,
+        kwargs = dict(
+            cwd=cmd.cwd or self.proyecto,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.name == "posix":
+            kwargs["start_new_session"] = True
+        else:
+            kwargs["creationflags"] = getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if cmd.shell is not None:
+            return subprocess.Popen(cmd.shell, shell=True, **kwargs)
+        return subprocess.Popen(cmd.argv, **kwargs)
+
+    def detener(self, proc, espera=5):
+        """Stops the process group started by `lanzar` (TERM, then KILL).
+
+        Returns True when the process is gone. It never looks up a PID by port:
+        the target is only the group/session created for this check.
+        """
+        if proc is None or proc.poll() is not None:
+            return True
+        if os.name == "posix":
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                return True
+            except OSError:
+                try:
+                    proc.terminate()
+                except OSError:
+                    pass
+            try:
+                proc.wait(timeout=espera)
+                return True
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                return False
+            return True
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            return False
+        return True
 
 
 def _comando(valor, cwd):

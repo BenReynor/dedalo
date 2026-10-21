@@ -464,9 +464,10 @@ opencode) is documented step by step, per OS, in
 
 #### 🏷️ Tags and Release Status
 
-The current tags are `v2.0.0`, `v2.0.1` (pre-rename) and `v2.0.2` (already as
-Dédalo). Every `v*` tag triggers `.github/workflows/release.yml`, which builds
-and publishes a Release with the binaries for all three OSes. Worth knowing:
+The latest release is `v2.1.0`; the previous tags are `v2.0.0`, `v2.0.1`
+(pre-rename) and `v2.0.2` (already as Dédalo). Every `v*` tag triggers
+`.github/workflows/release.yml`, which builds and publishes a Release with the
+binaries for all three OSes. Worth knowing:
 
 - Releases **v2.0.0 / v2.0.1 predate the rename**: their title is
   *"Autopiloto v2.0.x"* and their assets are named `autopiloto-gui-*`. **They
@@ -684,6 +685,15 @@ The gate can smoke-test a backend's endpoints. The bundled dev credentials
 (`admin`/`admin123`) are applied **only when the target is `localhost`**; a
 remote `SERVE_URL` with no `USUARIO`/`CLAVE` never receives them and prints a
 warning instead.
+
+### Backend port
+
+The bundled backend check **never kills a process by port**. If something
+already answers at `SERVE_URL`, it reuses that backend with a warning. If the
+port is occupied but does not answer HTTP, the gate fails and shows the PID(s),
+asking you to free the port or change `SERVE_URL`. A backend started by the
+check is stopped with its own process group (`TERM`, then `KILL`), so it cannot
+leave a child holding the port for the next iteration.
 
 ### Engine environment (allowlist)
 

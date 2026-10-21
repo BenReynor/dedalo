@@ -59,7 +59,8 @@ HOW THE LOOP WORKS
   after executing it, runs the project's "gate" (tests + lint).
 - Only commits if the gate passes; if it fails, the iteration does not commit.
 - With `revision_manual` active, the loop PAUSES before committing and waits for
-  a decision (APPROVE / REJECT) from a human or a pilot agent.
+  a decision (APPROVE / REJECT) from a human. By default an agent's APPROVE is
+  ignored (`REVISION_APRUEBA_AGENTE=0`); REJECT is always honored.
 - If there is no internet, the loop stops.
 
 PROJECT FILES (same as exposed at dedalo://{nombre}/{fichero})
@@ -81,7 +82,8 @@ TYPICAL FLOW WITH THESE TOOLS
 1. listar_proyectos / estado_proyecto: what's there and in what state.
 2. leer_plan / leer_contexto / leer_lecciones / cola_log: context.
 3. instalar_proyecto: create and register a new project (optional).
-4. confiar_gate: approve the gate of a repo whose checks you trust.
+4. confiar_gate: approve the gate of a repo whose checks you trust. Required
+   before `correr_gate` or `iniciar_loop` can run the gate.
 5. iniciar_loop: start the loop in background (returns pid).
 6. estado_loop / cola_log: follow progress.
 7. resolver_revision(APPROVE|REJECT): resolve a pending review.
@@ -131,7 +133,11 @@ def _leer_texto(ruta):
 
 
 def _cola(texto, lineas):
-    return "\n".join(texto.splitlines()[-lineas:])
+    try:
+        n = max(1, int(lineas))
+    except (TypeError, ValueError):
+        n = 1
+    return "\n".join(texto.splitlines()[-n:])
 
 
 def _leer_jsonl(ruta):
@@ -287,9 +293,10 @@ def estado_agentes() -> str:
 
 def listar_modelos() -> str:
     """Known models (opencode catalog) with the suggested one first."""
+    disponibles = modelos.lista_modelos()
     return json.dumps({
-        "sugerido": modelos.sugerido(modelos.lista_modelos()),
-        "modelos": modelos.lista_modelos(),
+        "sugerido": modelos.sugerido(disponibles),
+        "modelos": disponibles,
     }, ensure_ascii=False, indent=2)
 
 
@@ -311,10 +318,11 @@ def instalar_proyecto(ruta: str, nombre: str = "") -> str:
 
 
 def confiar_gate(nombre: str) -> str:
-    """Approves the project's gate_checks (the consent `iniciar_loop` needs).
+    """Approves the project's gate_checks (the consent the gate needs).
 
-    The engine refuses to run a repo's gate without consent and the GUI asks
-    the user; a headless MCP client has no terminal, so it needs this tool.
+    The engine and `correr_gate` refuse to run a repo's gate without consent
+    and the GUI asks the user; a headless MCP client has no terminal, so it
+    needs this tool.
     """
     ruta = _ruta_de(nombre)
     consentimiento.confiar(ruta)
@@ -324,35 +332,64 @@ def confiar_gate(nombre: str) -> str:
 
 
 def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
-    """Runs the project gate (blocking, with timeout) and returns its output."""
+    """Runs the project gate (blocking, with timeout) and returns its output.
+
+    It requires the same consent as the engine: a cloned repo can bring
+    arbitrary commands in `gate_checks/`. On timeout the whole gate process
+    group is stopped, so a backend started by a check cannot keep running.
+    """
     ruta = _ruta_de(nombre)
     argv = argv_gate(getattr(sys, "frozen", False))
     env = loop_launch.filtrar_entorno(os.environ)
     loop_launch.entorno_python(env, getattr(sys, "frozen", False))
+    if not consentimiento.concedido(ruta, env):
+        return json.dumps({
+            "rc": 3, "timeout": False, "stdout": "",
+            "stderr": "gate sin consentimiento; ejecuta confiar_gate primero",
+        }, ensure_ascii=False, indent=2)
     try:
-        out = subprocess.run(argv, cwd=ruta, env=env,
-                             capture_output=True, text=True,
-                             timeout=max(1, int(timeout_s)))
-        return json.dumps({"rc": out.returncode, "stdout": out.stdout,
-                           "stderr": out.stderr},
+        proc = subprocess.Popen(
+            argv, cwd=ruta, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=(os.name != "nt"))
+    except OSError as e:
+        return json.dumps({"rc": 127, "timeout": False, "stdout": "",
+                           "stderr": str(e)},
                           ensure_ascii=False, indent=2)
-    except subprocess.TimeoutExpired as e:
+    try:
+        salida, error = proc.communicate(timeout=max(1, int(timeout_s)))
+    except subprocess.TimeoutExpired:
+        loops_estado.matar(proc.pid, espera=5)
+        try:
+            salida, error = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            salida, error = proc.communicate()
         return json.dumps({"rc": -1, "timeout": True,
-                           "stdout": (e.stdout or "") if isinstance(e.stdout, str) else "",
-                           "stderr": (e.stderr or "") if isinstance(e.stderr, str) else ""},
+                           "stdout": salida or "", "stderr": error or ""},
                           ensure_ascii=False, indent=2)
+    return json.dumps({"rc": proc.returncode, "stdout": salida or "",
+                       "stderr": error or ""},
+                      ensure_ascii=False, indent=2)
 
 
 def iniciar_loop(nombre: str) -> str:
     """Launches the loop in the background for the project (returns the pid)."""
-    _ruta_de(nombre)
-    if _estado_loop(nombre)["corriendo"]:
+    ruta = _ruta_de(nombre)
+    estado = _estado_loop(nombre)
+    if estado["corriendo"]:
         return json.dumps({"iniciado": False, "motivo": "ya está corriendo",
-                           **_estado_loop(nombre)}, ensure_ascii=False, indent=2)
+                           **estado}, ensure_ascii=False, indent=2)
     if not net.hay_internet():
         return json.dumps({"iniciado": False,
                            "motivo": "sin conexión a internet"},
                           ensure_ascii=False, indent=2)
+    if not consentimiento.concedido(
+            ruta, loop_launch.filtrar_entorno(os.environ)):
+        return json.dumps({
+            "iniciado": False,
+            "motivo": "gate sin consentimiento; ejecuta confiar_gate primero",
+        }, ensure_ascii=False, indent=2)
     conf, nav = loop_launch.config_de_proyecto(nombre)
     plan = loop_launch.preparar(conf, nav, nombre=nombre, origen="mcp")
     if not plan["detectados"]:
@@ -360,7 +397,7 @@ def iniciar_loop(nombre: str) -> str:
                            "motivo": "ningún agente CLI con sesión"},
                           ensure_ascii=False, indent=2)
     proc = subprocess.Popen(
-        [plan["programa"]] + plan["argv"], cwd=_ruta_de(nombre),
+        [plan["programa"]] + plan["argv"], cwd=ruta,
         env=plan["env"], stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=(os.name != "nt"))
@@ -369,7 +406,6 @@ def iniciar_loop(nombre: str) -> str:
     # even before the engine has finished booting; the engine re-registers
     # itself with the same pid once it holds its lock.
     loops_estado.registrar(nombre, proc.pid, origen="mcp")
-    conf, _ = loop_launch.config_de_proyecto(nombre)
     return json.dumps({
         "nombre": nombre, "pid": proc.pid,
         "agente_tarea": plan["agente_tarea"],
@@ -391,10 +427,19 @@ def detener_loop(nombre: str, espera_s: int = 5) -> str:
                            "motivo": "no estaba corriendo"},
                           ensure_ascii=False, indent=2)
     proc = _LOOPS.pop(nombre, None)
+    espera = max(0, int(espera_s))
+    terminado = True
     if proc and proc.poll() is None:
-        loop_proceso.matar_grupo(proc, espera=max(0, int(espera_s)))
-    else:
-        loops_estado.matar(estado["pid"], espera=max(0, int(espera_s)))
+        terminado = loops_estado.matar(proc.pid, espera=espera)
+        if not terminado:
+            _LOOPS[nombre] = proc
+    elif proc is None:
+        terminado = loops_estado.matar(estado["pid"], espera=espera)
+    if not terminado:
+        return json.dumps({
+            "nombre": nombre, "pid": estado["pid"], "detenido": False,
+            "motivo": "el proceso sigue vivo; no se pudo detener",
+        }, ensure_ascii=False, indent=2)
     loops_estado.olvidar(nombre)
     return json.dumps({"nombre": nombre, "pid": estado["pid"], "detenido": True},
                       ensure_ascii=False, indent=2)

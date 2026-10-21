@@ -11,10 +11,12 @@
 import json
 import re
 import shutil
+import socket
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 
 def _http(url, headers=None, body=None):
@@ -22,7 +24,7 @@ def _http(url, headers=None, body=None):
     datos = body.encode("utf-8") if isinstance(body, str) else body
     req = urllib.request.Request(url, data=datos, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=5) as r:
             return r.getcode(), r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         try:
@@ -42,20 +44,48 @@ def _resumen(texto):
     return texto.replace("\n", " ")[:200]
 
 
-def _liberar_puerto(serve_url):
+def _puerto(serve_url):
     m = re.search(r":(\d+)", serve_url or "")
-    if not m or not shutil.which("lsof"):
-        return
+    return int(m.group(1)) if m else None
+
+
+def _es_local(serve_url):
+    host = (urlparse(serve_url or "").hostname or "").lower()
+    if not host:
+        host = (serve_url or "").split(":")[0].strip("[]").lower()
+    return host in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
+
+
+def _puerto_ocupado(serve_url):
+    """True only for a LOCAL port with something listening.
+
+    A remote SERVE_URL is not probed: `lsof` cannot see it and the check must
+    never make decisions about ports on another machine.
+    """
+    puerto = _puerto(serve_url)
+    if not puerto or not _es_local(serve_url):
+        return False
+    host = (urlparse(serve_url or "").hostname or "").lower() or "127.0.0.1"
+    if host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+    try:
+        with socket.create_connection((host, puerto), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _pids_puerto(serve_url):
+    """PIDs listening on the local port, for diagnostics only (never killed)."""
+    puerto = _puerto(serve_url)
+    if not puerto or not shutil.which("lsof"):
+        return []
     try:
         salida = subprocess.run(
-            ["lsof", "-ti", ":" + m.group(1)], capture_output=True, text=True)
-        pids = [p for p in salida.stdout.split() if p.strip()]
-        if pids:
-            print(f"[GATE] \u26a0 puerto {m.group(1)} ocupado, liberando")
-            subprocess.run(["kill", "-9"] + pids, capture_output=True)
-            time.sleep(1)
+            ["lsof", "-ti", f":{puerto}"], capture_output=True, text=True)
     except OSError:
-        pass
+        return []
+    return [p for p in salida.stdout.split() if p.strip()]
 
 
 def _token(env):
@@ -81,8 +111,23 @@ def run(env):
         return 0
 
     base = env.serve_url or "http://localhost:8000"
-    _liberar_puerto(env.serve_url)
-    proc = env.lanzar(env.serve_cmd)
+    proc = None
+    if _puerto_ocupado(env.serve_url):
+        if _responde(base + "/"):
+            env.aviso(
+                f"ya hay un backend respondiendo en {base}; "
+                "se reutiliza sin liberar el puerto")
+        else:
+            pids = _pids_puerto(env.serve_url)
+            detalle = f" (PID(s): {', '.join(pids)})" if pids else ""
+            env.fail(
+                f"puerto {_puerto(env.serve_url)} ocupado{detalle} "
+                f"y no responde HTTP en {base}")
+            env.aviso(
+                "libéralo o cambia SERVE_URL; el gate no mata procesos por puerto")
+            return 1
+    else:
+        proc = env.lanzar(env.serve_cmd)
     try:
         for _ in range(15):
             if _responde(base + "/"):
@@ -119,11 +164,4 @@ def run(env):
         return 1 if err else 0
     finally:
         if proc is not None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=5)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+            env.detener(proc)

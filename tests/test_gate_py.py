@@ -169,3 +169,20 @@ def test_credenciales_explicitas_se_respetan(tmp_path):
         "SERVE_URL": "https://produccion.example.com",
         "USUARIO": "ana", "CLAVE": "secreta"})
     assert env.usuario == "ana" and env.clave == "secreta"
+
+
+def test_entorno_detener_limpia_el_grupo_lanzado(tmp_path):
+    """The backend check may only stop the group it started itself."""
+    from dedalo import gate_env
+
+    env = gate_env.Entorno(
+        proyecto=str(tmp_path), backend_dir=str(tmp_path), frontend_dir="",
+        py_backend=sys.executable, py_frontend="", db_check=None,
+        migrate_check=None, test_cmd=None,
+        serve_cmd=gate_env.Comando(
+            argv=[sys.executable, "-c", "import time; time.sleep(60)"]),
+        serve_url="", token_url="", usuario="", clave="", endpoints=[])
+    proc = env.lanzar(env.serve_cmd)
+    assert proc is not None and proc.poll() is None
+    assert env.detener(proc, espera=1) is True
+    assert proc.poll() is not None

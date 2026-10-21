@@ -1,43 +1,29 @@
-# Known bugs still open
+# Known bugs and resolved decisions
 
-A deliberate record of defects **found and decided not to fix now**, with
-the reason and a pointer to the code. It lives here so they don't get lost in chat or in the
-agent's memory.
+A deliberate record of defects **found and decided not to fix now**, plus
+the ones already fixed, with the reason and a pointer to the code. It lives
+here so they don't get lost in chat or in the agent's memory.
 
 Suite status: see [README](../README.md#-development). Each entry states whether it carries
 an active risk or is just technical debt.
 
 ---
 
-## 1. The gate kills any process on the port — `03_backend.sh`
+## Resolved in v2.1.0
 
-**Active risk: accepted at the user's explicit request.**
-
-`dedalo/plantillas_data/gate_checks/03_backend.sh:71-74` kills with
-`lsof -ti :"$PUERTO" | xargs kill -9`. The code comment says "another process
-**of the gate**", but what it actually kills is **any** process listening on that port,
-including the user's development backend, and without any warning.
-
-It was reviewed and **left as is** at explicit request. Partial mitigation already
-in place: the check frees the port on every iteration, so a zombie process from a
-previous round does get cleaned up.
-
-Known consequence: `kill $BPID` (line 81) does not kill the grandchildren spawned by the
-server, which can be left holding the socket open. The next `lsof` finds them and
-kills them with `kill -9`.
-
-**The port-based `kill -9` kills whoever holds the socket, whether or not it belongs to the gate.** This was
-proved in an unintentionally direct way while writing the tests for the check: the port is derived
-from `SERVE_URL`, so if the test server listens there, `lsof -ti` returns
-pytest's own PID and the check killed itself (the runner died with SIGKILL
-and without a trace, because the pipe to `tail` took the buffer). That is why
-`tests/test_gate_backend.py` puts a stub `lsof` on the `PATH`: that way the `kill -9`
-stays out of the tests and does not depend on behavior that kills arbitrary
-processes.
+- **The gate no longer kills any process on the port.** `03_backend.sh` and
+  `03_backend.py` now reuse a backend that already answers at `SERVE_URL`, and
+  fail with a diagnostic (PID included when `lsof` is available) when the port
+  is occupied by something that does not answer HTTP. The backend launched by
+  the check is isolated in its own process group/session and stopped with
+  `TERM` → `KILL`; the check never looks up a PID by port to kill it.
+- Remaining limitation: a server that deliberately daemonizes outside its
+  process group can survive the cleanup. The next run then reuses it if it
+  answers, or fails safely if it does not; it is never killed by port.
 
 ---
 
-## 2. A 3xx on endpoints is now a failure
+## 1. A 3xx on endpoints is now a failure
 
 **Active risk: cosmetic, with diagnostics.**
 
@@ -51,7 +37,7 @@ false 2xx on a mistyped route.
 
 ---
 
-## 3. `proyectos.json` has no schema versioning
+## 2. `proyectos.json` has no schema versioning
 
 **Active risk: low.** Technical debt.
 
@@ -66,7 +52,7 @@ registry and validate the number when reading.
 
 ---
 
-## 4. Orphan branches from blocked tasks pile up
+## 3. Orphan branches from blocked tasks pile up
 
 **Active risk: cosmetic.** Consequence of a deliberate decision.
 
@@ -85,7 +71,7 @@ git -C <proyecto> branch --delete --force <rama>
 
 ---
 
-## 5. Platform compatibility
+## 4. Platform compatibility
 
 **Active risk: known and documented.** See
 [README](../README.md#-compatibility).

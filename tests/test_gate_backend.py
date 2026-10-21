@@ -14,21 +14,20 @@ body for diagnosis.
 A real HTTP server is started (http.server in a thread) to test the codes for
 real, instead of simulating curl.
 
-About the `lsof` stub: the check kills with `kill -9` any process listening on
-the port it derives from SERVE_URL. In these tests that port is the test
-server's, whose socket belongs to the pytest process itself, so without the stub
-the check would kill itself. The `kill -9` by port is outside the scope of this
-change (explicit decision: it is kept as is) and is recorded in
-docs/BUGS_CONOCIDOS.md; here it is neutralized with an `lsof` that never finds
-anything.
+Port safety: the check must never kill by port. When a healthy backend already
+answers on SERVE_URL it is reused; when the port is occupied by something that
+does not answer HTTP, the check fails with a diagnostic and leaves it alive.
 """
 
 import http.server
+import importlib.util
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -80,7 +79,7 @@ def servidor():
 
 
 def _preparar(tmp_path, endpoints=None):
-    """Copies the check to a temp dir and creates an inert `lsof`. Returns the project."""
+    """Copies the check to a temp dir. Returns the project and an empty PATH dir."""
     proyecto = tmp_path / "proyecto"
     proyecto.mkdir(exist_ok=True)
     shutil.copy2(CHECK, proyecto / "check.sh")
@@ -89,10 +88,6 @@ def _preparar(tmp_path, endpoints=None):
             "".join(f"{e}\n" for e in endpoints), encoding="utf-8")
     binstub = tmp_path / "bin"
     binstub.mkdir(exist_ok=True)
-    lsof = binstub / "lsof"
-    lsof.write_text("#!/bin/sh\n# stub: ningún puerto aparece ocupado\nexit 1\n",
-                    encoding="utf-8")
-    lsof.chmod(0o755)
     return proyecto, binstub
 
 
@@ -125,6 +120,136 @@ def _url(servidor):
 
 def _con_respuestas(servidor, respuestas):
     servidor.respuestas = respuestas
+
+
+def _puerto_libre():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _lanzar_ocupante(tmp_path, puerto):
+    """Separate process that listens but never answers HTTP.
+
+    It is deliberately NOT pytest itself: if a regression reintroduces the
+    port kill, this process dies and the assertion fails, instead of killing
+    the test runner.
+    """
+    guion = tmp_path / "ocupante.py"
+    guion.write_text(
+        "import socket, sys, time\n"
+        "s = socket.socket()\n"
+        "s.bind(('127.0.0.1', int(sys.argv[1])))\n"
+        "s.listen(1)\n"
+        "time.sleep(60)\n",
+        encoding="utf-8")
+    proc = subprocess.Popen(
+        [sys.executable, str(guion), str(puerto)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(50):
+        try:
+            with socket.create_connection(("127.0.0.1", puerto), timeout=0.1):
+                return proc
+        except OSError:
+            time.sleep(0.1)
+    proc.terminate()
+    pytest.fail("el proceso ocupante no llegó a escuchar")
+
+
+def _cargar_backend_py():
+    ruta = RAIZ / "dedalo" / "plantillas_data" / "gate_checks" / "03_backend.py"
+    spec = importlib.util.spec_from_file_location("gate_backend_py", ruta)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+class _EnvPy:
+    """Minimal Entorno for 03_backend.py, recording what the check does."""
+
+    def __init__(self, url):
+        self.serve_cmd = object()
+        self.serve_url = url
+        self.token_url = ""
+        self.endpoints = []
+        self.avisos = []
+        self.fallos = []
+        self.oks = []
+        self.lanzado = False
+
+    def aviso(self, mensaje):
+        self.avisos.append(mensaje)
+
+    def ok(self, mensaje):
+        self.oks.append(mensaje)
+
+    def fail(self, mensaje):
+        self.fallos.append(mensaje)
+
+    def lanzar(self, cmd):
+        self.lanzado = True
+        raise AssertionError("no debía lanzar un backend con el puerto ocupado")
+
+    def detener(self, proc):
+        return True
+
+
+# ─── Port safety: reuse or fail, never kill by port ───────────────────────
+
+def test_reutiliza_backend_sano_sin_matarlo(tmp_path, servidor):
+    """A healthy server already on SERVE_URL is reused, not killed."""
+    _con_respuestas(servidor, {"/": (200, "{}")})
+    proyecto, binstub = _preparar(tmp_path, [])
+    rc, out = _correr(proyecto, binstub, _url(servidor))
+    assert rc == 0, out
+    assert "se reutiliza" in out
+    assert "liberando" not in out
+
+
+@pytest.mark.skipif(shutil.which("lsof") is None, reason="diagnóstico con lsof")
+def test_puerto_ocupado_sin_http_falla_sin_matarlo(tmp_path):
+    """Occupied by a non-HTTP process: fail and leave that process alive."""
+    puerto = _puerto_libre()
+    proc = _lanzar_ocupante(tmp_path, puerto)
+    try:
+        proyecto, binstub = _preparar(tmp_path, [])
+        rc, out = _correr(proyecto, binstub,
+                          f"http://127.0.0.1:{puerto}")
+        assert rc == 1, out
+        assert "ocupado" in out
+        assert "no mata procesos por puerto" in out
+        assert proc.poll() is None, "el gate mató un proceso ajeno"
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def test_py_reutiliza_backend_sano_sin_lanzar(servidor):
+    """The portable .py check follows the same safe rule."""
+    _con_respuestas(servidor, {"/": (200, "{}")})
+    modulo = _cargar_backend_py()
+    env = _EnvPy(_url(servidor))
+    assert modulo.run(env) == 0
+    assert env.lanzado is False
+    assert any("se reutiliza" in a for a in env.avisos)
+
+
+def test_py_puerto_ocupado_sin_http_falla_sin_lanzar(monkeypatch):
+    """The .py check must not launch or kill when the port is not HTTP."""
+    modulo = _cargar_backend_py()
+    monkeypatch.setattr(modulo, "_http", lambda *a, **k: (0, ""))
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        puerto = s.getsockname()[1]
+        env = _EnvPy(f"http://127.0.0.1:{puerto}")
+        assert modulo.run(env) == 1
+    assert env.lanzado is False
+    assert any("ocupado" in f for f in env.fallos)
 
 
 # ─── Endpoints: 404/500 are no longer green ────────────────────────────────

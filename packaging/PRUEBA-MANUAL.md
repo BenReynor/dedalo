@@ -1,4 +1,4 @@
-# Manual test of a published binary (v2.0.0)
+# Manual test of a published binary (v2.1.0)
 
 A ~15-minute checklist per OS to validate a binary from the
 [GitHub Release](https://github.com/BenReynor/dedalo/releases) end to end.
@@ -30,6 +30,15 @@ internet, `7` = internal error.
 3. (Optional) Verify the build provenance of an asset, if `gh` is available:
    `gh attestation verify dedalo-*.AppImage --repo BenReynor/dedalo`.
 
+4. **MCP** is source-only: the packaged binary is windowed and cannot serve
+   stdio, so validate it from a checkout with
+   `.venv/bin/python -m dedalo.mcp_server` (see `docs/MCP.md`).
+
+5. **Gate port safety** (projects with a backend check): if something already
+   answers at `SERVE_URL`, the gate reuses it. If the port is occupied by a
+   process that does not answer HTTP, the gate fails with the PID and **must
+   leave that process alive**; it never kills by port.
+
 > **First run per project**: Dédalo asks once for consent to trust and run the
 > project's gate (interactive prompt, or the GUI dialog). If you decline, or run
 > non-interactively without `DEDALO_GATE_CONSENT=1`, the loop aborts with
@@ -55,23 +64,24 @@ internet, `7` = internal error.
 6. **Thermal sensor**: on machines with `/sys/class/thermal` the reading is shown;
    without it, "no data" (expected degradation).
 
-## 2. Windows (`dedalo-2.0.0-win64.zip`)
+## 2. Windows (`dedalo-2.1.0-win64.zip`)
 
 1. Verify the checksum from PowerShell:
-   `Get-FileHash dedalo-2.0.0-win64.zip -Algorithm SHA256`
+   `Get-FileHash dedalo-2.1.0-win64.zip -Algorithm SHA256`
    and compare it with `SHA256SUMS-windows`.
 2. Unzip → `dedalo\dedalo.exe`.
 3. **First launch**: SmartScreen → *More info* → *Run anyway*.
    The panel opens.
 4. **GUI**: add a project with the `plan.md` from step 0; theme persists.
-5. **Gate**: requires **Git for Windows** installed (the loop uses `gate.sh`
-   with its `bash`). Without Git Bash, the loop runs but the gate blocks the task.
-   With Git Bash on the PATH, `t1` passes the criterion and `progreso.log` reflects it.
+5. **Gate**: runs the native Python checks (`03_backend.py`, etc.); **Git Bash is
+   not required**. `t1` must pass the criterion and `progreso.log` must reflect it.
+   Git for Windows is only needed for the optional project map (`mapear.sh`) and
+   the legacy bash engine.
 6. **CLI** (PowerShell, in the project's cwd):
    `.\dedalo\dedalo.exe --dedalo-loop plan.md`
    → rc `0` with opencode on PATH; rc `2` without it.
 
-## 3. macOS (`dedalo-2.0.0-macos-arm64.dmg`)
+## 3. macOS (`dedalo-2.1.0-macos-arm64.dmg`)
 
 > **Apple Silicon (arm64)** only. Binary unsigned and unnotarized.
 
@@ -91,7 +101,7 @@ internet, `7` = internal error.
 | Symptom | Likely cause |
 |---|---|
 | SmartScreen / Gatekeeper blocks it | Unsigned binary: use the "first launch" steps. |
-| Loop blocks the task (Windows) | Git for Windows missing (the gate uses bash). |
+| Loop blocks the task (Windows) | A gate check failed; read the gate pane. Git Bash is only needed for the project map/legacy bash engine. |
 | Unexpected rc `2` | The agent is not on the PATH the app inherits: use `CLI_OPENCODE` or fix the PATH. |
 | rc `4` | No network at the time of the run. |
 | rc `3` | The project's gate was not trusted: accept the prompt or set `DEDALO_GATE_CONSENT=1`. |

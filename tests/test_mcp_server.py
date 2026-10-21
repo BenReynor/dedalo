@@ -8,6 +8,7 @@ a tmp_path, without starting the stdio transport.
 import asyncio
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,12 @@ def test_cola_log_devuelve_ultimas(proyecto):
     assert m.cola_log("p1", 3) == "linea 97\nlinea 98\nlinea 99"
 
 
+def test_cola_log_cero_no_vuelca_todo(proyecto):
+    """`0` used to mean `[-0:]`, i.e. the whole log."""
+    assert m.cola_log("p1", 0) == "linea 99"
+    assert m.cola_log("p1", -5) == "linea 99"
+
+
 def test_resolver_revision_escribe_decision(proyecto):
     m.resolver_revision("p1", "approve")
     decision = (Path(rutas.dir_review(str(proyecto))) / "decision").read_text(encoding="utf-8")
@@ -103,6 +110,15 @@ def test_detener_loop_si_no_corre(proyecto):
     datos = json.loads(m.detener_loop("p1"))
     assert datos["detenido"] is False
     assert "motivo" in datos
+
+
+def test_detener_loop_no_reporta_exito_si_sigue_vivo(proyecto, monkeypatch):
+    m.loops_estado.registrar("p1", os.getpid(), origen="gui")
+    monkeypatch.setattr(m.loops_estado, "matar", lambda *a, **k: False)
+    datos = json.loads(m.detener_loop("p1"))
+    assert datos["detenido"] is False
+    assert "sigue vivo" in datos["motivo"]
+    assert m.loops_estado.estado("p1")["corriendo"] is True
 
 
 def test_registro_tools_y_recurso():
@@ -149,6 +165,14 @@ def test_iniciar_loop_sin_internet(proyecto, monkeypatch):
     assert "internet" in datos["motivo"]
 
 
+def test_iniciar_loop_sin_consentimiento(proyecto, monkeypatch):
+    monkeypatch.setattr(m.net, "hay_internet", lambda: True)
+    monkeypatch.setattr(m.consentimiento, "concedido", lambda *a: False)
+    datos = json.loads(m.iniciar_loop("p1"))
+    assert datos["iniciado"] is False
+    assert "consentimiento" in datos["motivo"]
+
+
 def test_estado_loop_ve_bucle_externo(proyecto):
     """A loop started elsewhere (GUI/CLI) is visible via the shared registry."""
     m.loops_estado.registrar("p1", os.getpid(), origen="gui")
@@ -169,23 +193,71 @@ def test_iniciar_loop_no_duplica_si_ya_corre(proyecto, monkeypatch):
 def test_correr_gate_pasa_el_argv_completo(monkeypatch, tmp_path):
     """argv_gate returns a list; correr_gate must not try to unpack 2 values."""
     monkeypatch.setattr(m, "_ruta_de", lambda nombre: str(tmp_path))
+    monkeypatch.setattr(m.consentimiento, "concedido", lambda *a: True)
     vistos = {}
 
     class Resultado:
         returncode = 0
-        stdout = "TODO OK"
-        stderr = ""
+        pid = 123
 
-    def run_falso(cmd, **kwargs):
+        def communicate(self, timeout=None):
+            vistos["timeout"] = timeout
+            return "TODO OK", ""
+
+    def popen_falso(cmd, **kwargs):
         vistos["cmd"] = cmd
         vistos["kwargs"] = kwargs
         return Resultado()
 
-    monkeypatch.setattr(m.subprocess, "run", run_falso)
+    monkeypatch.setattr(m.subprocess, "Popen", popen_falso)
     datos = json.loads(m.correr_gate("p1", timeout_s=5))
     assert datos["rc"] == 0
+    assert datos["stdout"] == "TODO OK"
     assert vistos["cmd"] == m.argv_gate(False)
     assert vistos["kwargs"]["cwd"] == str(tmp_path)
+    assert vistos["kwargs"]["start_new_session"] is (os.name != "nt")
+
+
+def test_correr_gate_exige_consentimiento(proyecto, monkeypatch):
+    monkeypatch.setattr(m.consentimiento, "concedido", lambda *a: False)
+
+    def no_popen(*a, **k):
+        raise AssertionError("no debe ejecutar el gate sin consentimiento")
+
+    monkeypatch.setattr(m.subprocess, "Popen", no_popen)
+    datos = json.loads(m.correr_gate("p1", timeout_s=5))
+    assert datos["rc"] == 3
+    assert "consentimiento" in datos["stderr"]
+
+
+def test_correr_gate_timeout_mata_el_grupo(proyecto, monkeypatch):
+    monkeypatch.setattr(m.consentimiento, "concedido", lambda *a: True)
+    muertos = []
+
+    class Colgado:
+        returncode = -9
+        pid = 4321
+
+        def __init__(self):
+            self.llamadas = 0
+
+        def communicate(self, timeout=None):
+            self.llamadas += 1
+            if self.llamadas == 1:
+                raise subprocess.TimeoutExpired("gate", timeout or 5)
+            return "parcial", ""
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(m.subprocess, "Popen", lambda *a, **k: Colgado())
+    monkeypatch.setattr(
+        m.loops_estado, "matar",
+        lambda pid, espera=5: muertos.append((pid, espera)) or True)
+    datos = json.loads(m.correr_gate("p1", timeout_s=1))
+    assert datos["rc"] == -1
+    assert datos["timeout"] is True
+    assert muertos == [(4321, 5)]
 
 
 def test_confiar_gate_habilita_el_gate(monkeypatch, tmp_path):
