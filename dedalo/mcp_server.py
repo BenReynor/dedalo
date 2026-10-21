@@ -10,9 +10,9 @@ Transport: stdio (no ports opened). Start:
     python -m dedalo.mcp_server
 
 The loop's manual review is resolved by writing to
-`<proyecto>/.dedalo_review/decision` (APPROVE / "REJECT <motivo>"), which is
-exactly what `resolver_revision` does: the pilot agent takes the human's seat
-when the loop pauses.
+`<proyecto>/.dedalo/review/decision` (APPROVE / "REJECT <motivo>"), which is
+exactly what `resolver_revision` does: a pilot can answer a pending review
+when the loop pauses (subject to `REVISION_APRUEBA_AGENTE` for APPROVE).
 
 Security note: `iniciar_loop` launches the engine in the background with
 `start_new_session=True` and its stdout/stderr go to /dev/null —NEVER to the
@@ -401,11 +401,11 @@ def detener_loop(nombre: str, espera_s: int = 5) -> str:
 
 
 def resolver_revision(nombre: str, decision: str, motivo: str = "") -> str:
-    """Resolves the pending manual review by writing `.dedalo_review/decision`.
+    """Resolves the pending manual review by writing `.dedalo/review/decision`.
 
     `decision`: "APPROVE" (accept the diff) or "REJECT" (reject; uses `motivo`).
-    It is what lets a pilot agent take the human's seat when the
-    loop pauses awaiting approval.
+    It is what lets a pilot agent answer a pending review when the loop pauses
+    awaiting approval.
 
     The file carries a `# origen=mcp` marker so the loop can audit
     who decided and apply the `REVISION_APRUEBA_AGENTE` policy: by default
