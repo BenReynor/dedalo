@@ -32,7 +32,8 @@ def test_asegurar_crea_arbol_y_log():
         info = rutas.asegurar(tmp)
         assert rutas.es_nuevo(tmp) is True
         for directorio in (rutas.dir_scripts(tmp), rutas.dir_estado(tmp),
-                           os.path.join(tmp, ".dedalo", "review")):
+                           os.path.join(tmp, ".dedalo", "review"),
+                           rutas.dir_fichas(tmp)):
             assert os.path.isdir(directorio)
         assert os.path.isfile(rutas.log(tmp))
         assert "progreso.log" in info["creados"]
@@ -98,6 +99,7 @@ def test_resuelve_layout_legacy_y_nuevo():
         assert rutas.log(tmp) == os.path.join(tmp, ".dedalo", "estado",
                                               "progreso.log")
         assert rutas.dir_review(tmp) == os.path.join(tmp, ".dedalo", "review")
+        assert rutas.dir_fichas(tmp) == os.path.join(tmp, ".dedalo", "fichas")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

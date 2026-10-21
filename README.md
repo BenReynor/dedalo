@@ -193,6 +193,9 @@ Use it as a guardrail, and check your provider dashboard for the real numbers.
 - **Set a spending cap.** `MAX_COSTO` caps the **estimated** spend (attempts ×
   `COSTO_POR_ITER`, in USD); it is a safety rail, not your provider's invoice.
   Set it before leaving the loop unattended.
+- **JSON fichas are opt-in.** The Run tab has a checkbox to write one
+  `.dedalo/fichas/*.json` per accepted task. It uses an extra agent call, so it
+  is off by default; a failure never blocks the commit.
 - **Don't hand-edit the 3 framework scripts** (`dedalo.sh`, `gate.sh`,
   `mapear.sh`): they renew themselves when you open the project. If you touch
   them, commit first.
@@ -504,11 +507,22 @@ GUI fills them in from the Run form). The most useful ones:
 | `NAVEGADOR` / `MODELO_NAVEGADOR` | Automatic context browser before each task. |
 | `CRITERIO` | Extracted from the `criterio:` line under the task in `plan.md`. |
 | `REVISION_APRUEBA_AGENTE` | `1` lets a pilot agent approve its own manual review (default `0`: an agent's `APPROVE` is ignored and the loop keeps waiting for a human). |
+| `FICHA_ACTIVA` | `1` writes a JSON ficha per accepted task in `.dedalo/fichas/` (default `0`: off, no extra tokens). |
+| `AGENTE_FICHA` / `MODELO_FICHA` | Agent/model for the ficha observer (`auto` = same as the task agent). |
+| `TIMEOUT_FICHA` | Seconds for the observer call (default `120`). |
+| `FICHAS_DIR` | Overrides `.dedalo/fichas` (relative to the project or absolute). |
+| `FICHA_MAX_DIFF` | Max diff characters stored in the ficha (default `12000`). |
+| `FICHA_MAX_SALIDA` | Max characters of gate/agent output (default `20000`). |
+| `FICHA_DIFF_COMPLETO` | `1` stores the full diff (default `0`). |
 | `DEDALO_GATE_CONSENT` | `1` trusts the project's gate without prompting (for CI/scripts). Unset = ask once per project (interactive) or abort. |
 
 > While waiting on `REVISION_MANUAL`, if the network goes down the loop aborts
 > (rather than hanging); and if `TIMEOUT_REVISION_MANUAL` expires, the task is
 > marked `[B]`.
+>
+> Fichas use the canonical format in
+> `dedalo/plantillas_data/skills/ficha-dedalo/SKILL.md`; the engine injects it
+> into the observer prompt, so it works with opencode, codex and claude.
 >
 > These variables (plus everything prefixed `DEDALO_`, `CLI_`, `LC_`,
 > `OPENCODE_`, `CODEX_` and `CLAUDE_`) are always passed through. Any **other**

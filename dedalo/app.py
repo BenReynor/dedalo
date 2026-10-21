@@ -890,6 +890,7 @@ class Ventana(QMainWindow):
             f"{modelo_revisor or 'n/a'}, "
             f"nav={'on' if nav_conf['activo'] else 'off'}, "
             f"dual={conf['dual']}, "
+            f"fichas={'on' if conf.get('fichas') else 'off'}, "
             f"cost/iter={conf['costo_iter']} USD, iter={conf['iteraciones']})")
         self.loop = Proceso(panel, on_fin=self._loop_fin)
         self.loop.setWorkingDirectory(ruta)

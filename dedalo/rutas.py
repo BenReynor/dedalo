@@ -24,6 +24,7 @@ DIR = ".dedalo"
 SCRIPTS = "scripts"
 ESTADO = "estado"
 REVIEW = "review"
+FICHAS = "fichas"
 
 # Framework files that used to live at the project root.
 SCRIPTS_LEGACY = ("dedalo.sh", "gate.sh", "mapear.sh", "gate_checks")
@@ -51,6 +52,15 @@ def dir_review(proyecto):
     if es_nuevo(proyecto):
         return os.path.join(proyecto, DIR, REVIEW)
     return os.path.join(proyecto, REVIEW_LEGACY)
+
+
+def dir_fichas(proyecto):
+    """Directory of the JSON fichas (`.dedalo/fichas`)."""
+    return os.path.join(proyecto, DIR, FICHAS)
+
+
+def fichas_index(proyecto):
+    return os.path.join(dir_fichas(proyecto), "index.jsonl")
 
 
 def es_nuevo(proyecto):
@@ -168,7 +178,8 @@ def asegurar(proyecto):
         elif _mover(viejo_review, nuevo_review):
             pass
         migrados.append(REVIEW_LEGACY)
-    for ruta in (dir_scripts(proyecto), dir_estado(proyecto), nuevo_review):
+    for ruta in (dir_scripts(proyecto), dir_estado(proyecto), nuevo_review,
+                 dir_fichas(proyecto)):
         os.makedirs(ruta, exist_ok=True)
     creados = []
     if not os.path.exists(log(proyecto)):

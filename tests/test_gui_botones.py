@@ -435,14 +435,17 @@ def test_ejecucion_config_roundtrip(app, proyecto_git):
     p = PanelEjecucion()
     p.txt_hasta.setText("18:30")
     p.txt_iter.setText("5")
+    p.chk_fichas.setChecked(True)
     conf = p.config()
     assert conf["hasta"] == "18:30"
     assert conf["iteraciones"] == 5
+    assert conf["fichas"] is True
     # apply back
     p2 = PanelEjecucion()
     p2.aplicar_config(conf)
     assert p2.txt_hasta.text() == "18:30"
     assert p2.txt_iter.text() == "5"
+    assert p2.chk_fichas.isChecked() is True
 
 
 def test_ejecucion_combo_agente_solo_ofrece_instalados(

@@ -145,6 +145,11 @@ _ES: dict[str, str] = {
         "Fallos, abortos y tareas bloqueadas con su motivo real.",
     "Framework out of git": "Framework fuera de git",
     "Full history": "Historial completo",
+    "📄 Generate JSON ficha on each accepted task (uses extra tokens)":
+        "📄 Generar ficha JSON al aceptar cada tarea (usa tokens extra)",
+    "Runs a separate agent call after the task is accepted. The ficha is saved in .dedalo/fichas/ and never blocks the commit.":
+        "Hace una llamada aparte al agente cuando la tarea se acepta. La ficha "
+        "se guarda en .dedalo/fichas/ y nunca bloquea el commit.",
     "Gate": "Gate",
     "Gate output": "Salida del gate",
     "Gate: OK / FAIL": "Gate: OK / FAIL",

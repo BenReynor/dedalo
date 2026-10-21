@@ -125,6 +125,7 @@ Example configuration in an MCP client (opencode):
 | `~/.config/dedalo/models_dev.json` | Model catalog. |
 | `<proyecto>/plan.md`, `lecciones.md`, `CONTEXTO.md` | Project-owned files. |
 | `<proyecto>/.dedalo/estado/` | Run state (`progreso.log`, `metrics.jsonl`, ...). |
+| `<proyecto>/.dedalo/fichas/` | Opt-in JSON fichas per accepted task (`index.jsonl` + one file each). |
 
 The config directory is created with `0700` permissions.
 

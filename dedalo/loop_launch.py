@@ -53,6 +53,8 @@ VARS_ENTORNO = frozenset({
     "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
     # Engine overrides that are not secrets.
     "MODELO_JUEZ", "TIMEOUT_JUEZ", "CRITERIO", "SKIP_RUFF",
+    "AGENTE_FICHA", "MODELO_FICHA", "TIMEOUT_FICHA", "FICHAS_DIR",
+    "FICHA_MAX_DIFF", "FICHA_MAX_SALIDA", "FICHA_DIFF_COMPLETO",
     # Opt-in agent API keys (the agents normally keep their own session).
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
     "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -199,6 +201,7 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
     env["COSTO_POR_ITER"] = str(
         conf.get("costo_iter", cfg.LAUNCH_DEFECTO["costo_iter"]))
     env["REVISION_MANUAL"] = "1" if conf.get("revision_manual", False) else "0"
+    env["FICHA_ACTIVA"] = "1" if conf.get("fichas", False) else "0"
     return env
 
 

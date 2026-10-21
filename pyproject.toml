@@ -45,6 +45,7 @@ dedalo = [
     "plantillas_data/.gitignore",
     "plantillas_data/gate_checks/*.sh",
     "plantillas_data/gate_checks/*.py",
+    "plantillas_data/skills/ficha-dedalo/*.md",
     "icono.svg",
     "acceso.sh",
 ]

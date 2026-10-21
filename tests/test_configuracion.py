@@ -18,6 +18,10 @@ def test_agentes_y_defecto():
     assert cfg.AGENTE_DEFECTO in cfg.AGENTES_DISPONIBLES
 
 
+def test_fichas_desactivadas_por_defecto():
+    assert cfg.LAUNCH_DEFECTO["fichas"] is False
+
+
 def test_eventos_webhook():
     assert set(cfg.WEBHOOK_DEFECTO["eventos"]) == {
         "inicio", "bloqueada", "fin", "tokens", "error"}

@@ -12,7 +12,7 @@ def _conf(**extra):
     conf = {
         "iteraciones": 1, "agente_cli": "auto", "revisor_cli": "auto",
         "agente": "", "revisor": "", "dual": True, "voz": False,
-        "costo_max": 0, "revision_manual": False,
+        "costo_max": 0, "revision_manual": False, "fichas": False,
     }
     conf.update(extra)
     return conf
@@ -59,6 +59,12 @@ def test_construir_entorno_filtra_y_conserva_el_contrato(monkeypatch):
     assert env["DEDALO_X"] == "1"
     assert env["PATH"] == "/usr/bin"
     assert "SECRET_XYZ" not in env
+
+
+def test_fichas_se_mapean_al_entorno(monkeypatch):
+    monkeypatch.setattr(ll.modelos, "ruta_binario", lambda clave: "")
+    assert ll.construir_entorno(_conf(fichas=False), {}, [], {})["FICHA_ACTIVA"] == "0"
+    assert ll.construir_entorno(_conf(fichas=True), {}, [], {})["FICHA_ACTIVA"] == "1"
 
 
 def test_preparar_exporta_identidad_y_filtra(monkeypatch):

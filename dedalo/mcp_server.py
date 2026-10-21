@@ -411,6 +411,7 @@ def iniciar_loop(nombre: str) -> str:
         "agente_tarea": plan["agente_tarea"],
         "agente_revisor": plan["agente_revisor"],
         "revision_manual": bool(conf.get("revision_manual")),
+        "fichas": bool(conf.get("fichas")),
     }, ensure_ascii=False, indent=2)
 
 

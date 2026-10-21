@@ -53,7 +53,8 @@ def quitar(ruta):
             if GATE_CHECKS_DIR + "/" not in eliminados:
                 eliminados.append(GATE_CHECKS_DIR + "/")
     # Run state (new layout) and anything left at the root of an old project
-    for directorio in (rutas.dir_estado(ruta), rutas.dir_review(ruta)):
+    for directorio in (rutas.dir_estado(ruta), rutas.dir_review(ruta),
+                       rutas.dir_fichas(ruta)):
         if os.path.isdir(directorio):
             shutil.rmtree(directorio, ignore_errors=True)
     for nombre in ("progreso.log", "metrics.jsonl", "incidencias.jsonl",
@@ -66,7 +67,8 @@ def quitar(ruta):
     # Remove the framework directories (then .dedalo/) only if they are empty:
     # never delete anything the user put there.
     for directorio in (rutas.dir_scripts(ruta), rutas.dir_estado(ruta),
-                       os.path.join(ruta, rutas.DIR, rutas.REVIEW)):
+                       os.path.join(ruta, rutas.DIR, rutas.REVIEW),
+                       rutas.dir_fichas(ruta)):
         try:
             os.rmdir(directorio)
         except OSError:

@@ -52,6 +52,8 @@ LAUNCH_DEFECTO = {
     "dual": True,
     "push": True,
     "voz": False,
+    # Opt-in: writes a JSON ficha per accepted task using an extra agent call.
+    "fichas": False,
 }
 
 # ----- Navigator (context search before each task) -----

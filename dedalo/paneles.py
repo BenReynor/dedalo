@@ -1326,6 +1326,14 @@ class PanelEjecucion(QWidget):
         self.chk_revision_manual.setChecked(False)
         g.addWidget(self.chk_revision_manual, 16, 0, 1, 2)
 
+        self.chk_fichas = QCheckBox(t(
+            "📄 Generate JSON ficha on each accepted task (uses extra tokens)"))
+        self.chk_fichas.setChecked(bool(cfg.LAUNCH_DEFECTO["fichas"]))
+        self.chk_fichas.setToolTip(t(
+            "Runs a separate agent call after the task is accepted. The ficha "
+            "is saved in .dedalo/fichas/ and never blocks the commit."))
+        g.addWidget(self.chk_fichas, 17, 0, 1, 2)
+
         v.addWidget(grupo)
 
         # ===== CONTROL BUTTONS =====
@@ -1402,6 +1410,7 @@ class PanelEjecucion(QWidget):
             "dual": self.chk_dual.isChecked(),
             "voz": self.chk_voz.isChecked(),
             "revision_manual": self.chk_revision_manual.isChecked(),
+            "fichas": self.chk_fichas.isChecked(),
             "costo_max": _numero(self.txt_costo_max.text(),
                                  cfg.LAUNCH_DEFECTO["costo_max"], float),
             "costo_iter": _numero(self.txt_costo_iter.text(),
@@ -1435,6 +1444,7 @@ class PanelEjecucion(QWidget):
         self.chk_voz.setChecked(bool(c.get("voz")))
         self.chk_push.setChecked(bool(c.get("push")))
         self.chk_revision_manual.setChecked(bool(c.get("revision_manual")))
+        self.chk_fichas.setChecked(bool(c.get("fichas")))
         self.txt_costo_max.setText(
             str(c.get("costo_max", cfg.LAUNCH_DEFECTO["costo_max"])))
         self.txt_costo_iter.setText(

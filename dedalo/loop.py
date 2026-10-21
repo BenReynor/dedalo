@@ -29,7 +29,7 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, loops_estado, net, notificaciones, rutas
+from . import consentimiento, ficha, loops_estado, net, notificaciones, rutas
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
@@ -109,6 +109,20 @@ class Config:
         # Security: an agent (MCP origin) may only APPROVE its own diff when
         # explicitly opted in. Default is safe: agent approvals are ignored.
         self.revision_aprueba_agente = env.get("REVISION_APRUEBA_AGENTE", "0")
+        # Opt-in JSON ficha per accepted task. Off by default: it costs an
+        # extra agent call, so the GUI must enable it explicitly per project.
+        self.ficha_activa = env.get("FICHA_ACTIVA", "0")
+        self.agente_ficha = env.get("AGENTE_FICHA", "auto") or "auto"
+        self.modelo_ficha = env.get("MODELO_FICHA", "") or ""
+        self.timeout_ficha = int(env.get("TIMEOUT_FICHA", "120"))
+        self.ficha_max_diff = int(env.get("FICHA_MAX_DIFF", "12000"))
+        self.ficha_max_salida = int(env.get("FICHA_MAX_SALIDA", "20000"))
+        self.ficha_diff_completo = env.get("FICHA_DIFF_COMPLETO", "0") == "1"
+        fichas_dir = (env.get("FICHAS_DIR") or rutas.dir_fichas(self.proyecto))
+        if not os.path.isabs(fichas_dir):
+            fichas_dir = os.path.join(self.proyecto, fichas_dir)
+        self.fichas_dir = fichas_dir
+        self.fichas_index = os.path.join(fichas_dir, "index.jsonl")
         self.voz = env.get("VOZ", "0")
         self.max_costo = float(env.get("MAX_COSTO", "0") or 0)
         self.costo_por_iter = env.get("COSTO_POR_ITER", "0.50")
@@ -462,7 +476,8 @@ def run(cfg):
          f"== DEDALO INICIADO (agente={cfg.agente_tarea}, "
          f"modelo={cfg.modelo_tarea}, revisor={cfg.revisor or 'ninguno'}, "
          f"modelo_rev={cfg.modelo_revisor}, dual={cfg.revision_dual}, "
-         f"manual={cfg.revision_manual}, max_iter={cfg.max_iter}, "
+         f"manual={cfg.revision_manual}, fichas={cfg.ficha_activa}, "
+         f"max_iter={cfg.max_iter}, "
          f"hasta={cfg.hasta or 'sin limite'}, base={cfg.rama_base}, "
          f"costo_max={cfg.max_costo}) ==")
 
@@ -604,6 +619,15 @@ def run(cfg):
         snapshot(cfg.proyecto, before)
         hecho = 0
         gate_out = None
+        gate_rc = 1
+        gate_salida = ""
+        salida_tarea = ""
+        resultado_revision = "no_ejecutado"
+        feedback_revision = ""
+        revisor_modo = "no_ejecutado"
+        merge_ok = False
+        commit_hash = ""
+        commit_msg = ""
         cfg.ultimo_motivo = None
 
         for intento in range(1, cfg.max_reintentos + 1):
@@ -684,6 +708,7 @@ def run(cfg):
                 mensaje(cfg, f"[dedalo] ⚠ {cfg.agente_tarea} salió con rc={rc}")
 
             contenido = _leer(out)
+            salida_tarea = contenido
             if rc == 0 or contenido:
                 print(contenido, end="")
             _append_log(cfg, contenido)
@@ -739,14 +764,19 @@ def run(cfg):
 
             logx(cfg.log, f"GATE: ejecutando gate.sh (intento {intento})")
             rc_gate, gate_out = _run_gate(cfg, criterio)
+            gate_rc = rc_gate
+            gate_salida = _leer(gate_out)
             if rc_gate == 0:
                 if cfg.revision_dual == "1" and cfg.revisor:
+                    revisor_modo = "dual"
                     costo_iter = suma_coste(costo_iter,
                                             float(cfg.costo_por_iter) / 2)
                     vstat, vdiff = diff_para_revisor(cfg.proyecto)
                     resultado, feedback = revisar_diff(
                         cfg, cfg.revisor, tarea,
                         f"{vstat}\n{vdiff}" if vdiff else vstat)
+                    resultado_revision = resultado or "fail"
+                    feedback_revision = feedback or ""
                     if resultado == "sin_auth":
                         mensaje(cfg, f"[dedalo] ✗✗ revisor ({cfg.revisor}) "
                                      "no está autenticado — deteniendo loop")
@@ -775,6 +805,8 @@ def run(cfg):
                         if rc_manual == 4:
                             return 4
                         if rc_manual == 0:
+                            resultado_revision = "pass"
+                            feedback_revision = ""
                             hecho = 1
                             break
                         if rc_manual == 2:
@@ -804,10 +836,15 @@ def run(cfg):
                             logx(cfg.log, "Feedback del revisor inyectado para "
                                           "siguiente intento")
                 else:
+                    revisor_modo = ("manual" if cfg.revision_manual == "1"
+                                    else "gate")
+                    resultado_revision = "pendiente"
                     rc_manual = _esperar_revision_manual(cfg, tarea)
                     if rc_manual == 4:
                         return 4
                     if rc_manual == 0:
+                        resultado_revision = "pass"
+                        feedback_revision = ""
                         hecho = 1
                         break
                     if rc_manual == 2:
@@ -849,20 +886,16 @@ def run(cfg):
 
         logx(cfg.log, f"Costo iteración {iteracion}: {costo_iter} USD")
         snapshot(cfg.proyecto, after)
-        try:
-            if gate_out:
-                os.unlink(gate_out)
-        except OSError:
-            pass
 
         if hecho == 1:
             nuevos, _b = cambios_entre(before, after)
-            commit_msg = ""
             if nuevos:
                 subj = "dedalo: " + tarea[:40]
                 rc_c = commit_tarea(cfg.proyecto, nuevos, subj, tarea)
                 if rc_c == 0:
                     commit_msg = subj
+                    _, head, _ = run_git(cfg.proyecto, "rev-parse", "HEAD")
+                    commit_hash = head.strip()
                     logx(cfg.log, f"commit en {rama_tarea}: {subj}")
                     print(f"[dedalo] ✔ commit: {subj}")
                 else:
@@ -873,6 +906,7 @@ def run(cfg):
 
             if (checkout(cfg.proyecto, rama_run) == 0
                     and merge_ff(cfg.proyecto, rama_tarea) == 0):
+                merge_ok = True
                 borrar_rama(cfg.proyecto, rama_tarea)
                 logx(cfg.log, f"mergeada {rama_tarea} -> {rama_run}")
                 _mapear(cfg)
@@ -928,6 +962,22 @@ def run(cfg):
             logx(cfg.log, "lección registrada en lecciones.md (tarea bloqueada)")
 
         _commit_memoria(cfg, tarea, iteracion)
+
+        if hecho == 1 and merge_ok:
+            ficha.generar(
+                cfg, tarea=tarea, criterio=criterio, iteracion=iteracion,
+                rama=rama_run, commit=commit_hash, commit_msg=commit_msg,
+                gate_rc=gate_rc, gate_salida=gate_salida,
+                salida_agente=salida_tarea,
+                resultado_revision=resultado_revision,
+                feedback_revision=feedback_revision, merge_ok=True,
+                revisor_modo=revisor_modo)
+
+        try:
+            if gate_out:
+                os.unlink(gate_out)
+        except OSError:
+            pass
 
         costo_total = suma_coste(costo_total, costo_iter)
         logx(cfg.log, f"Costo estimado acumulado: {costo_total} USD")

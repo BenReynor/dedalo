@@ -95,15 +95,17 @@ def soporta_dir(binario, cwd=None):
     return soportado
 
 
-def _argv_opencode(binario, cfg, subagente, modelo, prompt):
+def _argv_opencode(binario, cfg, subagente, modelo, prompt, dir_trabajo=None):
     """argv for `opencode run`, pinning the working directory to the project.
 
     Both the task agent and the reviewer go through here; the navigator builds
-    its own argv but follows the same rule.
+    its own argv but follows the same rule. `dir_trabajo` lets the ficha
+    observer run in an isolated temporary directory instead of the repo.
     """
+    directorio = dir_trabajo or cfg.proyecto
     args = [binario, "run", "--agent", subagente]
-    if soporta_dir(binario, cfg.proyecto or None):
-        args += ["--dir", cfg.proyecto]
+    if soporta_dir(binario, directorio or None):
+        args += ["--dir", directorio]
     if modelo:
         args += ["--model", modelo]
     args.append(prompt)
@@ -194,19 +196,23 @@ def extraer_tokens(texto, agente):
     return tin, tout
 
 
-def registrar_metrica(cfg, agente, modelo, dur_ms, rc, salida, tarea, iteracion):
+def registrar_metrica(cfg, agente, modelo, dur_ms, rc, salida, tarea, iteracion,
+                      fase=""):
     """Append of a line to metrics.jsonl (6 decimals and UTC ts, like the
     script's printf; without depending on the locale)."""
     texto = _leer_fichero(salida)
     tin, tout = extraer_tokens(texto, agente)
     costo = costo_por_modelo(modelo, tin, tout)
     ts = datetime.datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    linea = json.dumps({
+    datos = {
         "ts": ts, "iter": int(iteracion), "agente": agente,
         "modelo": modelo or "default", "dur_ms": int(dur_ms), "rc": int(rc),
         "tokens_in": int(tin), "tokens_out": int(tout),
         "costo_usd": round(costo, 6), "tarea": tarea,
-    }, ensure_ascii=False)
+    }
+    if fase:
+        datos["fase"] = fase
+    linea = json.dumps(datos, ensure_ascii=False)
     try:
         with open(cfg.metrics, "a", encoding="utf-8") as f:
             f.write(linea + "\n")
@@ -214,13 +220,17 @@ def registrar_metrica(cfg, agente, modelo, dur_ms, rc, salida, tarea, iteracion)
         pass
 
 
-def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion):
+def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
+               cwd=None, timeout=None, dir_trabajo=None, fase="", env=None):
     """Runs a task with an agent and returns its exit code (run_agente).
 
     Opens the output files (stdout/salida, stderr/salida.err) like the
     `> "$salida" 2> "$salida_err"` redirect of the script, records the metric
     and passes the proc to `vivo` so the signals kill it. Returns
     (rc, agente_pid_dict).
+
+    `cwd`/`timeout`/`dir_trabajo` are used by the ficha observer to run in a
+    temporary directory, without the real repo and with a shorter timeout.
     """
     agente = (agente or cfg.agente_tarea or "").strip()
     if not agente or agente == "auto":
@@ -236,7 +246,8 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion):
     if agente == "opencode":
         cmd = _argv_opencode(
             binario, cfg,
-            cfg.environ.get("OPENCODE_AGENT_TAREA") or "build", modelo, prompt)
+            cfg.environ.get("OPENCODE_AGENT_TAREA") or "build", modelo, prompt,
+            dir_trabajo=dir_trabajo)
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check",
                *flags, prompt]
@@ -249,12 +260,14 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion):
     salida_err = salida + ".err"
     vivo = {}
     t0 = ahora_ms()
+    entorno = env if env is not None else cfg.environ
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _salida, _t = run_con_timeout(
-            cmd, cfg.timeout_por_tarea, env=cfg.environ,
-            cwd=cfg.proyecto, stdout=fout, stderr=ferr, vivo=vivo)
+            cmd, timeout or cfg.timeout_por_tarea, env=entorno,
+            cwd=cwd or cfg.proyecto, stdout=fout, stderr=ferr, vivo=vivo)
     dur = ahora_ms() - t0
-    registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, iteracion)
+    registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, iteracion,
+                      fase=fase)
     return rc, vivo
 
 
