@@ -165,9 +165,9 @@ def test_json_invalido_deja_ficha_incompleta(tmp_path, monkeypatch):
 
 
 def test_redacta_secretos_y_trunca():
-    texto = "token=abc123456789\nBearer abcdefghijklmnop\nfin"
+    clave = "x" * 24
+    texto = "token=" + clave + "\nBearer " + clave + "\nfin"
     limpio = ficha.redactar(texto)
-    assert "abc123456789" not in limpio
-    assert "abcdefghijklmnop" not in limpio
+    assert clave not in limpio
     assert "***" in limpio
     assert ficha._truncar("x" * 20, 10).endswith("(truncado)")
