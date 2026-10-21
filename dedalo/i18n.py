@@ -211,8 +211,8 @@ _ES: dict[str, str] = {
     "Reload": "Recargar",
     "Remove": "Quitar",
     "Remove project": "Quitar proyecto",
-    "Remove the project from the list?\n\nIts dedalo files will also be deleted from disk:\n  · dedalo.sh, gate.sh, mapear.sh\n  · plan.md, lecciones.md and progreso.log\n\nThe rest of the project's code is NOT touched.":
-        "¿Quitar el proyecto de la lista?\n\nTambién se borrarán de disco sus ficheros de dedalo:\n  · .dedalo/ (scripts y estado)\n  · plan.md, lecciones.md y progreso.log\n\nEl resto del código del proyecto NO se toca.",
+    "Remove the project from the list?\n\nIts dedalo files will also be deleted from disk:\n  · .dedalo/ (scripts, gate_checks and run state)\n  · plan.md, lecciones.md and CONTEXTO.md\n\nThe rest of the project's code is NOT touched.":
+        "¿Quitar el proyecto de la lista?\n\nTambién se borrarán de disco sus ficheros de dedalo:\n  · .dedalo/ (scripts, gate_checks y estado)\n  · plan.md, lecciones.md y CONTEXTO.md\n\nEl resto del código del proyecto NO se toca.",
     "Removed from the list and deleted:\n  · {lista}":
         "Quitado de la lista y borrado:\n  · {lista}",
     "Removed from the list.": "Quitado de la lista.",

@@ -714,8 +714,8 @@ class Ventana(QMainWindow):
                 self, t("Remove project"),
                 t("Remove the project from the list?\n\nIts dedalo files will "
                   "also be deleted from disk:\n"
-                  "  · .dedalo/ (scripts and run state)\n"
-                  "  · plan.md, lecciones.md and progreso.log\n\n"
+                  "  · .dedalo/ (scripts, gate_checks and run state)\n"
+                  "  · plan.md, lecciones.md and CONTEXTO.md\n\n"
                   "The rest of the project's code is NOT touched."),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if resp != QMessageBox.Yes:
