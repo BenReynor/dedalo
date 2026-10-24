@@ -204,8 +204,10 @@ _ES: dict[str, str] = {
     "Project": "Proyecto",
     "Project ready": "Proyecto listo",
     "Gate templates": "Plantillas de gate",
-    "Gate templates to enable (comma separated; empty = python/backend):":
-        "Plantillas de gate a activar (separadas por comas; vacío = python/backend):",
+    "Select the stacks this project uses:":
+        "Selecciona los lenguajes que usa este proyecto:",
+    "None checked = python/backend (default)":
+        "Ninguno marcado = python/backend (por defecto)",
     "Project removed": "Proyecto eliminado",
     "Project to work on (branch):": "Proyecto a trabajar (rama):",
     "Project:": "Proyecto:",
@@ -381,6 +383,13 @@ _ES: dict[str, str] = {
     "🟢 Internet: OK": "🟢 Internet: OK",
     "🧠 Lessons": "🧠 Lecciones",
     "🧠 Project memory": "🧠 Memoria del proyecto",
+    "📋 Context": "📋 Contexto",
+    "📋 Project context": "📋 Contexto del proyecto",
+    "Permanent context injected into the agent and reviewer before every task. Write architecture notes, constraints, decision logs, etc.":
+        "Contexto permanente inyectado en el agente y el revisor antes de cada tarea. Escribe notas de arquitectura, restricciones, registros de decisiones, etc.",
+    "CONTEXTO.md saved ({ruta})": "CONTEXTO.md guardado ({ruta})",
+    "CONTEXTO.md does not exist yet": "CONTEXTO.md aún no existe",
+    "# Project context — permanent notes\n\n": "# Contexto del proyecto — notas permanentes\n\n",
     "🧪 Test Discord": "🧪 Probar Discord",
     "🧪 Test Telegram": "🧪 Probar Telegram",
     "🧪 Test WhatsApp": "🧪 Probar WhatsApp",

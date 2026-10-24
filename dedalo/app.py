@@ -12,16 +12,18 @@ import subprocess
 import sys
 import time
 
-from PySide6.QtCore import QProcess, QSettings, QTimer
+from PySide6.QtCore import QProcess, QSettings, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -48,6 +50,7 @@ from .i18n import IDIOMAS, NOMBRES_IDIOMA, idioma, set_idioma, t
 from .paneles import (
     AvisoTemperatura,
     LoopPill,
+    PanelContexto,
     PanelEjecucion,
     PanelGit,
     PanelIncidencias,
@@ -87,6 +90,34 @@ def _argv_motor(frozen, args):
 def _raiz_codigo():
     """Root of the GUI repo: `dedalo` is one of its subdirectories."""
     return loop_launch.raiz_codigo()
+
+
+class DialogoPlantillas(QDialog):
+    """Multi-select of gate templates: one checkable box per stack."""
+
+    def __init__(self, padre, disponibles):
+        super().__init__(padre)
+        self.setWindowTitle(t("Gate templates"))
+        caja = QVBoxLayout(self)
+        caja.addWidget(QLabel(t("Select the stacks this project uses:")))
+        self.lista = QListWidget(self)
+        for nombre in disponibles:
+            item = QListWidgetItem(nombre)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.lista.addItem(item)
+        caja.addWidget(self.lista)
+        caja.addWidget(QLabel(t("None checked = python/backend (default)")))
+        botones = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        caja.addWidget(botones)
+
+    def seleccion(self):
+        return [self.lista.item(i).text()
+                for i in range(self.lista.count())
+                if self.lista.item(i).checkState() == Qt.Checked]
 
 
 class Ventana(QMainWindow):
@@ -365,6 +396,10 @@ class Ventana(QMainWindow):
         self.pan_lecciones.guardado.connect(
             lambda ruta: self.estado.setText(
                 t("lecciones.md saved ({ruta})", ruta=ruta)))
+        self.pan_contexto = PanelContexto()
+        self.pan_contexto.guardado.connect(
+            lambda ruta: self.estado.setText(
+                t("CONTEXTO.md saved ({ruta})", ruta=ruta)))
         self.pan_incidencias = PanelIncidencias()
         self.pan_ejec = PanelEjecucion()
         self.pan_ejec.iniciar.connect(self._iniciar_loop)
@@ -389,6 +424,7 @@ class Ventana(QMainWindow):
         self._secciones = [
             (t("Plan"), self.pan_plan),
             (t("🧠 Lessons"), self.pan_lecciones),
+            (t("📋 Context"), self.pan_contexto),
             (t("⚠ Incidents"), self.pan_incidencias),
             (t("Run"), self.pan_ejec),
             (t("Logs"), self.pan_logs),
@@ -605,6 +641,7 @@ class Ventana(QMainWindow):
             self.estado.setText(t("No project"))
             self.pan_plan.clear()
             self.pan_lecciones.cargar(None)
+            self.pan_contexto.cargar(None)
             self.pan_incidencias.cargar(None)
             self.pan_git.cargar(None)
             self.pan_mapa.cargar(None, None)
@@ -627,6 +664,7 @@ class Ventana(QMainWindow):
         self.estado.setText(t("Project: {nombre} — {ruta}", nombre=nombre, ruta=ruta))
         self.pan_plan.cargar(rutas.proyecto_archivo(ruta, "plan.md"))
         self.pan_lecciones.cargar(rutas.proyecto_archivo(ruta, "lecciones.md"))
+        self.pan_contexto.cargar(rutas.proyecto_archivo(ruta, "CONTEXTO.md"))
         self.pan_incidencias.cargar(rutas.incidencias(ruta))
         self.pan_git.cargar(ruta)
         self.pan_mapa.cargar(rutas.mapeo(ruta), ruta)
@@ -646,10 +684,11 @@ class Ventana(QMainWindow):
             self.pan_logs.panel_loop.appendPlainText(
                 t("[auto-provision] Templates installed: {lista}",
                   lista=", ".join(creados)))
-            # If plan.md/lecciones.md were missing, reload them into the UI
-            if "plan.md" in creados or "lecciones.md" in creados:
+            # If plan.md/lecciones.md/CONTEXTO.md were missing, reload them into the UI
+            if any(n in creados for n in ("plan.md", "lecciones.md", "CONTEXTO.md")):
                 self.pan_plan.cargar(rutas.proyecto_archivo(ruta, "plan.md"))
                 self.pan_lecciones.cargar(rutas.proyecto_archivo(ruta, "lecciones.md"))
+                self.pan_contexto.cargar(rutas.proyecto_archivo(ruta, "CONTEXTO.md"))
 
         desactualizados = plantillas._desactualizados(ruta)
         if desactualizados:
@@ -673,17 +712,14 @@ class Ventana(QMainWindow):
         if not ruta:
             return
         nombre = os.path.basename(ruta)
-        elegida = ""
+        elegidas = []
         disponibles = plantillas.disponibles()
         if disponibles:
-            elegida, aceptar = QInputDialog.getText(
-                self, t("Gate templates"),
-                t("Gate templates to enable (comma separated; empty = "
-                  "python/backend):") + "\n" + ", ".join(disponibles),
-                text="")
-            if not aceptar:
+            dialogo = DialogoPlantillas(self, disponibles)
+            if dialogo.exec() != QDialog.Accepted:
                 return
-        creados = plantillas.instalar(ruta, elegida or None)
+            elegidas = dialogo.seleccion()
+        creados = plantillas.instalar(ruta, elegidas or None)
         git = plantillas.inicializar_git(ruta)
         self.proyectos[nombre] = {"ruta": ruta}
         guardar(self.proyectos, self.tema)
@@ -1016,6 +1052,7 @@ class Ventana(QMainWindow):
         if p:
             self.pan_plan.cargar(rutas.proyecto_archivo(p[1], "plan.md"))
             self.pan_lecciones.cargar(rutas.proyecto_archivo(p[1], "lecciones.md"))
+            self.pan_contexto.cargar(rutas.proyecto_archivo(p[1], "CONTEXTO.md"))
             self.pan_git.cargar(p[1])
             self.pan_mapa.cargar(rutas.mapeo(p[1]), p[1])
 
