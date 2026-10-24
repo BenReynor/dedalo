@@ -2,6 +2,7 @@
 
 import filecmp
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime
@@ -9,10 +10,15 @@ from datetime import datetime
 from . import rutas
 
 PLANTILLA_DIR = os.path.join(os.path.dirname(__file__), "plantillas_data")
+PLANTILLAS_DIR = os.path.join(PLANTILLA_DIR, "plantillas")
 SCRIPTS = ("dedalo.sh", "gate.sh", "mapear.sh")
 MEMORIA = ("plan.md", "lecciones.md", "CONTEXTO.md")
 ARCHIVOS = SCRIPTS + MEMORIA
 GATE_CHECKS_DIR = "gate_checks"
+# Checks shared by every selectable template: they are copied from the default
+# gate_checks/ (the criterion judge is generic, not stack-specific).
+COMMON_CHECKS = ("98_criterio.py",)
+MARCADOR = "plantilla"
 GATE_CHECKS = tuple(
     # Relative names ALWAYS with "/": the listing from `instalar()` (which the GUI
     # shows and the test compares) must not depend on the OS slash.
@@ -161,13 +167,110 @@ def _destino(ruta, nombre):
     return os.path.join(ruta, nombre)
 
 
-def instalar(ruta):
+def disponibles():
+    """Names of the selectable gate templates (e.g. web, python, node...)."""
+    if not os.path.isdir(PLANTILLAS_DIR):
+        return []
+    return sorted(
+        d for d in os.listdir(PLANTILLAS_DIR)
+        if os.path.isdir(os.path.join(PLANTILLAS_DIR, d, GATE_CHECKS_DIR))
+    )
+
+
+def _normalizar_plantillas(valor):
+    """Normalizes a template selection (str/list, comma or space separated).
+
+    Unknown names are ignored; duplicates are removed keeping order. This is
+    what makes templates accumulative: `"rust, go"` enables both.
+    """
+    if not valor:
+        return []
+    if isinstance(valor, str):
+        partes = re.split(r"[,\s]+", valor)
+    else:
+        partes = list(valor)
+    disponibles_ = set(disponibles())
+    elegidas = []
+    for parte in partes:
+        nombre = str(parte).strip()
+        if nombre in disponibles_ and nombre not in elegidas:
+            elegidas.append(nombre)
+    return elegidas
+
+
+def plantillas_de(ruta):
+    """Templates chosen for a project (persisted marker), in order."""
+    marca = os.path.join(rutas.dir_dedalo(ruta), MARCADOR)
+    try:
+        with open(marca, encoding="utf-8") as f:
+            return _normalizar_plantillas(f.read())
+    except OSError:
+        return []
+
+
+def plantilla_de(ruta):
+    """Comma-joined selection for a project, or None (kept for compatibility)."""
+    return ",".join(plantillas_de(ruta)) or None
+
+
+def _escribir_marcador(ruta, nombres):
+    """Persists the selection so reopening does not add the defaults."""
+    marca = os.path.join(rutas.dir_dedalo(ruta), MARCADOR)
+    os.makedirs(os.path.dirname(marca), exist_ok=True)
+    with open(marca, "w", encoding="utf-8") as f:
+        f.write("\n".join(nombres) + "\n")
+
+
+def _checks_de_plantillas(nombres):
+    """(destination, source) pairs for the selected templates.
+
+    Check names are suffixed with the template (`03_test_go.py`,
+    `03_test_rust.py`) so several stacks can coexist without overwriting each
+    other. Common checks (98_criterio) are copied once, unprefixed.
+    """
+    pares = []
+    for nombre in nombres:
+        directorio = os.path.join(PLANTILLAS_DIR, nombre, GATE_CHECKS_DIR)
+        if not os.path.isdir(directorio):
+            continue
+        for f in sorted(os.listdir(directorio)):
+            if not f.endswith((".sh", ".py")) or f.startswith("_"):
+                continue
+            base, ext = os.path.splitext(f)
+            destino = f"{GATE_CHECKS_DIR}/{base}_{nombre}{ext}"
+            pares.append((destino, os.path.join(directorio, f)))
+    comunes = [c for c in COMMON_CHECKS
+               if os.path.isfile(os.path.join(PLANTILLA_DIR, GATE_CHECKS_DIR, c))]
+    pares += [(f"{GATE_CHECKS_DIR}/{c}",
+               os.path.join(PLANTILLA_DIR, GATE_CHECKS_DIR, c))
+              for c in comunes]
+    return pares
+
+
+def instalar(ruta, plantilla=None):
     """Copies the templates (scripts + gate_checks) that are missing.
+
+    `plantilla` selects one or more gate templates by name (see
+    `disponibles()`), either as a list or as a comma/space separated string:
+    `"rust,go"`. Selections accumulate, so a project that uses several stacks
+    enables several templates. If it is omitted, the project's persisted choice
+    is used and, failing that, the default (Python/backend) checks.
 
     Projects installed with an older version are migrated first: their
     framework files move from the project root into `.dedalo/`. Returns the
     project-relative paths of the created files.
     """
+    if plantilla is None:
+        seleccion = plantillas_de(ruta)
+    else:
+        seleccion = _normalizar_plantillas(plantilla)
+    if seleccion:
+        pares = _checks_de_plantillas(seleccion)
+        nombres = list(ARCHIVOS) + [d for d, _ in pares] + [".gitignore"]
+        origenes = dict(pares)
+    else:
+        nombres = list(ARCHIVOS) + list(GATE_CHECKS) + [".gitignore"]
+        origenes = {}
     habia_log = (os.path.exists(os.path.join(ruta, "progreso.log"))
                  or os.path.exists(os.path.join(rutas.dir_estado(ruta),
                                                 "progreso.log")))
@@ -183,14 +286,17 @@ def instalar(ruta):
         creados.append(".gitignore")
     if not habia_log and os.path.exists(log):
         creados.append(os.path.relpath(log, ruta).replace("\\", "/"))
-    for nombre in list(ARCHIVOS) + list(GATE_CHECKS) + [".gitignore"]:
+    for nombre in nombres:
         destino = _destino(ruta, nombre)
         if not os.path.exists(destino):
+            origen = origenes.get(nombre, os.path.join(PLANTILLA_DIR, nombre))
             os.makedirs(os.path.dirname(destino), exist_ok=True)
-            shutil.copy2(os.path.join(PLANTILLA_DIR, nombre), destino)
+            shutil.copy2(origen, destino)
             if nombre.endswith(".sh"):
                 os.chmod(destino, 0o755)
             creados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
+    if seleccion:
+        _escribir_marcador(ruta, seleccion)
     return creados
 
 

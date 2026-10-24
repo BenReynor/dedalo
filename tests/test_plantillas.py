@@ -413,3 +413,46 @@ def test_asegurar_gitignore_migra_el_bloque_antiguo():
         assert contenido.count("# Dédalo:") == 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_plantillas_son_acumulables():
+    """Several stacks can be enabled at once without their checks colliding."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp, "rust, go")
+        checks = os.path.join(tmp, ".dedalo", "scripts", "gate_checks")
+        assert os.path.exists(os.path.join(checks, "03_test_rust.py"))
+        assert os.path.exists(os.path.join(checks, "03_test_go.py"))
+        assert plantillas.plantillas_de(tmp) == ["rust", "go"]
+        # Installing again does not duplicate nor overwrite user checks
+        assert plantillas.instalar(tmp) == []
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_plantilla_desconocida_se_ignora():
+    """Unknown names are dropped instead of breaking the install."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp, ["web", "no-existe"])
+        assert plantillas.plantillas_de(tmp) == ["web"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_marcador_guarda_varias_plantillas():
+    """The marker persists the whole selection, one name per line."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp, "python,node")
+        with open(os.path.join(tmp, ".dedalo", "plantilla"),
+                  encoding="utf-8") as f:
+            assert f.read().split() == ["python", "node"]
+        # Reopening with no explicit selection keeps both
+        assert plantillas.instalar(tmp) == []
+        assert plantillas.plantilla_de(tmp) == "python,node"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)

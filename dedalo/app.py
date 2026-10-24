@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QListWidget,
     QMainWindow,
@@ -672,7 +673,17 @@ class Ventana(QMainWindow):
         if not ruta:
             return
         nombre = os.path.basename(ruta)
-        creados = plantillas.instalar(ruta)
+        elegida = ""
+        disponibles = plantillas.disponibles()
+        if disponibles:
+            elegida, aceptar = QInputDialog.getText(
+                self, t("Gate templates"),
+                t("Gate templates to enable (comma separated; empty = "
+                  "python/backend):") + "\n" + ", ".join(disponibles),
+                text="")
+            if not aceptar:
+                return
+        creados = plantillas.instalar(ruta, elegida or None)
         git = plantillas.inicializar_git(ruta)
         self.proyectos[nombre] = {"ruta": ruta}
         guardar(self.proyectos, self.tema)

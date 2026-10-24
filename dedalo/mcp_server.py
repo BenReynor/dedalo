@@ -304,15 +304,28 @@ def listar_modelos() -> str:
 # ACTION tools
 # ---------------------------------------------------------------------------
 
-def instalar_proyecto(ruta: str, nombre: str = "") -> str:
-    """Installs the templates in `ruta`, initializes git and registers the project."""
+def listar_plantillas() -> str:
+    """Gate templates available to install (web, python, node, rust, go, generic)."""
+    return json.dumps({"plantillas": plantillas.disponibles()},
+                      ensure_ascii=False, indent=2)
+
+
+def instalar_proyecto(ruta: str, nombre: str = "", plantilla: str = "") -> str:
+    """Installs the templates in `ruta`, initializes git and registers the project.
+
+    `plantilla` picks one or more gate templates (see `listar_plantillas`),
+    comma separated, e.g. `"rust,go"`; empty uses the persisted choice or the
+    default Python/backend checks. The selection accumulates and is persisted
+    in `.dedalo/plantilla`.
+    """
     ruta = os.path.abspath(os.path.expanduser(ruta))
     os.makedirs(ruta, exist_ok=True)
-    creados = plantillas.instalar(ruta)
+    creados = plantillas.instalar(ruta, plantilla or None)
     git = plantillas.inicializar_git(ruta)
     nombre = (nombre or os.path.basename(ruta.rstrip(os.sep))).strip()
     proyectos.registrar(nombre, ruta)
     return json.dumps({"nombre": nombre, "ruta": ruta,
+                       "plantillas": plantillas.plantillas_de(ruta),
                        "creados": creados, "git": git},
                       ensure_ascii=False, indent=2)
 
@@ -512,8 +525,8 @@ def manual() -> str:
 def _registrar(server):
     for fn in (listar_proyectos, estado_proyecto, leer_fichero, leer_plan,
                leer_lecciones, leer_contexto, leer_incidencias, resumen_metricas,
-               cola_log, estado_agentes, listar_modelos, instalar_proyecto,
-               confiar_gate, correr_gate, iniciar_loop, estado_loop,
+               cola_log, estado_agentes, listar_modelos, listar_plantillas,
+               instalar_proyecto, confiar_gate, correr_gate, iniciar_loop, estado_loop,
                detener_loop,
                resolver_revision):
         server.tool()(fn)

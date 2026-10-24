@@ -203,6 +203,9 @@ _ES: dict[str, str] = {
     "Plan": "Plan",
     "Project": "Proyecto",
     "Project ready": "Proyecto listo",
+    "Gate templates": "Plantillas de gate",
+    "Gate templates to enable (comma separated; empty = python/backend):":
+        "Plantillas de gate a activar (separadas por comas; vacío = python/backend):",
     "Project removed": "Proyecto eliminado",
     "Project to work on (branch):": "Proyecto a trabajar (rama):",
     "Project:": "Proyecto:",
