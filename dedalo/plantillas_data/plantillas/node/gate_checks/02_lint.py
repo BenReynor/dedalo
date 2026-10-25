@@ -1,8 +1,10 @@
-"""Gate: ejecuta `npm run lint` si el script existe."""
+"""Gate (node): ejecuta `npm run lint` si el script existe."""
 import json
 import os
 import shutil
 import subprocess
+
+HERRAMIENTA = "[node]"
 
 
 def _script(nombre):
@@ -16,17 +18,17 @@ def _script(nombre):
 
 def run(env):
     if not _script("lint"):
-        env.aviso("package.json sin script 'lint', se omite")
+        env.aviso(f"{HERRAMIENTA} package.json sin script 'lint', se omite")
         return 0
     npm = shutil.which("npm")
     if not npm:
-        env.aviso("npm no disponible, se omite lint")
+        env.aviso(f"{HERRAMIENTA} npm no disponible, se omite lint")
         return 0
     p = subprocess.run([npm, "run", "lint"], cwd=env.proyecto,
                        capture_output=True, text=True)
     if p.returncode != 0:
-        env.fail("npm run lint falló")
+        env.fail(f"{HERRAMIENTA} npm run lint falló")
         print(p.stdout or p.stderr)
         return 1
-    env.ok("npm run lint OK")
+    env.ok(f"{HERRAMIENTA} npm run lint OK")
     return 0

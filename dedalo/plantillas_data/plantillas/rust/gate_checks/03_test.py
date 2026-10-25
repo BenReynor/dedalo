@@ -1,22 +1,24 @@
-"""Gate: `cargo test` (si hay Cargo.toml)."""
+"""Gate (rust): `cargo test`."""
 import os
 import shutil
 import subprocess
 
+HERRAMIENTA = "[rust]"
+
 
 def run(env):
     if not os.path.isfile(os.path.join(env.proyecto, "Cargo.toml")):
-        env.aviso("sin Cargo.toml, se omite cargo test")
+        env.aviso(f"{HERRAMIENTA} sin Cargo.toml, se omite cargo test")
         return 0
     cargo = shutil.which("cargo")
     if not cargo:
-        env.aviso("cargo no disponible, se omite")
+        env.aviso(f"{HERRAMIENTA} cargo no disponible, se omite")
         return 0
     p = subprocess.run([cargo, "test"], cwd=env.proyecto,
                        capture_output=True, text=True)
     if p.returncode != 0:
-        env.fail("cargo test falló")
+        env.fail(f"{HERRAMIENTA} cargo test falló")
         print(p.stdout or p.stderr)
         return 1
-    env.ok("cargo test OK")
+    env.ok(f"{HERRAMIENTA} cargo test OK")
     return 0

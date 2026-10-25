@@ -1,8 +1,10 @@
-"""Gate: ejecuta `npm test` si el script existe."""
+"""Gate (node): ejecuta `npm test` si el script existe."""
 import json
 import os
 import shutil
 import subprocess
+
+HERRAMIENTA = "[node]"
 
 
 def _script(nombre):
@@ -16,11 +18,11 @@ def _script(nombre):
 
 def run(env):
     if not _script("test"):
-        env.aviso("package.json sin script 'test', se omite")
+        env.aviso(f"{HERRAMIENTA} package.json sin script 'test', se omite")
         return 0
     npm = shutil.which("npm")
     if not npm:
-        env.aviso("npm no disponible, se omite test")
+        env.aviso(f"{HERRAMIENTA} npm no disponible, se omite test")
         return 0
     p = subprocess.run([npm, "test", "--", "--runInBand"], cwd=env.proyecto,
                        capture_output=True, text=True)
@@ -29,8 +31,8 @@ def run(env):
         p = subprocess.run([npm, "test"], cwd=env.proyecto,
                            capture_output=True, text=True)
         if p.returncode != 0:
-            env.fail("npm test falló")
+            env.fail(f"{HERRAMIENTA} npm test falló")
             print(p.stdout or p.stderr)
             return 1
-    env.ok("npm test OK")
+    env.ok(f"{HERRAMIENTA} npm test OK")
     return 0

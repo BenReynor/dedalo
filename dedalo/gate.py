@@ -133,8 +133,34 @@ def _correr_sh(proyecto, check, bash):
     return p.returncode
 
 
+def _lenguaje_de(nombre):
+    """Stack a check belongs to, taken from its `<check>_<plantilla>.py` suffix.
+
+    Templates install their checks suffixed with their name so several stacks
+    can coexist (`03_test_go.py`, `03_test_rust.py`). This lets a failure be
+    attributed to a language instead of looking like an anonymous gate error.
+    Checks without a known suffix (project's own) are reported as `custom`.
+    """
+    base = os.path.splitext(nombre)[0]
+    if base == "98_criterio":
+        return "criterio"
+    try:
+        from . import plantillas
+        for plantilla in plantillas.disponibles():
+            if base.endswith("_" + plantilla):
+                return plantilla
+    except Exception:  # noqa: BLE001 - attribution must never break the gate
+        pass
+    return "custom"
+
+
 def correr(proyecto, bash=None):
-    """Runs the project gate. Returns 0=OK, 1=FAIL."""
+    """Runs the project gate. Returns 0=OK, 1=FAIL.
+
+    Every check runs even if an earlier one fails: with several stacks enabled
+    one broken language must not hide the state of the rest. Failures are
+    summarized per language at the end.
+    """
     _proteger_salidas()
     if bash is None:
         bash = shutil.which("bash")
@@ -147,6 +173,7 @@ def correr(proyecto, bash=None):
         print("[GATE] ⚠ Sin checks — se asume OK")
         return 0
     entorno = None
+    fallos = []
     for clave in sorted(grupos):
         grupo = grupos[clave]
         usado = grupo.get(".sh") or grupo.get(".py")
@@ -163,8 +190,14 @@ def correr(proyecto, bash=None):
                   "se omite")
             rc = 0
         if rc != 0:
-            print(f"[GATE] ✗ Check falló: {os.path.basename(usado)}")
-            return rc if rc > 0 else 1
+            fallos.append((_lenguaje_de(os.path.basename(usado)),
+                           os.path.basename(usado), rc))
+    if fallos:
+        print()
+        for lenguaje, check, _rc in fallos:
+            print(f"[GATE] ✗ {lenguaje}: {check} falló")
+        print(f"[GATE] ❌ {len(fallos)} check(s) fallaron")
+        return fallos[0][2] if fallos[0][2] > 0 else 1
     print()
     print("[GATE] ✅ TODO OK")
     return 0

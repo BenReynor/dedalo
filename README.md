@@ -390,6 +390,43 @@ is kept as a reference and for manual runs in a POSIX terminal.
 
 ---
 
+## 🛠️ Gate Templates (plantillas de gate)
+
+When you add a project (GUI or MCP `instalar_proyecto`) you can select **one
+or more gate templates** — each is a set of portable Python checks for a
+language/stack. The templates live in `dedalo/plantillas_data/plantillas/`
+and are installed into your project's `.dedalo/scripts/gate_checks/` with a
+language suffix so several stacks coexist without collisions
+(`03_test_rust.py`, `03_test_go.py`, etc.).
+
+| Template | Detects | Checks (run if tool present) |
+|---|---|---|
+| `web` | `index.html` | HTML5 structure, CSS custom properties + responsive, JS theme toggle + syntax |
+| `python` | `pyproject.toml` / `requirements.txt` | `ruff check .`, `pytest -q` (if `tests/`) |
+| `node` | `package.json` | `package.json` validity, `npm run lint`, `npm test` |
+| `rust` | `Cargo.toml` | `cargo fmt --check`, `cargo check`, `cargo test` |
+| `go` | `go.mod` | `gofmt -l .`, `go vet ./...`, `go test ./...` |
+| `java` | `pom.xml` / `build.gradle(.kts)` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
+| `kotlin` | `build.gradle(.kts)` | `gradle compileKotlin`, `gradle test` |
+| `csharp` | `*.sln` / `*.csproj` | `dotnet build`, `dotnet test` |
+| `cpp` | `CMakeLists.txt` / `Makefile` | `clang-format --dry-run --Werror`, CMake/make build, `ctest` / `make test` |
+| `shell` | `*.sh` | `bash -n` syntax, `shellcheck -x` |
+| `ruby` | `Gemfile` | `rubocop` (via `bundle exec`), `rspec` / `rake test` |
+| `php` | `composer.json` | `php -l` on each `.php`, `phpunit` (vendor/bin) |
+| `swift` | `Package.swift` | `swift build`, `swift test` |
+| `dart` | `pubspec.yaml` | `dart analyze`, `dart test` |
+| `generic` | any known marker | auto-detects stack and runs standard commands (use **alone**, not combined) |
+
+**How it works:**
+- GUI: when adding a project, a dialog shows checkboxes for each template; tick the ones you need.
+- MCP: `instalar_proyecto(ruta, plantilla="rust,go")` — comma/space separated.
+- The selection is persisted in `.dedalo/plantilla` (one per line). Re-opening the project keeps it.
+- Checks missing their tool (`cargo`, `dotnet`, `swift`, etc.) are **skipped with a warning**, not failed — so a multi-stack gate passes on a machine that only has some toolchains.
+- Failures are reported per language (`[GATE] ✗ rust: 03_test_rust.py falló`), and **all checks run even if one fails** — you get the full picture.
+- Your own checks go in `gate_checks/99_custom.py` (or `NN_mi_check.py`); they are never overwritten.
+
+---
+
 ## 🧹 Uninstall / Remove a Project
 
 **Remove a project from the list.** Stop its loop first, then use *Remove
