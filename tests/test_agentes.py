@@ -132,6 +132,36 @@ def test_sesion_opencode_es_desconocida_sin_credenciales(monkeypatch, tmp_path):
     assert modelos.sesion_agente("opencode") is None
 
 
+def test_sesion_opencode_con_variables_de_entorno_es_valida(monkeypatch, tmp_path):
+    """Credentials via environment variables ARE a valid session.
+
+    `opencode auth list` prints the env var names (e.g. OPENAI_API_KEY) in its
+    environment section; those names must not be mistaken for the missing-login
+    marker, which is what used to happen.
+    """
+    from dedalo import modelos
+
+    salida = ('echo "  0 credentials"\n'
+              'echo "Environment"\n'
+              'echo "  OpenAI OPENAI_API_KEY"\n'
+              'echo "  5 environment variables"\n')
+    _monkey_cli(monkeypatch, modelos, tmp_path, {"opencode"},
+                {"opencode": salida})
+    assert modelos.sesion_agente("opencode") is True
+    assert modelos.agentes_operativos() == ["opencode"]
+
+
+def test_sesion_opencode_sin_credenciales_ni_entorno(monkeypatch, tmp_path):
+    """0 credentials and 0 environment variables: there is nothing to use."""
+    from dedalo import modelos
+
+    salida = ('echo "  0 credentials"\n'
+              'echo "  0 environment variables"\n')
+    _monkey_cli(monkeypatch, modelos, tmp_path, {"opencode"},
+                {"opencode": salida})
+    assert modelos.sesion_agente("opencode") is False
+
+
 def test_sesion_timeout_es_desconocida(monkeypatch, tmp_path):
     from dedalo import modelos
 

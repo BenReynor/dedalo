@@ -243,6 +243,31 @@ SONDA_SESION = {
 _sesiones = {}
 
 
+def _sesion_opencode(salida):
+    """Session state from `opencode auth list`.
+
+    That command always exits 0 and prints two sections: stored credentials and
+    environment variables. It is NOT an error report, so PATRONES_SIN_SESION
+    must not be applied here: the listing contains names such as
+    `OPENAI_API_KEY`, which are credentials, not a missing session. Counting
+    them is the only reliable signal.
+    """
+    if re.search(r"not logged in|please run /login", salida, re.I):
+        return False
+    # "<n> credentials" / "<n> environment variable(s)".
+    ceros = {}
+    for clave, patron in (("cred", r"(\d+)\s+credentials?"),
+                          ("env", r"(\d+)\s+environment\s+variables?")):
+        m = re.search(patron, salida, re.I)
+        ceros[clave] = int(m.group(1)) if m else None
+        if ceros[clave]:
+            return True
+    # Both sections explicitly say 0: there is nothing to authenticate with.
+    if ceros["cred"] == 0 and ceros["env"] == 0:
+        return False
+    return None
+
+
 def sesion_agente(nombre):
     """True/False if the agent has a session; None if it cannot be known.
 
@@ -262,12 +287,10 @@ def sesion_agente(nombre):
     except (subprocess.TimeoutExpired, OSError):
         return _sesiones[nombre]
     salida = f"{r.stdout}\n{r.stderr}"
-    if re.search("|".join(PATRONES_SIN_SESION), salida, re.I):
+    if nombre == "opencode":
+        _sesiones[nombre] = _sesion_opencode(salida)
+    elif re.search("|".join(PATRONES_SIN_SESION), salida, re.I):
         _sesiones[nombre] = False
-    elif nombre == "opencode":
-        # `opencode auth list` always returns 0. There is a session only if it lists
-        # some credential or environment variable; if not, it is unknown.
-        _sesiones[nombre] = None
     elif r.returncode == 0 or salida.strip():
         _sesiones[nombre] = True
     return _sesiones[nombre]
