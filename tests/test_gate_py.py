@@ -188,7 +188,8 @@ def test_entorno_detener_limpia_el_grupo_lanzado(tmp_path):
     assert proc.poll() is not None
 
 
-@pytest.mark.skipif(not shutil.which("bash"), reason="requires bash")
+@pytest.mark.skipif(not shutil.which("bash") or os.name == "nt",
+                    reason='requires bash; Windows forbids `"` in file names')
 def test_sh_con_comillas_y_dolar_en_la_ruta(tmp_path, capsys):
     """Quotes or `$(...)` in the project path must not break out of bash -c."""
     proyecto = tmp_path / 'p "x" $(touch PWNED)'
