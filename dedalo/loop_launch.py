@@ -53,7 +53,7 @@ VARS_ENTORNO = frozenset({
     "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL",
     "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
     # Engine overrides that are not secrets.
-    "MODELO_JUEZ", "TIMEOUT_JUEZ", "CRITERIO", "SKIP_RUFF",
+    "MODELO_JUEZ", "TIMEOUT_JUEZ", "ESPERA_JUEZ", "CRITERIO", "SKIP_RUFF",
     "AGENTE_FICHA", "MODELO_FICHA", "TIMEOUT_FICHA", "FICHAS_DIR",
     "FICHA_MAX_DIFF", "FICHA_MAX_SALIDA", "FICHA_DIFF_COMPLETO",
     # Opt-in agent API keys (the agents normally keep their own session).

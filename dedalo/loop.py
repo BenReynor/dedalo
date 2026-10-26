@@ -125,6 +125,8 @@ class Config:
         self.agente_ficha = env.get("AGENTE_FICHA", "auto") or "auto"
         self.modelo_ficha = env.get("MODELO_FICHA", "") or ""
         self.timeout_ficha = int(env.get("TIMEOUT_FICHA", "120"))
+        # Pause before rerunning a gate whose judge did not answer (network).
+        self.espera_juez = float(env.get("ESPERA_JUEZ", "10"))
         self.ficha_max_diff = int(env.get("FICHA_MAX_DIFF", "12000"))
         self.ficha_max_salida = int(env.get("FICHA_MAX_SALIDA", "20000"))
         self.ficha_diff_completo = env.get("FICHA_DIFF_COMPLETO", "0") == "1"
@@ -214,6 +216,26 @@ def _proteger_salidas():
 def rama_run_nombre():
     """`dedalo/$(date +%Y-%m-%d_%H-%M-%S)` from the script."""
     return "dedalo/" + time.strftime("%Y-%m-%d_%H-%M-%S")
+
+
+# Times the gate is rerun when the judge could not give an opinion.
+REINTENTOS_JUEZ = 2
+# "[GATE] ⚠" lines of 98_criterio (.py and .sh) meaning the judge did not judge.
+_JUEZ_SIN_OPINION = re.compile(
+    r"\[GATE\] ⚠ (juez agotó el timeout[^;]*|juez salió con rc=\d+"
+    r"|juez sin veredicto legible|\S+ no disponible para el juez"
+    r"|sin CRITERIO)")
+
+
+def _juez_no_opino(salida_gate):
+    """Why the judge gave no verdict (short text), or "" if it did judge.
+
+    98_criterio only warns in those cases ("no bloqueante") so a manual gate
+    run is not blocked by a flaky judge; the loop must not take that as a
+    pass, or a task is marked done with its criterio never checked.
+    """
+    m = _JUEZ_SIN_OPINION.search(salida_gate or "")
+    return m.group(1) if m else ""
 
 
 def _checks_del_gate(cfg, rel_scripts):
@@ -813,8 +835,29 @@ def run(cfg):
 
             logx(cfg.log, f"GATE: ejecutando gate.sh (intento {intento})")
             rc_gate, gate_out = _run_gate(cfg, criterio)
-            gate_rc = rc_gate
             gate_salida = _leer(gate_out)
+            # A green gate whose judge could not give an opinion has not
+            # verified the criterio: rerun only the gate (not the agent).
+            for reintento in range(1, REINTENTOS_JUEZ + 1):
+                if not (rc_gate == 0 and criterio
+                        and _juez_no_opino(gate_salida)):
+                    break
+                logx(cfg.log, f"JUEZ NO DISPONIBLE: repitiendo el gate "
+                              f"({reintento}/{REINTENTOS_JUEZ})")
+                time.sleep(cfg.espera_juez)
+                rc_gate, gate_out = _run_gate(cfg, criterio)
+                gate_salida = _leer(gate_out)
+            if rc_gate == 0 and criterio and _juez_no_opino(gate_salida):
+                motivo = _juez_no_opino(gate_salida)
+                mensaje(cfg, "[dedalo] ✗ el juez no pudo verificar el criterio "
+                             f"({motivo}) — deteniendo loop sin marcar la tarea")
+                logx(cfg.log, f"ABORTADO: juez no disponible ({motivo})")
+                _notificar(cfg, "error", detalle=f"juez no disponible: {motivo}")
+                _incidencia(cfg, "aborto_juez", f"juez no disponible: {motivo}",
+                            tarea=tarea, iteracion=iteracion, rama=rama_tarea)
+                alerta(cfg.voz, "El juez no responde, se detiene el dedalo")
+                return 8
+            gate_rc = rc_gate
             if rc_gate == 0:
                 if cfg.revision_dual == "1" and cfg.revisor:
                     revisor_modo = "dual"

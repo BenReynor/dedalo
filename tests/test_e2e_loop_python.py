@@ -392,3 +392,54 @@ def test_gate_corregido_en_reintento_deja_leccion_y_lista_checks(tmp_path):
     assert "estilo roto" in lecciones
     assert "El gate correrá estos checks" in prompts.read_text(encoding="utf-8")
     assert "01_x" in prompts.read_text(encoding="utf-8")
+
+
+def _gate_con_juez(tmp_path, respuestas):
+    """Gate whose judge answers `respuestas[i]` on its i-th post-task run."""
+    cuenta = tmp_path / "cuenta_juez"  # outside the repo: survives reverts
+    lineas = "\n".join(f'  {i}) echo "{r}" ;;' for i, r in enumerate(respuestas, 1))
+    return ("#!/usr/bin/env bash\n"
+            "[ -e src/nuevo.py ] || exit 0\n"
+            f"n=$(( $(cat '{cuenta}' 2>/dev/null || echo 0) + 1 )); echo $n > '{cuenta}'\n"
+            f'case "$n" in\n{lineas}\n'
+            '  *) echo "[GATE] ⚠ juez salió con rc=1 (¿cuota o red?); se omite (no bloqueante)" ;;\n'
+            "esac\nexit 0\n"), cuenta
+
+
+def test_juez_sin_opinion_detiene_el_loop_sin_marcar(tmp_path):
+    """A judge that never answers must not let the task pass as done."""
+    gate, cuenta = _gate_con_juez(tmp_path, [])
+    proyecto = _escenario(tmp_path, gate)
+    env = _entorno(_agente_falso(tmp_path / "bin"))
+    env["ESPERA_JUEZ"] = "0"
+    rc, _cfg = _correr(proyecto, env)
+    plan = (proyecto / "plan.md").read_text(encoding="utf-8")
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8", errors="replace")
+    assert rc == 8, log[-1500:]
+    assert "- [ ] t1" in plan, "ni hecha ni bloqueada: el criterio no se verificó"
+    assert "ABORTADO: juez no disponible" in log
+    assert int(cuenta.read_text()) == 3  # first run + 2 gate-only retries
+
+
+def test_juez_que_responde_al_reintentar_completa_la_tarea(tmp_path):
+    gate, _cuenta = _gate_con_juez(
+        tmp_path, ["[GATE] ⚠ juez agotó el timeout (120s); se omite (no bloqueante)",
+                   "[GATE] ✓ juez: criterio cumplido"])
+    proyecto = _escenario(tmp_path, gate)
+    env = _entorno(_agente_falso(tmp_path / "bin"))
+    env["ESPERA_JUEZ"] = "0"
+    rc, _cfg = _correr(proyecto, env)
+    assert rc == 0
+    assert "- [x] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+
+
+def test_juez_no_opino_reconoce_los_avisos_de_py_y_sh():
+    from dedalo.loop import _juez_no_opino
+    for aviso in (
+            "[GATE] ⚠ juez salió con rc=1 (¿cuota o red?); se omite (no bloqueante)",
+            "[GATE] ⚠ juez agotó el timeout (120s); se omite (no bloqueante)",
+            "[GATE] ⚠ juez sin veredicto legible; se omite (no bloqueante)",
+            "[GATE] ⚠ claude no disponible para el juez; se omite (CRITERIO='x…')"):
+        assert _juez_no_opino("[GATE] ✓ ruff OK\n" + aviso), aviso
+    assert not _juez_no_opino("[GATE] ✓ juez: criterio cumplido — ok")
+    assert not _juez_no_opino("[GATE] ✗ juez: criterio NO cumplido (falta x)")

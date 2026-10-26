@@ -165,6 +165,12 @@ and it stops before starting a new iteration once the **estimated** budget
 - The optional `criterio:` line is the **literal** pass/fail condition the
   judge checks (you can also put it inline after the task). Be concrete: files,
   tests, commands. The loop does not guess what "improve the UI" means.
+- If the judge cannot give a verdict (agent error, no credits, timeout, no
+  readable answer), the loop reruns **only the gate** twice (pause:
+  `ESPERA_JUEZ`, default 10 s). If it still cannot judge, the loop **stops**
+  (exit code 8, error notification) and leaves the task `[ ]`: an unverified
+  criterio is never counted as done. A manual gate run (GUI button, MCP
+  `correr_gate`) still only warns.
 - `[x]` is done, `[B]` is blocked. The loop writes both; you can edit the file
   by hand to retry or reorder work.
 - Order is dependency order: the loop always takes the first pending task.
