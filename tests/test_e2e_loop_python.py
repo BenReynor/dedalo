@@ -292,3 +292,59 @@ def test_contexto_del_proyecto_llega_al_prompt_del_agente(tmp_path):
     prompt = (proyecto / "prompt_agente.txt").read_text(encoding="utf-8")
     assert "MARCADOR_CONTEXTO_XYZ" in prompt, prompt[-2000:]
     assert "CONTEXTO DEL PROYECTO" in prompt
+
+
+def _agente_que_falla(dir_bin, mensaje="boom"):
+    """Fake agent that exits 1 without touching the repo."""
+    dir_bin.mkdir(parents=True, exist_ok=True)
+    bin_ = dir_bin / "opencode"
+    bin_.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "$1" = "session" ]; then echo "[]"; exit 0; fi\n'
+        f"echo '{mensaje}' >&2\n"
+        "exit 1\n", encoding="utf-8")
+    bin_.chmod(0o755)
+    return bin_
+
+
+def test_agente_que_falla_sin_cambios_no_marca_la_tarea_hecha(tmp_path):
+    """A failing agent + a green gate used to mark the task [x] with no work."""
+    marca = tmp_path / "gate_corrido.txt"  # outside the repo: survives reverts
+    gate = f"#!/usr/bin/env bash\necho corrido >> '{marca}'\nexit 0\n"
+    proyecto = _escenario(tmp_path, gate)
+    bin_falso = _agente_que_falla(tmp_path / "bin")
+
+    rc, _cfg = _correr(proyecto, _entorno(bin_falso))
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8", errors="replace")
+    plan = (proyecto / "plan.md").read_text(encoding="utf-8")
+
+    assert "- [x] t1" not in plan, log[-2000:]
+    assert "- [B] t1" in plan
+    assert "AGENTE FALLÓ sin cambios" in log
+    # Only the baseline ran the gate; failed attempts never reach it.
+    corridas = marca.read_text(encoding="utf-8").split()
+    assert len(corridas) == 1, corridas
+    assert rc == 0
+
+
+def test_agente_sin_creditos_detiene_el_loop(tmp_path):
+    """'requires usage credits' (claude) is quota exhaustion: stop, rc 5."""
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    bin_falso = _agente_que_falla(
+        tmp_path / "bin", "Fable 5 requires usage credits. Switch to another model")
+
+    rc, _cfg = _correr(proyecto, _entorno(bin_falso))
+    assert rc == 5
+    assert "- [x] t1" not in (proyecto / "plan.md").read_text(encoding="utf-8")
+
+
+def test_texto_del_agente_sobre_limites_no_detiene_el_loop(tmp_path):
+    """An agent that works and *mentions* 'usage limit' must not abort the run."""
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    bin_ = _agente_falso(tmp_path / "bin")
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "mkdir -p src\n", "mkdir -p src\necho 'Añadí el usage limit por cliente'\n"),
+        encoding="utf-8")
+    rc, _cfg = _correr(proyecto, _entorno(bin_))
+    assert rc == 0
+    assert "- [x] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")

@@ -737,7 +737,10 @@ def run(cfg):
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
                 alerta(cfg.voz, "El agente no está autenticado; revisa su login")
                 return 7
-            if tokens_agotados(out):
+            # stdout is the agent's own narrative: only trust a quota match there
+            # when the call actually failed or did nothing.
+            if (tokens_agotados(out + ".err")
+                    or ((rc != 0 or iter_sin_trabajo) and tokens_agotados(out))):
                 mensaje(cfg, "[dedalo] ✗ Tokens/cuota agotados del proveedor "
                              "IA — deteniendo loop")
                 logx(cfg.log, "ABORTADO: tokens/cuota agotados")
@@ -746,6 +749,19 @@ def run(cfg):
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
                 alerta(cfg.voz, "Tokens agotados, se detiene el dedalo")
                 return 5
+
+            if rc != 0 and iter_sin_trabajo:
+                # The agent failed and left nothing: a green gate here would only
+                # prove the previous state, so the attempt must not count as
+                # done (it used to mark the task [x] with no work at all).
+                logx(cfg.log, f"AGENTE FALLÓ sin cambios (rc={rc}, intento "
+                              f"{intento}): no se ejecuta el gate")
+                _incidencia(cfg, "agente_fallo",
+                            f"{cfg.agente_tarea} salió con rc={rc} sin cambios",
+                            tarea=tarea, iteracion=iteracion, rama=rama_tarea)
+                pre = (f"Tu ejecución anterior terminó con error (rc={rc}) sin "
+                       "cambiar nada. Completa la tarea. ")
+                continue
 
             _, actual, _ = run_git(cfg.proyecto, "branch", "--show-current")
             if actual.strip() != rama_tarea:

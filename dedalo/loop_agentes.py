@@ -32,11 +32,13 @@ _PATRON_AUTH = re.compile(
     r"missing[ _.-]?api[ _.-]?key|401 Unauthorized|HTTP 401|"
     r"Please set your api key)", re.IGNORECASE)
 
+# `.` stands for any separator (space, _, .), as in the grep -E it was ported from.
 _PATRON_TOKENS = re.compile(
-    r"insufficient_quota|rate_limit_exceeded|quota\.exceeded|"
-    r"credit\.balance\.is\.too\.low|billing\.hard\.limit|RESOURCE_EXHAUSTED|"
-    r"tokens?\.exhausted|out\.of\.tokens|no\.quota|quota\.depleted|"
-    r"monthly\.limit|usage\.limit", re.IGNORECASE)
+    r"insufficient_quota|rate_limit_exceeded|quota.exceeded|"
+    r"credit.balance.is.too.low|billing.hard.limit|RESOURCE_EXHAUSTED|"
+    r"tokens?.exhausted|out.of.tokens|no.quota|quota.depleted|"
+    r"monthly.limit|usage.limit|requires.usage.credits|"
+    r"usage.credits.to.continue", re.IGNORECASE)
 
 _USAGE = re.compile(
     r"\"usage\":\s*\{[^}]*\"input_tokens\":\s*(\d+)[^}]*"
@@ -424,7 +426,8 @@ def revisar_diff(cfg, rev, tarea, vdiff):
     if sin_autenticacion(rev_out + ".err", rev_out, int(sin_veredicto)):
         logx(cfg.log, f"ABORTADO: revisor sin autenticacion ({rev})")
         return "sin_auth", None
-    if tokens_agotados(rev_out) or tokens_agotados(rev_out + ".err"):
+    if (tokens_agotados(rev_out + ".err")
+            or (sin_veredicto and tokens_agotados(rev_out))):
         logx(cfg.log, "ABORTADO: tokens/cuota agotados (revisor)")
         return "sin_tokens", None
     if re.search(r"VERDICT:\s*PASS", texto):
