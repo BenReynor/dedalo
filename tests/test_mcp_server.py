@@ -295,7 +295,9 @@ def test_instalar_proyecto_mismo_nombre_mismo_path(proyecto, monkeypatch):
     assert datos["nombre"] == "p1"
 
 
-@pytest.mark.parametrize("destino", ["/etc/dedalo", "~", "~/.ssh/x", "~/.config/dedalo"])
+@pytest.mark.skipif(os.name == "nt", reason="POSIX paths")
+@pytest.mark.parametrize("destino", ["/etc/dedalo", "/var/lib/x", "~", "~/.ssh/x",
+                                     "~/.config/dedalo"])
 def test_instalar_proyecto_rechaza_rutas_sensibles(monkeypatch, destino):
     """An agent cannot turn system or dotfile directories into a project."""
     llamadas = []
@@ -306,6 +308,7 @@ def test_instalar_proyecto_rechaza_rutas_sensibles(monkeypatch, destino):
     assert llamadas == []
 
 
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
 def test_instalar_proyecto_resuelve_enlaces(tmp_path, monkeypatch):
     """A symlink pointing into ~/.ssh is refused like the target itself."""
     monkeypatch.setattr(m.plantillas, "instalar", lambda *a, **k: [])
@@ -313,3 +316,8 @@ def test_instalar_proyecto_resuelve_enlaces(tmp_path, monkeypatch):
     enlace.symlink_to(os.path.expanduser("~/.ssh"))
     with pytest.raises(ValueError):
         m.instalar_proyecto(str(enlace), nombre="x-enlace")
+
+
+def test_instalar_proyecto_permite_var_www(monkeypatch):
+    """Only system subtrees of /var are refused, not /var/www."""
+    assert m._ruta_prohibida("/var/www/sitio") == ""

@@ -312,8 +312,12 @@ def listar_plantillas() -> str:
 
 # Places an agent must never turn into a project: installing writes files and
 # runs `git init` there. Home-relative entries are matched as subtrees.
+# `/var` is listed by subtree because /var/www is a normal project location and
+# macOS keeps temp dirs under /private/var/folders.
 _SISTEMA_PROHIBIDO = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot",
-                      "/dev", "/proc", "/sys", "/root", "/var", "/opt", "/snap")
+                      "/dev", "/proc", "/sys", "/root", "/opt", "/snap",
+                      "/var/lib", "/var/log", "/var/cache", "/var/spool",
+                      "/var/run", "/var/mail")
 _HOME_PROHIBIDO = (".ssh", ".gnupg", ".config", ".local", ".cache", ".claude",
                    ".opencode", ".mozilla", ".pki", ".docker", ".kube", ".aws")
 
@@ -324,6 +328,8 @@ def _ruta_prohibida(ruta):
     if ruta in (os.sep, home):
         return "la raíz o el $HOME completo"
     for base in _SISTEMA_PROHIBIDO:
+        # Resolved too: on macOS /etc is a symlink to /private/etc.
+        base = os.path.realpath(base)
         if ruta == base or ruta.startswith(base + os.sep):
             return f"un directorio del sistema ({base})"
     for nombre in _HOME_PROHIBIDO:
