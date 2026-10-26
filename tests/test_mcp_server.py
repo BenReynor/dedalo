@@ -271,3 +271,25 @@ def test_confiar_gate_habilita_el_gate(monkeypatch, tmp_path):
     assert consentimiento.concedido(str(tmp_path), {}) is False
     datos = json.loads(m.confiar_gate("p1"))
     assert datos["gate_confiado"] is True
+
+
+def test_instalar_proyecto_no_secuestra_nombre_existente(proyecto, monkeypatch, tmp_path):
+    """A registered name cannot be repointed to another path by an agent."""
+    otro = tmp_path / "otro"
+    llamadas = []
+    monkeypatch.setattr(m.plantillas, "instalar",
+                        lambda *a, **k: llamadas.append(a) or [])
+    with pytest.raises(ValueError):
+        m.instalar_proyecto(str(otro), nombre="p1")
+    assert llamadas == [], "no debe escribir plantillas antes de validar"
+    assert not otro.exists()
+
+
+def test_instalar_proyecto_mismo_nombre_mismo_path(proyecto, monkeypatch):
+    """Re-installing an existing project at its own path is allowed."""
+    monkeypatch.setattr(m.plantillas, "instalar", lambda *a, **k: [])
+    monkeypatch.setattr(m.plantillas, "inicializar_git", lambda *a, **k: {})
+    monkeypatch.setattr(m.plantillas, "plantillas_de", lambda *a, **k: ["python"])
+    monkeypatch.setattr(m.proyectos, "registrar", lambda *a, **k: {})
+    datos = json.loads(m.instalar_proyecto(str(proyecto), nombre="p1"))
+    assert datos["nombre"] == "p1"

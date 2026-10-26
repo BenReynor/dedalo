@@ -310,19 +310,32 @@ def listar_plantillas() -> str:
                       ensure_ascii=False, indent=2)
 
 
-def instalar_proyecto(ruta: str, nombre: str = "", plantilla: str = "") -> str:
+def instalar_proyecto(ruta: str, nombre: str = "", plantilla: str = "",
+                      sobrescribir: bool = False) -> str:
     """Installs the templates in `ruta`, initializes git and registers the project.
 
     `plantilla` picks one or more gate templates (see `listar_plantillas`),
     comma separated, e.g. `"rust,go"`; empty uses the persisted choice or the
-    default Python/backend checks. The selection accumulates and is persisted
-    in `.dedalo/plantilla`.
+    default Python/backend checks. Special value `"auto"` detects stacks from
+    project files. The selection accumulates and is persisted in `.dedalo/plantilla`.
+
+    Safety: a name already registered at a DIFFERENT path is refused unless
+    `sobrescribir=True`. Otherwise a prompt-injected agent could repoint an
+    existing project (say, your main repo) to an attacker-controlled gate.
     """
     ruta = os.path.abspath(os.path.expanduser(ruta))
-    os.makedirs(ruta, exist_ok=True)
-    creados = plantillas.instalar(ruta, plantilla or None)
-    git = plantillas.inicializar_git(ruta)
     nombre = (nombre or os.path.basename(ruta.rstrip(os.sep))).strip()
+    previo = (proyectos.cargar().get(nombre) or {}).get("ruta")
+    if previo and os.path.abspath(previo) != ruta and not sobrescribir:
+        raise ValueError(
+            f"el proyecto {nombre!r} ya está registrado en {previo}. "
+            "Usa otro nombre o sobrescribir=True para cambiarlo.")
+    os.makedirs(ruta, exist_ok=True)
+    if plantilla == "auto":
+        creados = plantillas.instalar(ruta, "auto")
+    else:
+        creados = plantillas.instalar(ruta, plantilla or None)
+    git = plantillas.inicializar_git(ruta)
     proyectos.registrar(nombre, ruta)
     return json.dumps({"nombre": nombre, "ruta": ruta,
                        "plantillas": plantillas.plantillas_de(ruta),
