@@ -84,3 +84,12 @@ def test_generar_ignora_mapear_sh_de_fabrica(tmp_path):
     _escribir(tmp_path, "main.py")
     destino = mapeo.generar(str(tmp_path))
     assert "## CLI commands" in open(destino, encoding="utf-8").read()
+
+
+def test_mapa_incluye_binarios_de_rust_en_src_bin(tmp_path):
+    _escribir(tmp_path, "Cargo.toml", "[package]\nname='x'\n")
+    _escribir(tmp_path, "src/bin/herramienta.rs", "fn main() {}\n")
+    _escribir(tmp_path, "bin/compilado.rs", "")  # root build output: ignored
+    texto = mapeo.construir(str(tmp_path))
+    assert "src/bin/herramienta.rs" in texto
+    assert "\n  bin/compilado.rs" not in texto

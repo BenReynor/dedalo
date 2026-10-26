@@ -16,10 +16,12 @@ from . import plantillas, rutas
 
 # Directories never worth mapping (dependencies, builds, caches, tooling).
 IGNORADOS = frozenset({
-    ".git", ".dedalo", ".venv", "venv", "env", "node_modules", "__pycache__",
+    ".git", ".dedalo", ".venv", "venv", "node_modules", "__pycache__",
     "target", "dist", "build", ".pytest_cache", ".ruff_cache", ".mypy_cache",
-    ".tox", ".idea", ".vscode", "vendor", ".gradle", "bin", "obj", ".dart_tool",
+    ".tox", ".idea", ".vscode", "vendor", ".gradle", ".dart_tool",
 })
+# Build outputs only at the project root: `src/bin/` holds Rust binaries.
+IGNORADOS_RAIZ = frozenset({"bin", "obj", "env"})
 
 EXT_CODIGO = {
     ".py": "python", ".js": "node", ".mjs": "node", ".cjs": "node",
@@ -81,18 +83,24 @@ def _listar(proyecto):
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
             cwd=proyecto, capture_output=True, text=True, timeout=20)
         if r.returncode == 0:
-            ficheros = [f for f in r.stdout.splitlines() if f]
-            return sorted(f for f in ficheros
-                          if not set(f.split("/")[:-1]) & IGNORADOS)
+            return sorted(f for f in r.stdout.splitlines()
+                          if f and not _ignorado(f.split("/")[:-1]))
     except (OSError, subprocess.TimeoutExpired):
         pass
     ficheros = []
     for raiz, dirs, nombres in os.walk(proyecto):
-        dirs[:] = sorted(d for d in dirs if d not in IGNORADOS)
         rel = os.path.relpath(raiz, proyecto)
+        dirs[:] = sorted(d for d in dirs if d not in IGNORADOS
+                         and not (rel == "." and d in IGNORADOS_RAIZ))
         for n in sorted(nombres):
             ficheros.append(n if rel == "." else f"{rel}/{n}".replace(os.sep, "/"))
     return ficheros
+
+
+def _ignorado(partes):
+    """Is a file under an ignored directory? `partes` = its parent dirs."""
+    return bool(set(partes) & IGNORADOS) or (
+        bool(partes) and partes[0] in IGNORADOS_RAIZ)
 
 
 def _leer(proyecto, rel):

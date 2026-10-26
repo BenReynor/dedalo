@@ -134,7 +134,9 @@ CLAUDE_BASH_POR_PLANTILLA = {
     "dart": ("dart", "flutter"),
 }
 # Tools denied to read-only roles (reviewer, judge, navigator, ficha).
-CLAUDE_SOLO_LECTURA = ("Edit", "Write", "MultiEdit", "NotebookEdit", "Bash")
+# Agent/Task too: a subagent must not be a way around the read-only role.
+CLAUDE_SOLO_LECTURA = ("Edit", "Write", "MultiEdit", "NotebookEdit", "Bash",
+                       "Agent", "Task")
 
 
 def modelo_claude(seleccion):
