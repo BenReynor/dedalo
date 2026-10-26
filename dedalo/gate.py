@@ -18,6 +18,7 @@ The loop (loop.py) invokes this with the same project directory as before:
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -111,12 +112,12 @@ def _correr_sh(proyecto, check, bash):
     env_sh = os.path.join(rutas.gate_checks(proyecto), "_env.sh")
     partes = []
     if os.path.isfile(env_sh):
-        partes.append(f'source "{env_sh}"')
+        partes.append(f"source {shlex.quote(env_sh)}")
     else:
-        partes.append(f'PROYECTO="{proyecto}"')
+        partes.append(f"PROYECTO={shlex.quote(proyecto)}")
         partes.append('fail() { echo "[GATE] ✗ $1"; exit 1; }')
         partes.append('ok()   { echo "[GATE] ✓ $1"; }')
-    partes.append(f'source "{check}"')
+    partes.append(f"source {shlex.quote(check)}")
     guion = "\n".join(partes)
     try:
         p = subprocess.run(

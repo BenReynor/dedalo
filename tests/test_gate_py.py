@@ -186,3 +186,15 @@ def test_entorno_detener_limpia_el_grupo_lanzado(tmp_path):
     assert proc is not None and proc.poll() is None
     assert env.detener(proc, espera=1) is True
     assert proc.poll() is not None
+
+
+@pytest.mark.skipif(not shutil.which("bash"), reason="requires bash")
+def test_sh_con_comillas_y_dolar_en_la_ruta(tmp_path, capsys):
+    """Quotes or `$(...)` in the project path must not break out of bash -c."""
+    proyecto = tmp_path / 'p "x" $(touch PWNED)'
+    (proyecto / "gate_checks").mkdir(parents=True)
+    (proyecto / "gate_checks" / "01_x.sh").write_text(
+        'ok "ruta $PROYECTO"\n', encoding="utf-8")
+    assert gate.correr(str(proyecto), bash=shutil.which("bash")) == 0
+    assert str(proyecto) in capsys.readouterr().out
+    assert not any(p.name == "PWNED" for p in tmp_path.rglob("PWNED"))
