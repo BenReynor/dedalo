@@ -293,3 +293,23 @@ def test_instalar_proyecto_mismo_nombre_mismo_path(proyecto, monkeypatch):
     monkeypatch.setattr(m.proyectos, "registrar", lambda *a, **k: {})
     datos = json.loads(m.instalar_proyecto(str(proyecto), nombre="p1"))
     assert datos["nombre"] == "p1"
+
+
+@pytest.mark.parametrize("destino", ["/etc/dedalo", "~", "~/.ssh/x", "~/.config/dedalo"])
+def test_instalar_proyecto_rechaza_rutas_sensibles(monkeypatch, destino):
+    """An agent cannot turn system or dotfile directories into a project."""
+    llamadas = []
+    monkeypatch.setattr(m.plantillas, "instalar",
+                        lambda *a, **k: llamadas.append(a) or [])
+    with pytest.raises(ValueError):
+        m.instalar_proyecto(destino, nombre="x-sensible")
+    assert llamadas == []
+
+
+def test_instalar_proyecto_resuelve_enlaces(tmp_path, monkeypatch):
+    """A symlink pointing into ~/.ssh is refused like the target itself."""
+    monkeypatch.setattr(m.plantillas, "instalar", lambda *a, **k: [])
+    enlace = tmp_path / "inocente"
+    enlace.symlink_to(os.path.expanduser("~/.ssh"))
+    with pytest.raises(ValueError):
+        m.instalar_proyecto(str(enlace), nombre="x-enlace")

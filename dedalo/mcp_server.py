@@ -310,6 +310,29 @@ def listar_plantillas() -> str:
                       ensure_ascii=False, indent=2)
 
 
+# Places an agent must never turn into a project: installing writes files and
+# runs `git init` there. Home-relative entries are matched as subtrees.
+_SISTEMA_PROHIBIDO = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot",
+                      "/dev", "/proc", "/sys", "/root", "/var", "/opt", "/snap")
+_HOME_PROHIBIDO = (".ssh", ".gnupg", ".config", ".local", ".cache", ".claude",
+                   ".opencode", ".mozilla", ".pki", ".docker", ".kube", ".aws")
+
+
+def _ruta_prohibida(ruta):
+    """Reason why `ruta` (already resolved) is unsafe as a project, or ""."""
+    home = os.path.realpath(os.path.expanduser("~"))
+    if ruta in (os.sep, home):
+        return "la raíz o el $HOME completo"
+    for base in _SISTEMA_PROHIBIDO:
+        if ruta == base or ruta.startswith(base + os.sep):
+            return f"un directorio del sistema ({base})"
+    for nombre in _HOME_PROHIBIDO:
+        base = os.path.join(home, nombre)
+        if ruta == base or ruta.startswith(base + os.sep):
+            return f"un directorio sensible (~/{nombre})"
+    return ""
+
+
 def instalar_proyecto(ruta: str, nombre: str = "", plantilla: str = "",
                       sobrescribir: bool = False) -> str:
     """Installs the templates in `ruta`, initializes git and registers the project.
@@ -322,19 +345,21 @@ def instalar_proyecto(ruta: str, nombre: str = "", plantilla: str = "",
     Safety: a name already registered at a DIFFERENT path is refused unless
     `sobrescribir=True`. Otherwise a prompt-injected agent could repoint an
     existing project (say, your main repo) to an attacker-controlled gate.
+    System directories, `$HOME` itself and dotfile trees (`~/.ssh`,
+    `~/.config`...) are always refused, symlinks resolved.
     """
-    ruta = os.path.abspath(os.path.expanduser(ruta))
+    ruta = os.path.realpath(os.path.expanduser(ruta))
+    motivo = _ruta_prohibida(ruta)
+    if motivo:
+        raise ValueError(f"{ruta} no puede ser un proyecto: es {motivo}.")
     nombre = (nombre or os.path.basename(ruta.rstrip(os.sep))).strip()
     previo = (proyectos.cargar().get(nombre) or {}).get("ruta")
-    if previo and os.path.abspath(previo) != ruta and not sobrescribir:
+    if previo and os.path.realpath(previo) != ruta and not sobrescribir:
         raise ValueError(
             f"el proyecto {nombre!r} ya está registrado en {previo}. "
             "Usa otro nombre o sobrescribir=True para cambiarlo.")
     os.makedirs(ruta, exist_ok=True)
-    if plantilla == "auto":
-        creados = plantillas.instalar(ruta, "auto")
-    else:
-        creados = plantillas.instalar(ruta, plantilla or None)
+    creados = plantillas.instalar(ruta, plantilla or None)
     git = plantillas.inicializar_git(ruta)
     proyectos.registrar(nombre, ruta)
     return json.dumps({"nombre": nombre, "ruta": ruta,
