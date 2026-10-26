@@ -216,6 +216,26 @@ def rama_run_nombre():
     return "dedalo/" + time.strftime("%Y-%m-%d_%H-%M-%S")
 
 
+def _checks_del_gate(cfg, rel_scripts):
+    """Prompt line naming the gate checks, so the agent verifies the same way.
+
+    Without it the agent checked with its own commands (e.g. `python -m
+    pytest`, which adds the cwd to sys.path) and handed over work the gate's
+    plain `pytest` rejected.
+    """
+    try:
+        nombres = os.listdir(rutas.gate_checks(cfg.proyecto))
+    except OSError:
+        return ""
+    checks = sorted({os.path.splitext(n)[0] for n in nombres
+                     if n.endswith((".py", ".sh")) and not n.startswith("_")})
+    if not checks:
+        return ""
+    return (f"El gate correrá estos checks ({rel_scripts}/gate_checks/): "
+            f"{', '.join(checks)}. Léelos y verifica tu trabajo con sus mismos "
+            "comandos antes de terminar.\n")
+
+
 def _mapear(cfg):
     """Regenerates mapeo.txt (silent: a map failure never stops the loop)."""
     try:
@@ -636,9 +656,14 @@ def run(cfg):
         commit_msg = ""
         cfg.ultimo_motivo = None
 
+        # Feedback for the NEXT attempt: set at the end of a failed attempt
+        # (gate, reviewer, manual review...) and consumed by the next prompt.
+        # It used to be reset at the top of every attempt, so none of it ever
+        # reached the agent.
+        pre = ""
+        fallos_gate = []  # "[GATE] ✗" lines of failed attempts, for lecciones.md
         for intento in range(1, cfg.max_reintentos + 1):
-            pre = ""
-            if intento > 1:
+            if intento > 1 and not pre:
                 pre = ("El intento anterior no pasó la verificación: no repitas "
                        "tu cambio, corrígelo. ")
             costo_iter = suma_coste(costo_iter, cfg.costo_por_iter)
@@ -684,6 +709,7 @@ def run(cfg):
                       f"{rel_mapa} (mapa módulos→tests): localiza el/los test del "
                       "código que vas a tocar y úsalos como contrato.\n"
                       f"{nav_ctx}{contexto_block}{memoria_ctx}"
+                      f"{_checks_del_gate(cfg, rel_scripts)}"
                       "Ejecuta ÚNICAMENTE esta tarea.\n"
                       "NO hagas commits, NO crees, cambies ni borres ramas: el "
                       "script gestiona git.\n"
@@ -693,6 +719,7 @@ def run(cfg):
                       "Al terminar, responde con un resumen conciso de qué "
                       "cambiaste y qué tests corriste.")
 
+            pre = ""  # consumed: later failures set it again
             rc, _vivo = run_agente(cfg, cfg.agente_tarea, out,
                                    cfg.modelo_tarea, prompt, tarea, iteracion)
             if rc == 124:
@@ -891,6 +918,8 @@ def run(cfg):
                 sin_ruido = [li for li in fb.splitlines()
                              if not re.match(r"^\[GATE\] (✓|⚠)", li)]
                 resumen_gate = " ".join(sin_ruido[-15:])[:500]
+                fallos_gate += [li for li in fb.splitlines()
+                                if li.startswith("[GATE] ✗")][:3]
                 _incidencia(cfg, "gate_fail",
                             resumen_gate or "gate falló sin detalle",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
@@ -934,6 +963,15 @@ def run(cfg):
                 _mapear(cfg)
                 logx(cfg.log, f"mapeo.txt actualizado tras {tarea}")
                 _marcar(cfg, "x")
+                if fallos_gate:
+                    # Kept short: lecciones.md goes into every later prompt.
+                    registrar_leccion(
+                        cfg.lecciones, f"Corregida en reintento: {tarea}",
+                        "El gate falló antes de pasar.",
+                        "; ".join(dict.fromkeys(fallos_gate))[:300],
+                        "Verifica con los mismos checks del gate antes de "
+                        "terminar.")
+                    logx(cfg.log, "lección registrada (gate corregido en reintento)")
                 _notificar(cfg, "tarea", tarea=tarea, iteracion=iteracion,
                            rama=rama_run,
                            commit=(f"\nCommit: `{commit_msg}`"

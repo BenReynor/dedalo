@@ -348,3 +348,47 @@ def test_texto_del_agente_sobre_limites_no_detiene_el_loop(tmp_path):
     rc, _cfg = _correr(proyecto, _entorno(bin_))
     assert rc == 0
     assert "- [x] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+
+
+def test_feedback_del_gate_llega_al_siguiente_intento(tmp_path):
+    """The gate failure summary must be in the retry prompt (it was dropped)."""
+    gate = ("#!/usr/bin/env bash\n"
+            'if [ -e src/nuevo.py ]; then echo "ERROR_UNICO_DEL_GATE"; exit 1; fi\n'
+            "exit 0\n")
+    proyecto = _escenario(tmp_path, gate)
+    bin_ = _agente_falso(tmp_path / "bin")
+    prompts = tmp_path / "prompts.txt"
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "mkdir -p src\n",
+        f"printf '%s\\n---\\n' \"${{@: -1}}\" >> '{prompts}'\nmkdir -p src\n"),
+        encoding="utf-8")
+    _correr(proyecto, _entorno(bin_))
+    intentos = [p for p in prompts.read_text(encoding="utf-8").split("\n---\n")
+                if "Tarea actual" in p]  # skip CLI probes (e.g. --help)
+    assert "ERROR_UNICO_DEL_GATE" not in intentos[0]
+    assert "El gate falló con" in intentos[1] and "ERROR_UNICO_DEL_GATE" in intentos[1]
+
+
+def test_gate_corregido_en_reintento_deja_leccion_y_lista_checks(tmp_path):
+    """Recovered gate failures are remembered; the prompt names the checks."""
+    cuenta = tmp_path / "cuenta"  # outside the repo: survives reverts
+    gate = ("#!/usr/bin/env bash\n"
+            "[ -e src/nuevo.py ] || exit 0\n"
+            f"n=$(( $(cat '{cuenta}' 2>/dev/null || echo 0) + 1 )); echo $n > '{cuenta}'\n"
+            'if [ "$n" -eq 1 ]; then echo "[GATE] ✗ x: estilo roto"; exit 1; fi\n'
+            "exit 0\n")
+    proyecto = _escenario(tmp_path, gate)
+    bin_ = _agente_falso(tmp_path / "bin")
+    prompts = tmp_path / "prompts.txt"
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "mkdir -p src\n",
+        f"printf '%s\\n---\\n' \"${{@: -1}}\" >> '{prompts}'\nmkdir -p src\n"),
+        encoding="utf-8")
+    rc, _cfg = _correr(proyecto, _entorno(bin_))
+    assert rc == 0
+    assert "- [x] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+    lecciones = (proyecto / "lecciones.md").read_text(encoding="utf-8")
+    assert "Corregida en reintento: t1" in lecciones
+    assert "estilo roto" in lecciones
+    assert "El gate correrá estos checks" in prompts.read_text(encoding="utf-8")
+    assert "01_x" in prompts.read_text(encoding="utf-8")
