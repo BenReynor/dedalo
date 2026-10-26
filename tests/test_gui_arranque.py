@@ -32,3 +32,16 @@ def test_la_ventana_arranca_con_un_proyecto_registrado(app, tmp_path, monkeypatc
     finally:
         ventana.close()
         ventana.deleteLater()
+
+
+def test_consultar_catalogo_calienta_proveedores_fuera_del_hilo_ui(monkeypatch):
+    """The worker warms the first provider and saved ones not listed by opencode."""
+    m = app_mod.modelos
+    pedidos = []
+    monkeypatch.setattr(m, "lista_modelos", lambda: ["openai/gpt-4o"])
+    monkeypatch.setattr(m, "nombres_proveedores", lambda: ["google", "openai"])
+    monkeypatch.setattr(m, "lista_modelos_proveedor",
+                        lambda prov: pedidos.append(prov) or [])
+    lista, n = app_mod._consultar_catalogo(["groq", "openai", ""])
+    assert lista == ["openai/gpt-4o"] and n == 2
+    assert sorted(pedidos) == ["google", "groq"]

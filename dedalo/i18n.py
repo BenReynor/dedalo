@@ -186,6 +186,9 @@ _ES: dict[str, str] = {
     "Model": "Modelo",
     "Model (navigator):": "Modelo (navegador):",
     "Models refreshed": "Modelos actualizados",
+    "Refreshing models…": "Actualizando modelos…",
+    "Preparing loop…": "Preparando el loop…",
+    "Loop not started": "El loop no se inició",
     "No CLI agent with a session was detected (opencode, codex or claude)":
         "No se detectó ningún agente CLI con sesión (opencode, codex o claude)",
     "No internet": "Sin internet",

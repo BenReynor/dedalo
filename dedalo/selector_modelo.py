@@ -14,6 +14,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 
 from . import modelos
+from .proceso import Trabajo
 
 
 class SelectorModelo(QWidget):
@@ -29,6 +30,7 @@ class SelectorModelo(QWidget):
         super().__init__(parent)
         self._catalogo = {}
         self._proveedores_inicial = proveedores
+        self._pendientes = {}  # provider -> running Trabajo
 
         h = QHBoxLayout(self)
         h.setContentsMargins(0, 0, 0, 0)
@@ -38,7 +40,7 @@ class SelectorModelo(QWidget):
         h.addWidget(QLabel("/"))
         h.addWidget(self.cmb_modelo, 3)
 
-        self.cmb_proveedor.currentTextChanged.connect(self._cargar_modelos)
+        self.cmb_proveedor.currentTextChanged.connect(self._proveedor_elegido)
         self.cmb_modelo.currentTextChanged.connect(self._emitir)
         self._refrescar_proveedores()
 
@@ -123,6 +125,39 @@ class SelectorModelo(QWidget):
             self.cmb_proveedor.setCurrentText(actual)
         self.cmb_proveedor.blockSignals(False)
         self._cargar_modelos(self.cmb_proveedor.currentText())
+
+    def _proveedor_elegido(self, prov):
+        """User picked a provider: fetch its models off the UI thread if needed.
+
+        `opencode models <prov>` can take up to TIMEOUT_OPENCODE seconds.
+        Programmatic changes (setCurrentText, refresh) block signals and keep
+        loading synchronously, from caches warmed by the app's worker.
+        """
+        prov = (prov or "").strip()
+        if not prov or prov in self._catalogo:
+            self.cmb_modelo.setEnabled(True)
+            self._cargar_modelos(prov)
+            return
+        if prov in self._pendientes:
+            return
+        self.cmb_modelo.blockSignals(True)
+        self.cmb_modelo.clear()
+        self.cmb_modelo.addItem("…")
+        self.cmb_modelo.setEnabled(False)
+        self.cmb_modelo.blockSignals(False)
+        w = Trabajo(lambda: modelos.lista_modelos_proveedor(prov))
+        w.conectar(lambda lista: self._modelos_recibidos(prov, lista))
+        w.finished.connect(lambda: self._pendientes.pop(prov, None))
+        self._pendientes[prov] = w
+        w.start()
+
+    def _modelos_recibidos(self, prov, lista):
+        self._catalogo.setdefault(prov, list(lista or []))
+        # Stale answer: the user already moved to another provider.
+        if (self.cmb_proveedor.currentText() or "").strip() != prov:
+            return
+        self.cmb_modelo.setEnabled(True)
+        self._cargar_modelos(prov)
 
     def _cargar_modelos(self, prov):
         prov = (prov or "").strip()

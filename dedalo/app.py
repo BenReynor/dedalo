@@ -89,6 +89,23 @@ def _raiz_codigo():
     return loop_launch.raiz_codigo()
 
 
+def _consultar_catalogo(previos=()):
+    """Worker body for the model catalog: returns (models, provider count).
+
+    Also warms the providers that the selectors fill synchronously (the
+    first one listed and the saved selections), so that fetch never lands on
+    the UI thread.
+    """
+    lista = modelos.lista_modelos()
+    proveedores = modelos.nombres_proveedores()
+    detectados = {m.split("/", 1)[0] for m in lista or [] if "/" in m}
+    calentar = set(previos) | ({sorted(proveedores)[0]} if proveedores else set())
+    for prov in calentar:
+        if prov and prov not in detectados:
+            modelos.lista_modelos_proveedor(prov)
+    return lista, len(proveedores)
+
+
 class Ventana(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -285,23 +302,37 @@ class Ventana(QMainWindow):
         """Repaints the combos when the session probe arrives."""
         self.pan_ejec.refrescar_agentes()
 
-    def _cargar_modelos_en_fondo(self):
-        """Queries opencode/models.dev without blocking startup."""
-        w = Trabajo(modelos.lista_modelos)
-        w.conectar(self._modelos_cargados)
+    def _cargar_modelos_en_fondo(self, refresco=False):
+        """Queries opencode/models.dev without blocking the UI.
+
+        Everything that may spawn `opencode` or download the catalog runs in
+        the worker; the slot only reads the warmed caches.
+        """
+        if getattr(self, "_worker_modelos", None) is not None:
+            return  # a query is already running; its result will arrive
+        previos = [(self._sel_modelos.get(k) or "").split("/", 1)[0]
+                   for k in ("tarea", "revisor")]
+        w = Trabajo(lambda: _consultar_catalogo(previos))
+        w.conectar(lambda r: self._modelos_cargados(r, refresco))
         w.liberar(self, "_worker_modelos")
         w.start()
         self._worker_modelos = w
 
-    def _modelos_cargados(self, lista):
+    def _modelos_cargados(self, resultado, refresco=False):
+        lista, n_proveedores = resultado or (None, 0)
         nuevos = lista or [cfg.MODELO_SUGERIDO]
         self._modelos = nuevos
         for sel in (self.pan_ejec.cmb_agente, self.pan_ejec.cmb_revisor):
             sel.activar_catalogo_global()
         self.pan_ejec.agregar_catalogo(nuevos)
-        self.pan_ejec.info_modelos(len(nuevos),
-                                   len(modelos.nombres_proveedores()))
+        self.pan_ejec.info_modelos(len(nuevos), n_proveedores)
+        if refresco:
+            # invalidar_cache() also forgot the session probe: relaunch it.
+            self.pan_ejec.refrescar_agentes()
         self._aplicar_sel_modelos()
+        if refresco:
+            self.estado.setText(t("Models refreshed"))
+            self._guardar_sel_modelos()
 
     # ---------- UI ----------
 
@@ -779,19 +810,11 @@ class Ventana(QMainWindow):
                 seguridad=self.seguridad, modelos=self._sel_modelos)
 
     def _refrescar_modelos(self):
+        if getattr(self, "_worker_modelos", None) is not None:
+            return
         modelos.invalidar_cache()
-        nuevos = modelos.lista_modelos() or [cfg.MODELO_SUGERIDO]
-        self._modelos = nuevos
-        for sel in (self.pan_ejec.cmb_agente, self.pan_ejec.cmb_revisor):
-            sel.activar_catalogo_global()
-        self.pan_ejec.agregar_catalogo(nuevos)
-        self.pan_ejec.info_modelos(
-            len(nuevos), len(modelos.nombres_proveedores()))
-        # invalidar_cache() also forgot the session probe: relaunch it.
-        self.pan_ejec.refrescar_agentes()
-        self._aplicar_sel_modelos()
-        self.estado.setText(t("Models refreshed"))
-        self._guardar_sel_modelos()
+        self.estado.setText(t("Refreshing models…"))
+        self._cargar_modelos_en_fondo(refresco=True)
 
     # ---------- Internet ----------
 
@@ -870,8 +893,28 @@ class Ventana(QMainWindow):
 
         base_env = dict(e.split("=", 1) for e in QProcess.systemEnvironment()
                         if "=" in e)
-        plan = loop_launch.preparar(conf, nav_conf, base_env,
-                                    nombre=self._nombre_activo, origen="gui")
+        nombre = self._nombre_activo
+        # preparar() may probe agent sessions (up to TIMEOUT_OPENCODE each)
+        # when the background probe is still cold: keep it off the UI thread.
+        # The button stays disabled meanwhile so the loop cannot start twice.
+        self.pan_ejec.b_iniciar.setEnabled(False)
+        self.estado.setText(t("Preparing loop…"))
+        w = Trabajo(lambda: loop_launch.preparar(
+            conf, nav_conf, base_env, nombre=nombre, origen="gui"))
+        w.conectar(lambda plan: self._loop_preparado(plan, ruta, nombre))
+        w.liberar(self, "_worker_preparar")
+        w.start()
+        self._worker_preparar = w
+
+    def _loop_preparado(self, plan, ruta, nombre):
+        """Second half of _iniciar_loop, on the UI thread once preparar() ends."""
+        if plan is None or nombre != self._nombre_activo:
+            # preparar() failed, or the user switched project meanwhile.
+            self.estado.setText(t("Loop not started"))
+            self.pan_ejec.b_iniciar.setEnabled(True)
+            return
+        conf = self._lanzamiento
+        nav_conf = self.pan_ejec.navegador_config()
         detectados = plan["detectados"]
         if not detectados:
             self.estado.setText(

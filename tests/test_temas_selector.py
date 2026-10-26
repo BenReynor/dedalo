@@ -198,3 +198,42 @@ def test_selector_no_duplica_modelos(app, monkeypatch):
     s.addItems(["openai/gpt-4o", "openai/gpt-4o"])
     s.setCurrentText("openai")
     assert s.cmb_modelo.count() == 1, "el mismo modelo se ha duplicado"
+
+
+def _esperar(selector):
+    from PySide6.QtWidgets import QApplication
+    for w in list(selector._pendientes.values()):
+        w.wait(5000)
+    QApplication.processEvents()
+    QApplication.processEvents()
+
+
+def test_selector_elegir_proveedor_carga_en_segundo_plano(app, monkeypatch):
+    """A user-picked provider without cached models is fetched off the UI thread."""
+    s = _selector(monkeypatch, catalogo={"openai": ["gpt-4o"],
+                                         "google": ["gemini-2.0"]})
+    s.cmb_proveedor.setCurrentText("google")
+    assert "google" in s._pendientes or s.cmb_modelo.count() == 1
+    _esperar(s)
+    assert s.currentText() == "google/gemini-2.0"
+    assert s.cmb_modelo.isEnabled()
+
+
+def test_selector_descarta_respuesta_de_proveedor_anterior(app, monkeypatch):
+    """A slow answer for a provider the user already left must not win."""
+    import threading
+    soltar = threading.Event()
+
+    def lista(prov):
+        if prov == "google":
+            soltar.wait(5)
+        return {"google": ["gemini-2.0"], "openai": ["gpt-4o"]}[prov]
+
+    s = _selector(monkeypatch)
+    monkeypatch.setattr(selector_modelo.modelos, "lista_modelos_proveedor", lista)
+    s._catalogo.clear()
+    s.cmb_proveedor.setCurrentText("google")
+    s.cmb_proveedor.setCurrentText("openai")
+    soltar.set()
+    _esperar(s)
+    assert s.currentText() == "openai/gpt-4o"
