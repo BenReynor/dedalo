@@ -103,7 +103,7 @@ python -m dedalo
 | **Incidents** | Table for `incidencias.jsonl` (time, iteration, task, type, reason): failures, aborts, and blocks with their actual cause. |
 | **Run** | Launches the loop: agent → gate → reviewer → commit. Parameters: deadline, iterations, base branch, max cost, dual/manual review. |
 | **Logs** | Live output of `progreso.log` (loop) and `gate.sh`. Collapsible (⛶) with a permanently visible header. Auto-scroll. |
-| **Map** | Viewer for `mapeo.txt` (modules → tests). The **Regenerate** button runs `bash mapear.sh`. |
+| **Map** | Viewer for `mapeo.txt`: modules, tests (with their test names), HTTP routes (Django, Flask, FastAPI, Express, actix/axum, Go) and CLI commands (argparse, click/typer). Generated in Python for any stack; **Regenerate** rebuilds it. A `mapear.sh` you customized still takes precedence. |
 | **Metrics** | Real-time dashboard: tasks completed per iteration, cumulative estimated cost (amber), gate OK/FAIL, reviewer PASS/FAIL. Exports CSV. |
 | **Git** | Project commit history, quick revert. |
 | **Security** | CPU temperature limit (safe shutdown), webhooks (Telegram, Discord, WhatsApp). |
@@ -473,7 +473,7 @@ tokens and window settings.
 |----|--------|
 | **Linux** | ✅ **Tested.** Reference environment: daily use plus the CI suite. |
 | **macOS** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `macos-latest` (arm64) and the `.dmg` is built, and the known GNU-isms are gone (`timeout` → `_timeout` with a 124 fallback; `sed -i "0,/…/"` → `marcar_plan` in awk+cat, preserving permissions). Not exercised by hand: the thermal sensor is Linux-only (`/sys/class/thermal`, it degrades to "no data") and the `.dmg` is unsigned. |
-| **Windows** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is still needed for the project map (`mapear.sh`) and the optional bash engine (`dedalo.sh`). |
+| **Windows** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is only needed for the optional bash engine (`dedalo.sh`); the project map is generated in Python. |
 
 What's already OS-independent: the line endings of `.sh` files
 (`.gitattributes` forces `eol=lf`, so a `clone` on Windows with `autocrlf`

@@ -29,7 +29,7 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, ficha, loops_estado, net, notificaciones, rutas
+from . import consentimiento, ficha, loops_estado, mapeo, net, notificaciones, rutas
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
@@ -207,14 +207,9 @@ def rama_run_nombre():
 
 
 def _mapear(cfg):
-    """`bash "$MAPEAR" > "$MAPA" 2>/dev/null` (mapeo.txt, silent)."""
-    if not os.path.exists(cfg.mapear):
-        return
+    """Regenerates mapeo.txt (silent: a map failure never stops the loop)."""
     try:
-        with open(cfg.mapa, "wb") as f:
-            subprocess.run(["bash", cfg.mapear], cwd=cfg.proyecto,
-                           stdout=f, stderr=subprocess.DEVNULL,
-                           env=cfg.environ, timeout=120)
+        mapeo.generar(cfg.proyecto, cfg.mapa, env=cfg.environ)
     except OSError:
         pass
 
@@ -538,12 +533,11 @@ def run(cfg):
         return 1
     logx(cfg.log, "Baseline GATE OK")
 
-    if os.path.exists(cfg.mapear):
-        _mapear(cfg)
-        if os.path.getsize(cfg.mapa) > 0:
-            logx(cfg.log, "mapeo.txt regenerado")
-        else:
-            print("[dedalo] ⚠ no se pudo generar mapeo.txt")
+    _mapear(cfg)
+    if os.path.exists(cfg.mapa) and os.path.getsize(cfg.mapa) > 0:
+        logx(cfg.log, "mapeo.txt regenerado")
+    else:
+        print("[dedalo] ⚠ no se pudo generar mapeo.txt")
 
     rama_run = rama_run_nombre()
     rama_trabajo, msgs = preparar_ramas(cfg.proyecto, cfg.rama_base,
