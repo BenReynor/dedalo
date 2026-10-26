@@ -141,8 +141,10 @@ class SelectorModelo(QWidget):
         if prov in self._pendientes:
             return
         self.cmb_modelo.blockSignals(True)
+        # Empty combo + placeholder: currentText() stays "prov" while loading,
+        # never a fake "prov/…" model id.
         self.cmb_modelo.clear()
-        self.cmb_modelo.addItem("…")
+        self.cmb_modelo.setPlaceholderText("…")
         self.cmb_modelo.setEnabled(False)
         self.cmb_modelo.blockSignals(False)
         w = Trabajo(lambda: modelos.lista_modelos_proveedor(prov))
@@ -171,6 +173,9 @@ class SelectorModelo(QWidget):
         self.cmb_modelo.addItems(lista)
         if actual and self.cmb_modelo.findText(actual) >= 0:
             self.cmb_modelo.setCurrentText(actual)
+        elif self.cmb_modelo.currentIndex() < 0 and lista:
+            # Qt6 leaves the index at -1 after a placeholder was shown.
+            self.cmb_modelo.setCurrentIndex(0)
         self.cmb_modelo.blockSignals(False)
         if not self.signalsBlocked():
             self._emitir()

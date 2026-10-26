@@ -213,7 +213,7 @@ def test_selector_elegir_proveedor_carga_en_segundo_plano(app, monkeypatch):
     s = _selector(monkeypatch, catalogo={"openai": ["gpt-4o"],
                                          "google": ["gemini-2.0"]})
     s.cmb_proveedor.setCurrentText("google")
-    assert "google" in s._pendientes or s.cmb_modelo.count() == 1
+    assert "…" not in s.currentText(), "el marcador no es un modelo"
     _esperar(s)
     assert s.currentText() == "google/gemini-2.0"
     assert s.cmb_modelo.isEnabled()

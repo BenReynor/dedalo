@@ -89,12 +89,12 @@ def _raiz_codigo():
     return loop_launch.raiz_codigo()
 
 
-def _consultar_catalogo(previos=()):
+def _consultar_catalogo(previos=(), sondear=False):
     """Worker body for the model catalog: returns (models, provider count).
 
     Also warms the providers that the selectors fill synchronously (the
-    first one listed and the saved selections), so that fetch never lands on
-    the UI thread.
+    first one listed and the saved selections) and, with `sondear`, the agent
+    session probe, so none of those land on the UI thread.
     """
     lista = modelos.lista_modelos()
     proveedores = modelos.nombres_proveedores()
@@ -103,6 +103,8 @@ def _consultar_catalogo(previos=()):
     for prov in calentar:
         if prov and prov not in detectados:
             modelos.lista_modelos_proveedor(prov)
+    if sondear:
+        modelos.estado_agentes()
     return lista, len(proveedores)
 
 
@@ -312,7 +314,7 @@ class Ventana(QMainWindow):
             return  # a query is already running; its result will arrive
         previos = [(self._sel_modelos.get(k) or "").split("/", 1)[0]
                    for k in ("tarea", "revisor")]
-        w = Trabajo(lambda: _consultar_catalogo(previos))
+        w = Trabajo(lambda: _consultar_catalogo(previos, sondear=refresco))
         w.conectar(lambda r: self._modelos_cargados(r, refresco))
         w.liberar(self, "_worker_modelos")
         w.start()
@@ -855,6 +857,8 @@ class Ventana(QMainWindow):
         return True
 
     def _iniciar_loop(self):
+        if getattr(self, "_worker_preparar", None) is not None:
+            return  # already preparing a launch
         p = self._proyecto_actual()
         if not p:
             return
@@ -901,20 +905,22 @@ class Ventana(QMainWindow):
         self.estado.setText(t("Preparing loop…"))
         w = Trabajo(lambda: loop_launch.preparar(
             conf, nav_conf, base_env, nombre=nombre, origen="gui"))
-        w.conectar(lambda plan: self._loop_preparado(plan, ruta, nombre))
+        w.conectar(lambda plan: self._loop_preparado(
+            plan, ruta, nombre, conf, nav_conf))
         w.liberar(self, "_worker_preparar")
         w.start()
         self._worker_preparar = w
 
-    def _loop_preparado(self, plan, ruta, nombre):
+    def _loop_preparado(self, plan, ruta, nombre, conf, nav_conf):
         """Second half of _iniciar_loop, on the UI thread once preparar() ends."""
         if plan is None or nombre != self._nombre_activo:
-            # preparar() failed, or the user switched project meanwhile.
             self.estado.setText(t("Loop not started"))
+            if plan is None:
+                # Trabajo emits None when preparar() raised.
+                self.pan_logs.panel_loop.appendPlainText(
+                    t("> loop not started: preparing the launch failed"))
             self.pan_ejec.b_iniciar.setEnabled(True)
             return
-        conf = self._lanzamiento
-        nav_conf = self.pan_ejec.navegador_config()
         detectados = plan["detectados"]
         if not detectados:
             self.estado.setText(
