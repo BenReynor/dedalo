@@ -345,3 +345,19 @@ def test_ramas_del_motor_python_con_hora():
     finally:
         os.unlink(log_path)
         invalidar_cache_metricas(log_path)
+
+
+def test_sin_revisor_activo_no_se_inventa_un_pass(tmp_path):
+    """dual=0 and manual=0: a commit says nothing about a review."""
+    log = tmp_path / "progreso.log"
+    log.write_text(
+        "[2026-10-26 11:22:24] == DEDALO INICIADO (agente=claude, dual=0, manual=0) ==\n"
+        "[2026-10-26 11:22:24] == Iteración 1: Tarea 1 (rama dedalo/2026-10-26_11-22-24/t1) ==\n"
+        "[2026-10-26 11:23:00] commit en dedalo/2026-10-26_11-22-24/t1: dedalo: Tarea 1\n"
+        "[2026-10-26 11:24:00] == DEDALO INICIADO (agente=claude, dual=1, manual=0) ==\n"
+        "[2026-10-26 11:24:01] == Iteración 1: Tarea 2 (rama dedalo/2026-10-26_11-24-00/t2) ==\n"
+        "[2026-10-26 11:25:00] commit en dedalo/2026-10-26_11-24-00/t2: dedalo: Tarea 2\n", encoding="utf-8")
+    invalidar_cache_metricas()
+    its = parsear_log(str(log))["iteraciones"]
+    assert its[0]["revisor"] == "n/a"
+    assert its[1]["revisor"] == "pass"

@@ -143,9 +143,19 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
     rev_pass = rev_fail = 0
     inicio_ts = ""
     fin_ts = ""
+    # Whether the run had any reviewer (dual or manual). None = unknown: older
+    # logs do not say, and for them a commit keeps implying "pass".
+    hay_revisor = None
 
     for linea in lineas:
         linea = linea.rstrip("\n")
+
+        if "DEDALO INICIADO" in linea:
+            dual = re.search(r"\bdual=(\d)", linea)
+            manual = re.search(r"\bmanual=(\d)", linea)
+            if dual or manual:
+                hay_revisor = (dual and dual.group(1) == "1") or bool(
+                    manual and manual.group(1) == "1")
 
         m = LINEA_FIN.search(linea)
         if m:
@@ -183,7 +193,10 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
                 if "commit" in bajo or "completada" in bajo:
                     iter_actual["estado"] = "hecha"
                     iter_actual["gate"] = "ok"
-                    iter_actual["revisor"] = "pass"
+                    if iter_actual["revisor"] == "pendiente":
+                        # No verdict seen: only a run with a reviewer implies one.
+                        iter_actual["revisor"] = ("n/a" if hay_revisor is False
+                                                  else "pass")
                 elif "bloqueada" in bajo:
                     iter_actual["estado"] = "bloqueada"
                 iter_actual["duracion_s"] = _diff_seg(iter_actual["timestamp"], fecha)
@@ -226,7 +239,8 @@ def _parsear_log(ruta_log: str) -> dict[str, Any]:
                 iter_actual["gate"] = "fail"
 
         # Revisor
-        if "VERDICT: PASS" in linea or "REVISOR PASS" in linea:
+        if ("VERDICT: PASS" in linea or "REVISOR PASS" in linea
+                or "REVISIÓN MANUAL: APROBADO" in linea):
             rev_pass += 1
             if iter_actual:
                 iter_actual["revisor"] = "pass"
