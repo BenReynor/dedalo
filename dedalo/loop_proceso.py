@@ -54,7 +54,7 @@ def matar_grupo(proc, espera=5):
 
 
 def run_con_timeout(cmd, timeout, *, env=None, cwd=None,
-                    stdout=None, stderr=None, vivo=None):
+                    stdout=None, stderr=None, vivo=None, entrada=None):
     """Runs `cmd` with a `timeout`-second cap.
 
     Returns `(returncode, salida, timed_out)`:
@@ -66,8 +66,13 @@ def run_con_timeout(cmd, timeout, *, env=None, cwd=None,
         that `killpg(pid)` also takes down the agent hanging off it.
       · `vivo`: optional dictionary; filled with {"proc": Popen} BEFORE
         blocking so a signal handler can kill the group.
+      · `entrada`: bytes for the child's stdin. Without it stdin is /dev/null,
+        never the parent's: under the GUI that is an open pipe, and
+        `claude -p` waits 3 s on it before every call.
     """
-    kwargs = dict(env=env, cwd=cwd, stdout=stdout, stderr=stderr)
+    kwargs = dict(env=env, cwd=cwd, stdout=stdout, stderr=stderr,
+                  stdin=subprocess.PIPE if entrada is not None
+                  else subprocess.DEVNULL)
     if _POSIX:
         kwargs["start_new_session"] = True
     proc = subprocess.Popen(cmd, **kwargs)
@@ -76,7 +81,7 @@ def run_con_timeout(cmd, timeout, *, env=None, cwd=None,
     timed_out = False
     try:
         try:
-            salida = proc.communicate(timeout=timeout)
+            salida = proc.communicate(input=entrada, timeout=timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
             _golpe_grupo(proc)

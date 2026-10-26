@@ -162,3 +162,18 @@ def test_limpiar_sesiones_corre_en_el_proyecto(tmp_path):
     binario.chmod(0o755)
     limpiar_sesiones(str(binario), str(proy), 0, None)
     assert cwd_log.read_text(encoding="utf-8").split() == [str(proy)]
+
+
+def test_hijo_no_hereda_stdin_del_padre(tmp_path):
+    """Without `entrada` the child reads /dev/null (EOF at once), not our stdin."""
+    import sys
+
+    from dedalo.loop_proceso import run_con_timeout
+    rc, salida, _t = run_con_timeout(
+        [sys.executable, "-c", "import sys; print(len(sys.stdin.read()))"],
+        10, stdout=subprocess.PIPE)
+    assert rc == 0 and salida[0].strip() == b"0"
+    rc, salida, _t = run_con_timeout(
+        [sys.executable, "-c", "import sys; print(sys.stdin.read())"],
+        10, stdout=subprocess.PIPE, entrada=b"hola")
+    assert salida[0].strip() == b"hola"
