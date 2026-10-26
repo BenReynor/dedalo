@@ -800,9 +800,18 @@ class Ventana(QMainWindow):
 
     def _aplicar_sel_modelos(self):
         sug = modelos.sugerido(self._modelos)
-        self.pan_ejec.aplicar_modelos({
-            "tarea": self._sel_modelos.get("tarea") or sug,
-            "revisor": self._sel_modelos.get("revisor") or sug,
+        pe = self.pan_ejec
+
+        def defecto(cmb_cli):
+            # With no saved model, claude starts on its cheapest model instead
+            # of whatever opencode happened to list first.
+            return ("anthropic/haiku" if cmb_cli.currentData() == "claude"
+                    else sug)
+
+        pe.aplicar_modelos({
+            "tarea": self._sel_modelos.get("tarea") or defecto(pe.cmb_agente_cli),
+            "revisor": (self._sel_modelos.get("revisor")
+                        or defecto(pe.cmb_revisor_cli)),
         })
 
     def _guardar_sel_modelos(self, *_):
