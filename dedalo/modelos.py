@@ -95,16 +95,43 @@ def _ruta_catalogo():
     return cfg.CATALOGO_MODELOS
 
 
+_catalogo_cache: dict[str, object] = {"clave": None, "datos": None}
+
+
+def _leer_catalogo_disco(ruta):
+    """Reads the catalog and memoizes it by (size, mtime).
+
+    The catalog is several MB; provider/model selectors ask for it repeatedly
+    while the user browses. Without this memo every call re-read and re-parsed
+    the whole JSON on the UI thread.
+    """
+    try:
+        st = os.stat(ruta)
+        clave = (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return None
+    if _catalogo_cache["clave"] == clave:
+        return _catalogo_cache["datos"]
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            datos = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(datos, dict):
+        return None
+    _catalogo_cache["clave"] = clave
+    _catalogo_cache["datos"] = datos
+    return datos
+
+
 def leer_catalogo():
     """models.dev catalog cached on disk (downloads it if missing or stale)."""
     ruta = _ruta_catalogo()
     if (os.path.exists(ruta)
             and time.time() - os.path.getmtime(ruta) < CATALOGO_HORAS * 3600):
-        try:
-            with open(ruta, encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError):
-            pass
+        datos = _leer_catalogo_disco(ruta)
+        if datos is not None:
+            return datos
     try:
         os.makedirs(os.path.dirname(ruta), exist_ok=True)
         req = urllib.request.Request(
@@ -115,15 +142,11 @@ def leer_catalogo():
             datos = json.loads(r.read().decode("utf-8"))
         with open(ruta, "w", encoding="utf-8") as f:
             json.dump(datos, f, ensure_ascii=False)
+        _catalogo_cache["clave"] = None  # force a fresh read on next call
         return datos
     except (OSError, ValueError):
-        if os.path.exists(ruta):
-            try:
-                with open(ruta, encoding="utf-8") as f:
-                    return json.load(f)
-            except (OSError, json.JSONDecodeError):
-                return {}
-        return {}
+        datos = _leer_catalogo_disco(ruta)
+        return datos if datos is not None else {}
 
 
 def _consultar_proveedores():
