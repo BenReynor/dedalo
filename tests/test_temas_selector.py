@@ -237,3 +237,13 @@ def test_selector_descarta_respuesta_de_proveedor_anterior(app, monkeypatch):
     soltar.set()
     _esperar(s)
     assert s.currentText() == "openai/gpt-4o"
+
+
+def test_selector_anthropic_ofrece_alias_de_claude_primero(app, monkeypatch):
+    """opencode lists full Anthropic ids; haiku must still be selectable first."""
+    s = _selector(monkeypatch)
+    s.addItems(["anthropic/claude-fable-5", "anthropic/claude-sonnet-4-5"])
+    s.setCurrentText("anthropic/haiku")
+    assert s.currentText() == "anthropic/haiku"
+    s.setCurrentText("anthropic")
+    assert s.currentText() == "anthropic/haiku"

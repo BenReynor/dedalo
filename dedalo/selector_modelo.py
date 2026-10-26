@@ -59,6 +59,12 @@ class SelectorModelo(QWidget):
                 self._catalogo.setdefault(prov, [])
                 if modelo not in self._catalogo[prov]:
                     self._catalogo[prov].append(modelo)
+        if "anthropic" in self._catalogo:
+            # The claude CLI aliases go first, so picking claude lands on
+            # anthropic/haiku instead of whatever model opencode listed first.
+            resto = [m for m in self._catalogo["anthropic"]
+                     if m not in modelos.ALIAS_CLAUDE]
+            self._catalogo["anthropic"] = list(modelos.ALIAS_CLAUDE) + resto
         self._refrescar_proveedores()
 
     def clear(self):
