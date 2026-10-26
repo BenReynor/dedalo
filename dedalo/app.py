@@ -12,18 +12,15 @@ import subprocess
 import sys
 import time
 
-from PySide6.QtCore import QProcess, QSettings, Qt, QTimer
+from PySide6.QtCore import QProcess, QSettings, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -90,34 +87,6 @@ def _argv_motor(frozen, args):
 def _raiz_codigo():
     """Root of the GUI repo: `dedalo` is one of its subdirectories."""
     return loop_launch.raiz_codigo()
-
-
-class DialogoPlantillas(QDialog):
-    """Multi-select of gate templates: one checkable box per stack."""
-
-    def __init__(self, padre, disponibles):
-        super().__init__(padre)
-        self.setWindowTitle(t("Gate templates"))
-        caja = QVBoxLayout(self)
-        caja.addWidget(QLabel(t("Select the stacks this project uses:")))
-        self.lista = QListWidget(self)
-        for nombre in disponibles:
-            item = QListWidgetItem(nombre)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Unchecked)
-            self.lista.addItem(item)
-        caja.addWidget(self.lista)
-        caja.addWidget(QLabel(t("None checked = python/backend (default)")))
-        botones = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        botones.accepted.connect(self.accept)
-        botones.rejected.connect(self.reject)
-        caja.addWidget(botones)
-
-    def seleccion(self):
-        return [self.lista.item(i).text()
-                for i in range(self.lista.count())
-                if self.lista.item(i).checkState() == Qt.Checked]
 
 
 class Ventana(QMainWindow):
@@ -669,6 +638,7 @@ class Ventana(QMainWindow):
         self.pan_git.cargar(ruta)
         self.pan_mapa.cargar(rutas.mapeo(ruta), ruta)
         self.pan_ejec.actualizar_ramas(ruta)
+        self.pan_ejec.cargar_proyecto(ruta)
         self.pan_ejec.aplicar_config(self._lanzamiento)
         self.pan_logs.panel_gate.clear()
         self.pan_logs.panel_loop.clear()
@@ -712,14 +682,7 @@ class Ventana(QMainWindow):
         if not ruta:
             return
         nombre = os.path.basename(ruta)
-        elegidas = []
-        disponibles = plantillas.disponibles()
-        if disponibles:
-            dialogo = DialogoPlantillas(self, disponibles)
-            if dialogo.exec() != QDialog.Accepted:
-                return
-            elegidas = dialogo.seleccion()
-        creados = plantillas.instalar(ruta, elegidas or None)
+        creados = plantillas.instalar(ruta)
         git = plantillas.inicializar_git(ruta)
         self.proyectos[nombre] = {"ruta": ruta}
         guardar(self.proyectos, self.tema)

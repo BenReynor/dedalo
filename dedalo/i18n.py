@@ -204,10 +204,23 @@ _ES: dict[str, str] = {
     "Project": "Proyecto",
     "Project ready": "Proyecto listo",
     "Gate templates": "Plantillas de gate",
+    "Gate templates:": "Plantillas de gate:",
     "Select the stacks this project uses:":
         "Selecciona los lenguajes que usa este proyecto:",
     "None checked = python/backend (default)":
         "Ninguno marcado = python/backend (por defecto)",
+    "default (python/backend)": "por defecto (python/backend)",
+    "Auto-detect": "Autodetectar",
+    "Detect stacks from project files and apply templates":
+        "Detecta los lenguajes por los archivos del proyecto y aplica las "
+        "plantillas",
+    "Edit templates…": "Editar plantillas…",
+    "Open checklist to pick templates":
+        "Abre la lista para elegir plantillas",
+    "Comma-separated list of gate templates (web, python, rust, go, etc.). "
+    "History saves last 5 per project.":
+        "Lista de plantillas de gate separadas por comas (web, python, rust, "
+        "go, etc.). El historial guarda las últimas 5 por proyecto.",
     "Project removed": "Proyecto eliminado",
     "Project to work on (branch):": "Proyecto a trabajar (rama):",
     "Project:": "Proyecto:",

@@ -177,6 +177,70 @@ def disponibles():
     )
 
 
+def detectar_stacks(ruta):
+    """Detecta qué plantillas de gate aplicar según marcadores en el proyecto.
+
+    Devuelve una lista ordenada por prioridad (p.ej. ['rust', 'web']).
+    Prioridad: Rust, Go, Node, Python, Web estática, Java, Kotlin, C#,
+    C++, Shell, Ruby, PHP, Swift, Dart.
+    """
+    proyecto = os.path.abspath(ruta)
+    try:
+        nombres = {n.lower() for n in os.listdir(proyecto)}
+    except OSError:
+        nombres = set()
+    sufijos = {os.path.splitext(n)[1] for n in nombres}
+    encontrados = []
+
+    def hay(*ficheros):
+        return any(f.lower() in nombres for f in ficheros)
+
+    # Rust
+    if hay("Cargo.toml"):
+        encontrados.append("rust")
+    # Go
+    if hay("go.mod"):
+        encontrados.append("go")
+    # Node
+    if hay("package.json"):
+        encontrados.append("node")
+    # Python
+    if hay("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"):
+        encontrados.append("python")
+    # Web estática (necesita los 3 archivos base)
+    if hay("index.html", "styles.css", "app.js"):
+        encontrados.append("web")
+    # Java (Maven o Gradle con DSL Groovy)
+    if hay("pom.xml", "build.gradle"):
+        encontrados.append("java")
+    # Kotlin (Gradle con DSL Kotlin o fuentes .kt)
+    if hay("build.gradle.kts") or ".kt" in sufijos:
+        encontrados.append("kotlin")
+    # C# (proyecto o solución de .NET)
+    if ".csproj" in sufijos or ".sln" in sufijos:
+        encontrados.append("csharp")
+    # C++ (CMake o fuentes C/C++; un Makefile suelto no basta)
+    if hay("CMakeLists.txt") or sufijos & {".cpp", ".cc", ".cxx", ".hpp", ".hh"}:
+        encontrados.append("cpp")
+    # Shell (cualquier script .sh en la raíz)
+    if ".sh" in sufijos:
+        encontrados.append("shell")
+    # Ruby
+    if hay("Gemfile"):
+        encontrados.append("ruby")
+    # PHP
+    if hay("composer.json"):
+        encontrados.append("php")
+    # Swift
+    if hay("Package.swift"):
+        encontrados.append("swift")
+    # Dart
+    if hay("pubspec.yaml"):
+        encontrados.append("dart")
+
+    return encontrados
+
+
 def _normalizar_plantillas(valor):
     """Normalizes a template selection (str/list, comma or space separated).
 
@@ -247,6 +311,79 @@ def _checks_de_plantillas(nombres):
     return pares
 
 
+def plantillas_instaladas(ruta):
+    """Templates whose checks are really present in the project.
+
+    It is the truthful view when there is no marker (projects installed with an
+    older version): their default backend checks carry no suffix, so this
+    returns []. Used by the GUI so it does not claim `python` when the gate is
+    actually running the legacy default checks.
+    """
+    directorio = rutas.gate_checks(ruta)
+    if not os.path.isdir(directorio):
+        return []
+    encontradas = set()
+    for nombre in os.listdir(directorio):
+        base, ext = os.path.splitext(nombre)
+        if ext not in (".py", ".sh"):
+            continue
+        for plantilla in disponibles():
+            if not base.endswith("_" + plantilla):
+                continue
+            original = base[: -len(plantilla) - 1] + ext
+            origen = os.path.join(PLANTILLA_DIR, "plantillas", plantilla,
+                                  GATE_CHECKS_DIR, original)
+            if os.path.isfile(origen):
+                encontradas.add(plantilla)
+    return sorted(encontradas)
+
+
+def _purgar_checks_no_seleccionados(ruta, seleccion):
+    """Deletes template checks of stacks that are no longer selected.
+
+    Suffix convention: `<base>_<plantilla>.<ext>`. Only files whose content is
+    IDENTICAL to the framework template are removed, so a check the user
+    edited (or their own `99_custom.*`) is never deleted. Without this,
+    switching a project from rust to python left `03_test_rust.py` running
+    forever even though the marker said `python`.
+
+    Returns the project-relative paths of the deleted files.
+    """
+    directorio = rutas.gate_checks(ruta)
+    if not os.path.isdir(directorio):
+        return []
+    fuera = set(disponibles()) - set(seleccion)
+    if not fuera:
+        return []
+    borrados = []
+    for nombre in os.listdir(directorio):
+        base, ext = os.path.splitext(nombre)
+        if ext not in (".py", ".sh"):
+            continue
+        for plantilla in fuera:
+            sufijo = "_" + plantilla
+            if not base.endswith(sufijo):
+                continue
+            original = base[:-len(sufijo)] + ext
+            origen = os.path.join(PLANTILLA_DIR, "plantillas", plantilla,
+                                  GATE_CHECKS_DIR, original)
+            destino = os.path.join(directorio, nombre)
+            if not (os.path.isfile(origen) and os.path.isfile(destino)):
+                continue
+            try:
+                identico = filecmp.cmp(origen, destino, shallow=False)
+            except OSError:
+                identico = False
+            if not identico:
+                continue
+            try:
+                os.unlink(destino)
+            except OSError:
+                continue
+            borrados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
+    return borrados
+
+
 def instalar(ruta, plantilla=None):
     """Copies the templates (scripts + gate_checks) that are missing.
 
@@ -256,12 +393,20 @@ def instalar(ruta, plantilla=None):
     enables several templates. If it is omitted, the project's persisted choice
     is used and, failing that, the default (Python/backend) checks.
 
+    Special value `"auto"`: detects stacks from project files and applies them.
+
     Projects installed with an older version are migrated first: their
     framework files move from the project root into `.dedalo/`. Returns the
     project-relative paths of the created files.
     """
-    if plantilla is None:
+    # Special handling for "auto"
+    if plantilla == "auto" or (isinstance(plantilla, list) and plantilla == ["auto"]):
+        seleccion = detectar_stacks(ruta)
+        if not seleccion:
+            seleccion = ["python"]  # fallback
+    elif plantilla is None:
         seleccion = plantillas_de(ruta)
+        # If no marker, use default GATE_CHECKS (legacy behavior)
     else:
         seleccion = _normalizar_plantillas(plantilla)
     if seleccion:
@@ -296,6 +441,7 @@ def instalar(ruta, plantilla=None):
                 os.chmod(destino, 0o755)
             creados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
     if seleccion:
+        _purgar_checks_no_seleccionados(ruta, seleccion)
         _escribir_marcador(ruta, seleccion)
     return creados
 

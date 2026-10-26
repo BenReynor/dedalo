@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFrame,
     QGraphicsOpacityEffect,
     QGridLayout,
@@ -38,12 +39,41 @@ from PySide6.QtWidgets import (
 )
 
 from . import configuracion as cfg
-from . import modelos, plan, rutas
+from . import modelos, plan, plantillas, rutas
 from .i18n import t
 from .modelos import PROVEEDORES_CATALOGO
 from .paneles_webhooks import PanelWebhooks
 from .proceso import PanelTarea, Trabajo
 from .selector_modelo import SelectorModelo
+
+
+class DialogoPlantillas(QDialog):
+    """Multi-select of gate templates: one checkable box per stack."""
+
+    def __init__(self, padre, disponibles, pre_seleccionadas=None):
+        super().__init__(padre)
+        self.setWindowTitle(t("Gate templates"))
+        caja = QVBoxLayout(self)
+        caja.addWidget(QLabel(t("Select the stacks this project uses:")))
+        self.lista = QListWidget(self)
+        pre = set(pre_seleccionadas or [])
+        for nombre in disponibles:
+            item = QListWidgetItem(nombre)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if nombre in pre else Qt.Unchecked)
+            self.lista.addItem(item)
+        caja.addWidget(self.lista)
+        caja.addWidget(QLabel(t("None checked = python/backend (default)")))
+        botones = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        caja.addWidget(botones)
+
+    def seleccion(self):
+        return [self.lista.item(i).text()
+                for i in range(self.lista.count())
+                if self.lista.item(i).checkState() == Qt.Checked]
 
 
 def _fuente_monospace(objeto):
@@ -1455,6 +1485,34 @@ class PanelEjecucion(QWidget):
         h_ctrl.addWidget(self.b_iniciar)
         h_ctrl.addWidget(self.b_detener)
         h_ctrl.addWidget(self.b_gate)
+
+        # Gate templates selector
+        h_ctrl.addSpacing(12)
+        h_ctrl.addWidget(QLabel(t("Gate templates:")))
+        self.cmb_gate_templates = QComboBox()
+        self.cmb_gate_templates.setEditable(True)
+        self.cmb_gate_templates.setInsertPolicy(QComboBox.NoInsert)
+        self.cmb_gate_templates.setToolTip(
+            t("Comma-separated list of gate templates (web, python, rust, go, etc.). "
+              "History saves last 5 per project."))
+        # Apply on selection (activated) or when editing finishes (Enter/focus
+        # out) -- NOT on currentTextChanged: that fires per keystroke and would
+        # reinstall templates and rebuild the combo while the user is typing.
+        self.cmb_gate_templates.activated.connect(
+            lambda _i: self._cambiar_gate_templates(
+                self.cmb_gate_templates.currentText()))
+        self.cmb_gate_templates.lineEdit().editingFinished.connect(
+            lambda: self._cambiar_gate_templates(
+                self.cmb_gate_templates.currentText()))
+        h_ctrl.addWidget(self.cmb_gate_templates, 1)
+        self.b_gate_auto = _BtnGhost(t("Auto-detect"))
+        self.b_gate_auto.setToolTip(t("Detect stacks from project files and apply templates"))
+        self.b_gate_auto.clicked.connect(self._auto_detect_gate_templates)
+        h_ctrl.addWidget(self.b_gate_auto)
+        self.b_gate_edit = _BtnGhost(t("Edit templates…"))
+        self.b_gate_edit.setToolTip(t("Open checklist to pick templates"))
+        self.b_gate_edit.clicked.connect(self._editar_gate_templates)
+        h_ctrl.addWidget(self.b_gate_edit)
         h_ctrl.addStretch()
         v.addLayout(h_ctrl)
 
@@ -1497,6 +1555,106 @@ class PanelEjecucion(QWidget):
             if actual:
                 cmb.setCurrentText(actual)
             cmb.blockSignals(False)
+
+    # -------- Gate templates --------
+
+    def _cargar_gate_templates(self, ruta):
+        """Populates the combo with current selection + history."""
+        if not ruta:
+            self.cmb_gate_templates.blockSignals(True)
+            self.cmb_gate_templates.clear()
+            self.cmb_gate_templates.blockSignals(False)
+            return
+        # No marker (older install): show what the gate really runs instead
+        # of claiming `python`.
+        sel = (plantillas.plantillas_de(ruta)
+               or plantillas.plantillas_instaladas(ruta))
+        texto = ",".join(sel) if sel else t("default (python/backend)")
+        # Load history from QSettings (per project)
+        from PySide6.QtCore import QSettings
+        settings = QSettings("dedalo", "panel")
+        key = f"gate_history/{ruta}"
+        historial = settings.value(key, [])
+        if isinstance(historial, str):
+            historial = [historial]
+        # Build combo items: current selection first, then history
+        items = [texto] + [h for h in historial if h != texto][:4]
+        self.cmb_gate_templates.blockSignals(True)
+        self.cmb_gate_templates.clear()
+        self.cmb_gate_templates.addItems(items)
+        self.cmb_gate_templates.setCurrentIndex(0)
+        self.cmb_gate_templates.blockSignals(False)
+
+    def _guardar_en_historial(self, ruta, texto):
+        """Saves selection to history (max 5 per project)."""
+        from PySide6.QtCore import QSettings
+        settings = QSettings("dedalo", "panel")
+        key = f"gate_history/{ruta}"
+        historial = settings.value(key, [])
+        if isinstance(historial, str):
+            historial = [historial]
+        if texto in historial:
+            historial.remove(texto)
+        historial.insert(0, texto)
+        settings.setValue(key, historial[:5])
+
+    def _cambiar_gate_templates(self, texto=None):
+        """Applies a comma/space separated template list typed or selected.
+
+        Idempotent: does nothing when the normalized selection already matches
+        the installed one (so leaving the field does not rewrite files).
+        """
+        if not getattr(self, "_proyecto_actual", None):
+            return
+        texto = (texto if texto is not None
+                 else self.cmb_gate_templates.currentText()) or ""
+        actuales = plantillas.plantillas_de(self._proyecto_actual)
+        if texto.strip().lower() == "auto":
+            seleccion = plantillas.detectar_stacks(self._proyecto_actual) or ["python"]
+        else:
+            partes = [p.strip() for p in re.split(r"[,\s]+", texto) if p.strip()]
+            disponibles = set(plantillas.disponibles())
+            seleccion = [p for p in partes if p in disponibles]
+        if not seleccion:
+            return
+        if set(seleccion) == set(actuales):
+            return
+        plantillas.instalar(self._proyecto_actual, seleccion)
+        self._guardar_en_historial(self._proyecto_actual, ",".join(seleccion))
+        self._cargar_gate_templates(self._proyecto_actual)
+
+    def _auto_detect_gate_templates(self):
+        """Detects stacks and applies them."""
+        if not hasattr(self, "_proyecto_actual") or not self._proyecto_actual:
+            return
+        detectados = plantillas.detectar_stacks(self._proyecto_actual)
+        if not detectados:
+            detectados = ["python"]
+        plantillas.instalar(self._proyecto_actual, detectados)
+        texto = ",".join(detectados)
+        self._guardar_en_historial(self._proyecto_actual, texto)
+        self._cargar_gate_templates(self._proyecto_actual)
+
+    def _editar_gate_templates(self):
+        """Opens the checklist dialog with current selection pre-marked."""
+        if not hasattr(self, "_proyecto_actual") or not self._proyecto_actual:
+            return
+        sel = plantillas.plantillas_de(self._proyecto_actual)
+        dialogo = DialogoPlantillas(self, plantillas.disponibles(), pre_seleccionadas=sel)
+        if dialogo.exec() == QDialog.Accepted:
+            nueva = dialogo.seleccion()
+            if nueva:
+                plantillas.instalar(self._proyecto_actual, nueva)
+            else:
+                plantillas.instalar(self._proyecto_actual, ["python"])
+            texto = ",".join(nueva) if nueva else "python"
+            self._guardar_en_historial(self._proyecto_actual, texto)
+            self._cargar_gate_templates(self._proyecto_actual)
+
+    def cargar_proyecto(self, ruta):
+        """Called by the window when a project is loaded."""
+        self._proyecto_actual = ruta
+        self._cargar_gate_templates(ruta)
 
     # ---------- API for the window ----------
 

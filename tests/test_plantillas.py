@@ -456,3 +456,137 @@ def test_marcador_guarda_varias_plantillas():
         assert plantillas.plantilla_de(tmp) == "python,node"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# -------- Auto-detección de stacks --------
+
+def _dir_vacio():
+    return tempfile.mkdtemp()
+
+
+def _tocar(tmp, *nombres):
+    for nombre in nombres:
+        with open(os.path.join(tmp, nombre), "w", encoding="utf-8"):
+            pass
+
+
+def test_detectar_stacks_por_marcadores():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        _tocar(tmp, "package.json", "pyproject.toml",
+               "index.html", "styles.css", "app.js")
+        assert plantillas.detectar_stacks(tmp) == ["node", "python", "web"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_detectar_stacks_csharp_y_cpp():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        _tocar(tmp, "App.csproj", "main.cpp")
+        assert plantillas.detectar_stacks(tmp) == ["csharp", "cpp"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_detectar_stacks_java_vs_kotlin():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        _tocar(tmp, "build.gradle")
+        assert plantillas.detectar_stacks(tmp) == ["java"]
+        os.remove(os.path.join(tmp, "build.gradle"))
+        _tocar(tmp, "build.gradle.kts")
+        assert plantillas.detectar_stacks(tmp) == ["kotlin"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_detectar_stacks_proyecto_vacio():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        assert plantillas.detectar_stacks(tmp) == []
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_detectar_no_confunde_makefile_con_cpp():
+    """A lone Makefile is not proof of C++ (many non-C++ repos ship one)."""
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        _tocar(tmp, "Makefile")
+        assert "cpp" not in plantillas.detectar_stacks(tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_instalar_auto_aplica_lo_detectado():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        _tocar(tmp, "Cargo.toml")
+        creados = plantillas.instalar(tmp, "auto")
+        assert plantillas.plantillas_de(tmp) == ["rust"]
+        assert any("03_test_rust.py" in c for c in creados)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_instalar_auto_sin_marcadores_cae_en_python():
+    import shutil
+    tmp = _dir_vacio()
+    try:
+        plantillas.instalar(tmp, "auto")
+        assert plantillas.plantillas_de(tmp) == ["python"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_cambiar_seleccion_elimina_checks_obsoletos():
+    """Switching stacks removes the untouched checks of the old one."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp, "rust, python")
+        checks = os.path.join(tmp, ".dedalo", "scripts", "gate_checks")
+        assert os.path.exists(os.path.join(checks, "03_test_rust.py"))
+        plantillas.instalar(tmp, "python")
+        assert not os.path.exists(os.path.join(checks, "03_test_rust.py"))
+        assert os.path.exists(os.path.join(checks, "02_pytest_python.py"))
+        assert plantillas.plantillas_de(tmp) == ["python"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_cambiar_seleccion_respeta_check_modificado():
+    """A template check the user edited is NOT deleted on deselect."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp, "rust, python")
+        checks = os.path.join(tmp, ".dedalo", "scripts", "gate_checks")
+        rust = os.path.join(checks, "03_test_rust.py")
+        with open(rust, "w", encoding="utf-8") as f:
+            f.write("# personalizado\n")
+        plantillas.instalar(tmp, "python")
+        assert os.path.exists(rust), "no se borra lo que el usuario tocó"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_plantillas_instaladas_sin_marcador():
+    """Without marker the GUI reads the installed checks, not a guess."""
+    import shutil
+    tmp = _proyecto_tmp()
+    try:
+        plantillas.instalar(tmp)  # legacy default: unsuffixed checks
+        assert plantillas.plantillas_instaladas(tmp) == []
+        plantillas.instalar(tmp, "rust")
+        os.remove(os.path.join(tmp, ".dedalo", "plantilla"))
+        assert plantillas.plantillas_instaladas(tmp) == ["rust"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
