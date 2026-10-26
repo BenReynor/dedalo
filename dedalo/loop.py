@@ -850,6 +850,7 @@ def run(cfg):
                         return 5
                     if resultado == "pass":
                         print(f"[dedalo] ✔ revisor ({cfg.revisor}): PASS")
+                        logx(cfg.log, f"REVISOR PASS ({cfg.revisor}, intento {intento})")
                         rc_manual = _esperar_revision_manual(cfg, tarea)
                         if rc_manual == 4:
                             return 4
