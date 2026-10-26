@@ -475,6 +475,8 @@ def test_ejecucion_auto_usa_current_data(app, proyecto_git, monkeypatch):
     monkeypatch.setattr(modelos.shutil, "which", lambda n: (
         "/usr/bin/claude" if n == "claude" else None))
     monkeypatch.setattr(modelos, "sesion_agente", lambda n: None)
+    monkeypatch.setattr(modelos, "lista_modelos_proveedor",
+                        lambda prov: ["haiku", "sonnet"] if prov == "anthropic" else [])
     monkeypatch.setenv("HOME", str(proyecto_git))
     modelos.invalidar_cache()
 
@@ -485,8 +487,14 @@ def test_ejecucion_auto_usa_current_data(app, proyecto_git, monkeypatch):
     assert idx > 0
     p.cmb_agente_cli.setCurrentIndex(idx)
     assert p.modelos_seleccion()["agente_cli"] == "claude"
-    # claude does not accept --model: the selector must become disabled.
-    assert not p.cmb_agente.isEnabled()
+    # claude takes Anthropic models: selector stays usable, on a Claude model.
+    assert p.cmb_agente.isEnabled()
+    assert p.modelos_seleccion()["tarea"] == "anthropic/haiku"
+
+    idx_codex = p.cmb_agente_cli.findData("codex")
+    if idx_codex > 0:
+        p.cmb_agente_cli.setCurrentIndex(idx_codex)
+        assert not p.cmb_agente.isEnabled()
 
     p.cmb_agente_cli.setCurrentIndex(0)
     assert p.modelos_seleccion()["agente_cli"] == "auto"

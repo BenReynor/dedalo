@@ -105,3 +105,19 @@ def test_el_directorio_de_configuracion_llega_a_los_hijos():
     """Child processes (gate, engine) must see the isolated config dir too."""
     out = ll.filtrar_entorno({"PATH": "/usr/bin", "DEDALO_CONFIG_DIR": "/tmp/cfg"})
     assert out["DEDALO_CONFIG_DIR"] == "/tmp/cfg"
+
+
+def test_modelo_para_claude_y_opencode():
+    from dedalo.loop_launch import _modelo_para
+    assert _modelo_para("claude", "anthropic/haiku") == "anthropic/haiku"
+    assert _modelo_para("claude", "opencode/big-pickle") == ""
+    assert _modelo_para("opencode", "opencode/big-pickle") == "opencode/big-pickle"
+    assert _modelo_para("codex", "openai/gpt-5") == ""
+
+
+def test_entorno_juez_sustituye_claude_flags_por_lectura():
+    from dedalo.loop_launch import entorno_juez
+    env = entorno_juez({"CLAUDE_FLAGS": "--permission-mode acceptEdits"}, "haiku")
+    assert "acceptEdits" not in env["CLAUDE_FLAGS"]
+    assert "--disallowedTools" in env["CLAUDE_FLAGS"]
+    assert env["CLAUDE_FLAGS"].endswith("--model haiku")

@@ -189,6 +189,10 @@ _ES: dict[str, str] = {
     "Refreshing models…": "Actualizando modelos…",
     "Preparing loop…": "Preparando el loop…",
     "Loop not started": "El loop no se inició",
+    "claude only runs Anthropic models: anthropic/haiku is the "
+    "cheapest, sonnet and opus are stronger":
+        "claude solo usa modelos de Anthropic: anthropic/haiku es el más "
+        "barato; sonnet y opus son más potentes",
     "> loop not started: preparing the launch failed":
         "> el loop no se inició: falló la preparación del lanzamiento",
     "No CLI agent with a session was detected (opencode, codex or claude)":

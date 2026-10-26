@@ -48,6 +48,8 @@ def _binario_en(ruta_base):
     return ""
 
 
+ALIAS_CLAUDE = ("haiku", "sonnet", "opus")
+
 PROVEEDORES_CATALOGO = [
     "opencode", "google", "openai", "anthropic", "xai", "groq",
     "together", "deepseek", "azure", "bedrock", "ollama", "lmstudio",
@@ -194,7 +196,12 @@ def lista_modelos_proveedor(proveedor, forzar=False):
     if forzar:
         _modelos_por_proveedor.pop(proveedor, None)
     if proveedor not in _modelos_por_proveedor:
-        _modelos_por_proveedor[proveedor] = _consultar_proveedor(proveedor)
+        lista = _consultar_proveedor(proveedor)
+        if proveedor == "anthropic":
+            # Aliases the claude CLI resolves to the current model of each
+            # tier; catalog ids can lag behind the CLI.
+            lista = [a for a in ALIAS_CLAUDE if a not in lista] + lista
+        _modelos_por_proveedor[proveedor] = lista
     return _modelos_por_proveedor[proveedor]
 
 

@@ -377,7 +377,7 @@ def _observar(cfg, base, agente, modelo):
         rc, _ = run_agente(
             cfg, agente, salida, modelo, _prompt(base, skill), base["tarea"], 0,
             cwd=tmp, timeout=cfg.timeout_ficha, dir_trabajo=tmp, fase="ficha",
-            env=entorno)
+            env=entorno, rol="lectura")
         texto = _leer(salida)
         if rc != 0:
             return None, f"agente_rc_{rc}"

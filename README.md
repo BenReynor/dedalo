@@ -579,9 +579,20 @@ and labels the detected one in the `auto` option, so it never offers one that
 doesn't exist.
 
 - `codex` is invoked with `codex exec --skip-git-repo-check`.
-- `claude` is invoked with `claude -p --output-format text`.
-- Only `opencode` accepts `MODELO_*` (`provider/model`); the GUI disables the
-  selector for the other two, which take their model from their own account.
+- `claude` is invoked with `claude -p --output-format text --strict-mcp-config`
+  (it never loads your MCP servers) and receives the prompt through stdin.
+  Permissions depend on the role:
+  - **task agent:** may edit files (`acceptEdits`) and run the commands of the
+    project's gate templates without asking (python → `pytest`, `python`,
+    `ruff`; node → `npm`, `node`; rust → `cargo`…). Never `git`: the loop owns
+    branches and commits. `CLAUDE_FLAGS` adds extra flags to this role only.
+  - **reviewer, judge (`98_criterio`), navigator and ficha:** read-only
+    (`Edit`, `Write`, `Bash`… disallowed).
+- `opencode` accepts any `provider/model`; `claude` accepts Anthropic models
+  (`anthropic/haiku`, `anthropic/sonnet`, `anthropic/opus` or a full
+  `claude-*` id). Picking `claude` in the GUI switches a non-Claude model to
+  `anthropic/haiku`, the cheapest. `codex` takes its model from its own
+  account, so the selector is disabled for it.
 - If a CLI is installed but has no session (`Not logged in`, 401, invalid API
   key), the loop stops with a clear warning instead of marking tasks as failed
   over an authentication error.

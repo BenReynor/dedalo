@@ -20,6 +20,7 @@ import sys
 
 from . import configuracion as cfg
 from . import modelos
+from .loop_agentes import flags_claude, modelo_claude
 
 # Environment variable for each agent CLI (dedalo.sh supports them).
 MAPA_CLI = {
@@ -87,6 +88,32 @@ def filtrar_entorno(environ):
 def raiz_codigo():
     """Repo root of the GUI: `dedalo` is a subdirectory of it."""
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _modelo_para(agente, seleccion):
+    """MODELO_* value for an agent, or "" when the CLI cannot use it.
+
+    opencode takes any full provider/model; claude only its own models
+    (aliases, `anthropic/...`, `claude-*`); codex picks its model itself.
+    """
+    seleccion = (seleccion or "").strip()
+    if agente == "opencode":
+        return seleccion if "/" in seleccion else ""
+    if agente == "claude":
+        return seleccion if modelo_claude(seleccion) else ""
+    return ""
+
+
+def entorno_juez(env, modelo=""):
+    """Makes a claude judge read-only in the gate's environment.
+
+    `98_criterio.py` passes CLAUDE_FLAGS to `claude -p`; the user's value is
+    meant for the task agent (it may grant edits), so the gate always gets the
+    read-only judge flags instead. Done here rather than in the check itself so
+    installed checks, and therefore the user's gate consent, stay unchanged.
+    """
+    env["CLAUDE_FLAGS"] = " ".join(flags_claude("juez", modelo=modelo))
+    return env
 
 
 def entorno_python(env, frozen=False):
@@ -185,12 +212,8 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
     env["AGENTES_PREFERIDOS"] = " ".join(detectados)
     # The judge follows the task agent unless explicitly chosen.
     env["AGENTE_JUEZ"] = agente_tarea
-    # Only pass MODELO_* if the selection is a full provider/model AND the agent
-    # is opencode (codex and claude do not accept --model here).
-    modelo_tarea = (conf.get("agente", "") if "/" in conf.get("agente", "")
-                    and agente_tarea == "opencode" else "")
-    modelo_revisor = (conf.get("revisor", "") if "/" in conf.get("revisor", "")
-                      and agente_revisor == "opencode" else "")
+    modelo_tarea = _modelo_para(agente_tarea, conf.get("agente", ""))
+    modelo_revisor = _modelo_para(agente_revisor, conf.get("revisor", ""))
     env["MODELO_TAREA"] = modelo_tarea
     env["MODELO_REVISOR"] = modelo_revisor
     env["NAVEGADOR"] = "1" if nav.get("activo") else "0"

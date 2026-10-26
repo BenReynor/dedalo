@@ -399,6 +399,8 @@ def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     argv = argv_gate(getattr(sys, "frozen", False))
     env = loop_launch.filtrar_entorno(os.environ)
     loop_launch.entorno_python(env, getattr(sys, "frozen", False))
+    loop_launch.entorno_juez(
+        env, loop_launch.config_de_proyecto(nombre)[0].get("agente", ""))
     if not consentimiento.concedido(ruta, env):
         return json.dumps({
             "rc": 3, "timeout": False, "stdout": "",

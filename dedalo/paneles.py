@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 from . import configuracion as cfg
 from . import mapeo, modelos, plan, plantillas
 from .i18n import t
+from .loop_agentes import modelo_claude
 from .modelos import PROVEEDORES_CATALOGO
 from .paneles_webhooks import PanelWebhooks
 from .proceso import PanelTarea, Trabajo
@@ -174,21 +175,28 @@ PIPELINE_FASES = ["Plan", "Agente", "Gate", "Revisor", "Commit"]
 
 
 def _sincronizar_modelo(selector, cmb_cli):
-    """The model selector only applies to opencode.
+    """Enables the model selector only for agents that accept a model.
 
-    codex and claude take their model from their own account, so the selector is
-    disabled with a note: it prevents the GUI from offering an opencode model
-    that the script later silently ignores.
+    opencode takes any provider/model and claude its own (anthropic/...); codex
+    uses the model configured in its account, so the selector is disabled with
+    a note instead of offering a model the engine would silently ignore.
     """
     if selector is None or cmb_cli is None:
         return
     actual = cmb_cli.currentData() or "auto"
-    es_opencode = actual not in ("codex", "claude")
-    selector.setEnabled(es_opencode)
-    if not es_opencode:
+    selector.setEnabled(actual != "codex")
+    if actual == "codex":
         selector.setToolTip(
             t("{actual} does not accept --model here: the model configured "
               "in its own account is used", actual=actual))
+    elif actual == "claude":
+        selector.setToolTip(
+            t("claude only runs Anthropic models: anthropic/haiku is the "
+              "cheapest, sonnet and opus are stronger"))
+        if not modelo_claude(selector.currentText()):
+            selector.setCurrentText("anthropic/haiku")
+    else:
+        selector.setToolTip("")
 
 
 def fase_actual(log_ruta: str) -> str:

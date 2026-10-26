@@ -17,6 +17,7 @@ import subprocess
 
 from .loop_proceso import run_con_timeout
 from .loop_util import ahora_ms, logx
+from .modelos import ALIAS_CLAUDE
 
 UTC = datetime.timezone.utc
 
@@ -110,6 +111,87 @@ def _argv_opencode(binario, cfg, subagente, modelo, prompt, dir_trabajo=None):
         args += ["--model", modelo]
     args.append(prompt)
     return args
+
+
+# Commands the claude TASK agent may run without asking, per gate template.
+# git is never allowed: the loop owns branches and commits.
+CLAUDE_BASH_POR_PLANTILLA = {
+    "python": ("pytest", "python", "python3", "ruff"),
+    "node": ("npm", "npx", "node"),
+    "web": ("node",),
+    "rust": ("cargo",),
+    "go": ("go", "gofmt"),
+    "java": ("mvn", "gradle"),
+    "kotlin": ("gradle",),
+    "csharp": ("dotnet",),
+    "cpp": ("cmake", "make", "ctest"),
+    "shell": ("bash", "shellcheck"),
+    "ruby": ("bundle", "ruby", "rspec", "rake"),
+    "php": ("php", "composer"),
+    "swift": ("swift",),
+    "dart": ("dart", "flutter"),
+}
+# Tools denied to read-only roles (reviewer, judge, navigator, ficha).
+CLAUDE_SOLO_LECTURA = ("Edit", "Write", "MultiEdit", "NotebookEdit", "Bash")
+
+
+def modelo_claude(seleccion):
+    """Model id for `claude --model`, or "" if the selection is not Claude's.
+
+    Accepts the aliases (haiku/sonnet/opus), `anthropic/<id>` from the model
+    selector and bare `claude-*` ids. Anything else (e.g. `opencode/...`) is
+    ignored so the CLI falls back to its own default.
+    """
+    sel = (seleccion or "").strip()
+    if sel.startswith("anthropic/"):
+        sel = sel.split("/", 1)[1]
+    if sel in ALIAS_CLAUDE or sel.startswith("claude-"):
+        return sel
+    return ""
+
+
+def bash_permitidos(proyecto):
+    """Bash commands for the task agent, from the project's gate templates."""
+    from . import plantillas
+
+    stacks = plantillas.plantillas_de(proyecto) or plantillas.detectar_stacks(proyecto)
+    cmds = []
+    for stack in stacks:
+        for c in CLAUDE_BASH_POR_PLANTILLA.get(stack, ()):
+            if c not in cmds:
+                cmds.append(c)
+    return cmds
+
+
+def flags_claude(rol, proyecto="", modelo="", extra=""):
+    """claude -p flags for a role: "tarea" may edit, any other is read-only.
+
+    Every role runs with `--strict-mcp-config` so the nested agent never loads
+    the user's MCP servers (tokens, and it must not drive its own loop). The
+    list always ends in a non-variadic option so a positional prompt, as the
+    judge passes it, is never swallowed by `--allowedTools`.
+    """
+    flags = ["--strict-mcp-config"]
+    if rol == "tarea":
+        cmds = bash_permitidos(proyecto) if proyecto else []
+        if cmds:
+            flags += ["--allowedTools", *[f"Bash({c}:*)" for c in cmds]]
+        flags += (extra or "").split()
+        flags += ["--permission-mode", "acceptEdits"]
+    else:
+        flags += ["--disallowedTools", *CLAUDE_SOLO_LECTURA]
+        flags += ["--permission-mode", "default"]
+    modelo = modelo_claude(modelo)
+    if modelo:
+        flags += ["--model", modelo]
+    return flags
+
+
+def argv_claude(binario, cfg, rol, modelo=""):
+    """argv for `claude -p`; the prompt goes through stdin (see run_agente)."""
+    return [binario, "-p", "--output-format", "text",
+            *flags_claude(rol, cfg.proyecto, modelo,
+                          cfg.environ.get("CLAUDE_FLAGS", ""))]
 
 
 def elegir_revisor(cfg):
@@ -221,7 +303,8 @@ def registrar_metrica(cfg, agente, modelo, dur_ms, rc, salida, tarea, iteracion,
 
 
 def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
-               cwd=None, timeout=None, dir_trabajo=None, fase="", env=None):
+               cwd=None, timeout=None, dir_trabajo=None, fase="", env=None,
+               rol="tarea"):
     """Runs a task with an agent and returns its exit code (run_agente).
 
     Opens the output files (stdout/salida, stderr/salida.err) like the
@@ -241,8 +324,7 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
         return 2, None
     flags = (cfg.environ.get("CODEX_FLAGS") or "").split() \
         if agente == "codex" else []
-    claude_flags = (cfg.environ.get("CLAUDE_FLAGS") or "").split() \
-        if agente == "claude" else []
+    entrada = None
     if agente == "opencode":
         cmd = _argv_opencode(
             binario, cfg,
@@ -252,7 +334,8 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
         cmd = [binario, "exec", "--skip-git-repo-check",
                *flags, prompt]
     elif agente == "claude":
-        cmd = [binario, "-p", "--output-format", "text", *claude_flags, prompt]
+        cmd = argv_claude(binario, cfg, rol, modelo)
+        entrada = prompt.encode("utf-8")
     else:
         logx(cfg.log, f"ABORTADO: agente desconocido ({agente})")
         return 2, None
@@ -264,7 +347,8 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _salida, _t = run_con_timeout(
             cmd, timeout or cfg.timeout_por_tarea, env=entorno,
-            cwd=cwd or cfg.proyecto, stdout=fout, stderr=ferr, vivo=vivo)
+            cwd=cwd or cfg.proyecto, stdout=fout, stderr=ferr, vivo=vivo,
+            entrada=entrada)
     dur = ahora_ms() - t0
     registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, iteracion,
                       fase=fase)
@@ -285,6 +369,7 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
               "TESTS: ruta/test.py::test_x\n"
               "ENDPOINTS: GET /api/...\n"
               "MODELOS: Modulo.servicio")
+    entrada = None
     if agente == "opencode":
         cmd = _argv_opencode(
             binario, cfg,
@@ -292,7 +377,8 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check", prompt]
     elif agente == "claude":
-        cmd = [binario, "-p", "--output-format", "text", prompt]
+        cmd = argv_claude(binario, cfg, "lectura", modelo)
+        entrada = prompt.encode("utf-8")
     else:
         return 1, {}
     salida_err = salida + ".err"
@@ -301,7 +387,7 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _s, _t = run_con_timeout(
             cmd, cfg.timeout_navegador, env=cfg.environ, cwd=cfg.proyecto,
-            stdout=fout, stderr=ferr, vivo=vivo)
+            stdout=fout, stderr=ferr, vivo=vivo, entrada=entrada)
     dur = ahora_ms() - t0
     registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, 0)
     return rc, vivo
@@ -332,7 +418,7 @@ def revisar_diff(cfg, rev, tarea, vdiff):
               "Responde con 2 o 3 líneas de razones y, EN LA ÚLTIMA LÍNEA, "
               "exactamente: VERDICT: PASS o VERDICT: FAIL")
     rc, _vivo = run_agente(cfg, rev, rev_out, cfg.modelo_revisor,
-                           prompt, tarea, 0)
+                           prompt, tarea, 0, rol="revisor")
     texto = _leer_fichero(rev_out)
     sin_veredicto = "VERDICT:" not in texto
     if sin_autenticacion(rev_out + ".err", rev_out, int(sin_veredicto)):

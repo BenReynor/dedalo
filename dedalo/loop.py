@@ -29,13 +29,23 @@ import threading
 import time
 import urllib.request
 
-from . import consentimiento, ficha, loops_estado, mapeo, net, notificaciones, rutas
+from . import (
+    consentimiento,
+    ficha,
+    loop_launch,
+    loops_estado,
+    mapeo,
+    net,
+    notificaciones,
+    rutas,
+)
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
     cli_agente,
     detectar_agente,
     elegir_revisor,
+    modelo_claude,
     revisar_diff,
     run_agente,
     run_navegador,
@@ -300,6 +310,8 @@ def _run_gate(cfg, criterio):
     env["CRITERIO"] = criterio or ""
     env["MODELO_JUEZ"] = cfg.modelo_juez
     env["OPENCODE_AGENT_JUEZ"] = cfg.opencode_agente_juez
+    # A claude judge follows the task model unless MODELO_JUEZ names a Claude one.
+    loop_launch.entorno_juez(env, modelo_claude(cfg.modelo_juez) or cfg.modelo_tarea)
     if not getattr(sys, "frozen", False):
         # `python -m dedalo.gate` starts with cwd=project: without this,
         # an interpreter without the installed package (development) won't find it.

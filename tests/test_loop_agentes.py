@@ -311,7 +311,7 @@ def test_revisar_diff_incluye_contexto_del_proyecto(tmp_path):
     bin_.parent.mkdir(parents=True, exist_ok=True)
     bin_.write_text(
         "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$@\" > prompt_revisor.txt\n"
+        "{ printf '%s\\n' \"$@\"; cat; } > prompt_revisor.txt\n"
         "echo 'VERDICT: PASS'\n", encoding="utf-8")
     bin_.chmod(0o755)
     (tmp_path / "CONTEXTO.md").write_text(
@@ -419,3 +419,55 @@ def test_revisor_tambien_recibe_dir(tmp_path):
     assert resultado == "pass"
     argv = captura.read_text(encoding="utf-8").splitlines()
     assert argv[argv.index("--dir") + 1] == str(tmp_path)
+
+
+# ------------------------------------------------------------- claude roles
+
+def test_modelo_claude_solo_acepta_modelos_de_claude():
+    from dedalo.loop_agentes import modelo_claude
+    assert modelo_claude("haiku") == "haiku"
+    assert modelo_claude("anthropic/haiku") == "haiku"
+    assert modelo_claude("anthropic/claude-sonnet-4-5") == "claude-sonnet-4-5"
+    assert modelo_claude("opencode/big-pickle") == ""
+    assert modelo_claude("") == ""
+
+
+def test_claude_tarea_edita_y_corre_herramientas_del_stack(tmp_path):
+    from dedalo import plantillas
+    from dedalo.loop_agentes import flags_claude
+    plantillas.instalar(str(tmp_path), "python")
+    flags = flags_claude("tarea", str(tmp_path), "anthropic/haiku",
+                         extra="--verbose")
+    assert "--strict-mcp-config" in flags
+    assert flags[flags.index("--permission-mode") + 1] == "acceptEdits"
+    assert "Bash(pytest:*)" in flags and "Bash(ruff:*)" in flags
+    assert not any("git" in f for f in flags), "git es del loop, no del agente"
+    assert "--verbose" in flags
+    assert flags[-2:] == ["--model", "haiku"]
+
+
+def test_claude_roles_de_lectura_no_pueden_escribir(tmp_path):
+    from dedalo.loop_agentes import flags_claude
+    for rol in ("revisor", "juez", "lectura"):
+        flags = flags_claude(rol, str(tmp_path), extra="--permission-mode acceptEdits")
+        assert "acceptEdits" not in flags, f"{rol}: CLAUDE_FLAGS es solo para la tarea"
+        vetadas = flags[flags.index("--disallowedTools") + 1:]
+        for herramienta in ("Edit", "Write", "Bash"):
+            assert herramienta in vetadas
+        # Ends in a non-variadic option: a positional prompt stays a prompt.
+        assert flags[-2:] == ["--permission-mode", "default"]
+
+
+def test_agente_recibe_el_prompt_por_stdin(tmp_path):
+    """The prompt never travels in argv (variadic flags, Windows 32K limit)."""
+    bin_ = tmp_path / "bin" / "claude"
+    bin_.parent.mkdir(parents=True, exist_ok=True)
+    bin_.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > args.txt\n"
+                    "cat > stdin.txt\necho 'VERDICT: PASS'\n", encoding="utf-8")
+    bin_.chmod(0o755)
+    cfg = _config(tmp_path, {"CLI_CLAUDE": str(bin_)})
+    cfg.revisor = "claude"
+    cfg.timeout_por_tarea = 30
+    revisar_diff(cfg, "claude", "t1", "DIFF_UNICO_123")
+    assert "DIFF_UNICO_123" in _leer(str(tmp_path / "stdin.txt"))
+    assert "DIFF_UNICO_123" not in _leer(str(tmp_path / "args.txt"))
