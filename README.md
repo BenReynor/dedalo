@@ -392,8 +392,8 @@ is kept as a reference and for manual runs in a POSIX terminal.
 
 ## 🛠️ Gate Templates (plantillas de gate)
 
-When you add a project (GUI or MCP `instalar_proyecto`) you can select **one
-or more gate templates** — each is a set of portable Python checks for a
+Each project uses **one or more gate templates**, chosen in the **Run** panel
+(or via MCP `instalar_proyecto`) and changeable at any time mid-project — each is a set of portable Python checks for a
 language/stack. The templates live in `dedalo/plantillas_data/plantillas/`
 and are installed into your project's `.dedalo/scripts/gate_checks/` with a
 language suffix so several stacks coexist without collisions
@@ -406,10 +406,10 @@ language suffix so several stacks coexist without collisions
 | `node` | `package.json` | `package.json` validity, `npm run lint`, `npm test` |
 | `rust` | `Cargo.toml` | `cargo fmt --check`, `cargo check`, `cargo test` |
 | `go` | `go.mod` | `gofmt -l .`, `go vet ./...`, `go test ./...` |
-| `java` | `pom.xml` / `build.gradle(.kts)` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
-| `kotlin` | `build.gradle(.kts)` | `gradle compileKotlin`, `gradle test` |
+| `java` | `pom.xml` / `build.gradle` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
+| `kotlin` | `build.gradle.kts` / `*.kt` | `gradle compileKotlin`, `gradle test` |
 | `csharp` | `*.sln` / `*.csproj` | `dotnet build`, `dotnet test` |
-| `cpp` | `CMakeLists.txt` / `Makefile` | `clang-format --dry-run --Werror`, CMake/make build, `ctest` / `make test` |
+| `cpp` | `CMakeLists.txt` / C/C++ sources | `clang-format --dry-run --Werror`, CMake/make build, `ctest` / `make test` |
 | `shell` | `*.sh` | `bash -n` syntax, `shellcheck -x` |
 | `ruby` | `Gemfile` | `rubocop` (via `bundle exec`), `rspec` / `rake test` |
 | `php` | `composer.json` | `php -l` on each `.php`, `phpunit` (vendor/bin) |
@@ -418,8 +418,13 @@ language suffix so several stacks coexist without collisions
 | `generic` | any known marker | auto-detects stack and runs standard commands (use **alone**, not combined) |
 
 **How it works:**
-- GUI: when adding a project, a dialog shows checkboxes for each template; tick the ones you need.
-- MCP: `instalar_proyecto(ruta, plantilla="rust,go")` — comma/space separated.
+- GUI (**Run** panel → *Gate templates*):
+  - type a comma-separated list or pick one of the last 5 used for that project;
+  - **Auto-detect** reads the project files (table above) and applies the matching templates (falls back to `python` if nothing matches);
+  - **Edit templates…** opens a checklist.
+  Switching stacks removes the old stack's checks **only if you never edited them**.
+- New projects get no dialog: they start with the default Python/backend checks until you pick templates.
+- MCP: `instalar_proyecto(ruta, plantilla="rust,go")` — comma/space separated, or `plantilla="auto"` to detect.
 - The selection is persisted in `.dedalo/plantilla` (one per line). Re-opening the project keeps it.
 - Checks missing their tool (`cargo`, `dotnet`, `swift`, etc.) are **skipped with a warning**, not failed — so a multi-stack gate passes on a machine that only has some toolchains.
 - Failures are reported per language (`[GATE] ✗ rust: 03_test_rust.py falló`), and **all checks run even if one fails** — you get the full picture.
@@ -654,13 +659,18 @@ fresh, so engine fixes apply without restarting the client.
 
 ### What it exposes
 
-- **Read (11):** `listar_proyectos`, `estado_proyecto`, `leer_fichero`,
+- **Read (12):** `listar_proyectos`, `estado_proyecto`, `leer_fichero`,
   `leer_plan`, `leer_lecciones`, `leer_contexto`, `leer_incidencias`,
-  `resumen_metricas`, `cola_log`, `estado_agentes`, `listar_modelos`.
+  `resumen_metricas`, `cola_log`, `estado_agentes`, `listar_modelos`,
+  `listar_plantillas`.
 - **Act (7):** `instalar_proyecto`, `confiar_gate`, `correr_gate`,
   `iniciar_loop` (background), `estado_loop`, `detener_loop`,
   `resolver_revision`. `confiar_gate` approves a repo's `gate_checks` (the same
   consent the GUI asks for) before a headless loop can run its gate.
+  `instalar_proyecto` refuses a name already registered at another path
+  (unless `sobrescribir=True`) and never installs into `/`, `$HOME` itself,
+  system trees (`/etc`, `/usr`, `/var/lib`...) or dotfile trees (`~/.ssh`,
+  `~/.config`...), so a prompt-injected agent cannot hijack a project.
 
 **Shared state:** the MCP server, the GUI and the loop engine share a single
 running-state registry (`dedalo/loops_estado.py`, `~/.config/dedalo/loops.json`)
