@@ -656,6 +656,16 @@ QPlainTextEdit:focus, QTextEdit:focus {{
     outline: none;
 }}
 
+/* Tables/trees: without this the alternate rows took the system palette's
+   light colour, leaving every other row unreadable in dark themes. */
+QTableView, QTreeView {{
+    background-color: {bg_sunken};
+    alternate-background-color: {bg_panel};
+    color: {text_primary};
+    selection-background-color: {surface_selected};
+    selection-color: {text_primary};
+}}
+
 /* ─── TABS ─── */
 QTabWidget::pane {{
     border: 1px solid {border_default};

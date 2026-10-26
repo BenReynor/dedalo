@@ -189,6 +189,7 @@ _ES: dict[str, str] = {
     "Refreshing models…": "Actualizando modelos…",
     "Preparing loop…": "Preparando el loop…",
     "Loop not started": "El loop no se inició",
+    "Loop started": "Loop iniciado",
     "claude only runs Anthropic models: anthropic/haiku is the "
     "cheapest, sonnet and opus are stronger":
         "claude solo usa modelos de Anthropic: anthropic/haiku es el más "

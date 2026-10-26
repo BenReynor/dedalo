@@ -955,6 +955,7 @@ class Ventana(QMainWindow):
         self.loop.setWorkingDirectory(ruta)
         self.loop.setEnvironment(env)
         self.loop.start(programa, args_motor)
+        self.estado.setText(t("Loop started"))
         self.pan_ejec.b_iniciar.setEnabled(False)
         self.pan_ejec.b_detener.setEnabled(True)
         self.pan_ejec.b_gate.setEnabled(False)
