@@ -259,10 +259,8 @@ def preparar(conf, nav=None, environ=None, frozen=None, nombre="", origen=""):
     entorno_python(env, frozen)
     agente_tarea, agente_revisor = resolver_agentes(conf, detectados)
     programa, argv = argv_motor(frozen, args_cli(conf))
-    modelo_tarea = (conf.get("agente", "") if "/" in conf.get("agente", "")
-                    and agente_tarea == "opencode" else "")
-    modelo_revisor = (conf.get("revisor", "") if "/" in conf.get("revisor", "")
-                      and agente_revisor == "opencode" else "")
+    modelo_tarea = _modelo_para(agente_tarea, conf.get("agente", ""))
+    modelo_revisor = _modelo_para(agente_revisor, conf.get("revisor", ""))
     return {
         "detectados": detectados,
         "agente_tarea": agente_tarea,

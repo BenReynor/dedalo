@@ -121,3 +121,15 @@ def test_entorno_juez_sustituye_claude_flags_por_lectura():
     assert "acceptEdits" not in env["CLAUDE_FLAGS"]
     assert "--disallowedTools" in env["CLAUDE_FLAGS"]
     assert env["CLAUDE_FLAGS"].endswith("--model haiku")
+
+
+def test_preparar_informa_el_modelo_de_claude(monkeypatch):
+    """The plan shown to the user carries the claude model, not ''."""
+    from dedalo import loop_launch
+    monkeypatch.setattr(loop_launch.modelos, "agentes_operativos",
+                        lambda *a, **k: ["claude"])
+    conf = {"agente_cli": "claude", "revisor_cli": "claude",
+            "agente": "anthropic/haiku", "revisor": "anthropic/sonnet"}
+    plan = loop_launch.preparar(conf, {"activo": False, "modelo": ""})
+    assert plan["modelo_tarea"] == plan["env"]["MODELO_TAREA"] == "anthropic/haiku"
+    assert plan["modelo_revisor"] == "anthropic/sonnet"
