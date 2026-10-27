@@ -385,6 +385,37 @@ def _purgar_checks_no_seleccionados(ruta, seleccion):
     return borrados
 
 
+# Legacy default checks that a template selection replaces. The judge, the
+# user's own 99_custom and _env.sh (sourced by any remaining .sh) are kept.
+_CONSERVAR_AL_MIGRAR = ("98_criterio.", "99_custom.", "_env.")
+
+
+def _purgar_checks_legacy(ruta):
+    """Deletes the old unsuffixed default checks once templates are selected.
+
+    A project installed before templates existed keeps 01_db..05_tests (the
+    Python/Django backend checks) next to the new `*_<plantilla>` ones, so a
+    Rust or Node project would go on running Django checks. Only files
+    IDENTICAL to the bundled defaults go; edited ones stay.
+    """
+    directorio = rutas.gate_checks(ruta)
+    borrados = []
+    for rel in GATE_CHECKS:
+        nombre = os.path.basename(rel)
+        if nombre.startswith(_CONSERVAR_AL_MIGRAR):
+            continue
+        destino = os.path.join(directorio, nombre)
+        origen = os.path.join(PLANTILLA_DIR, rel)
+        try:
+            if not filecmp.cmp(origen, destino, shallow=False):
+                continue
+            os.unlink(destino)
+        except OSError:
+            continue
+        borrados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
+    return borrados
+
+
 def instalar(ruta, plantilla=None):
     """Copies the templates (scripts + gate_checks) that are missing.
 
@@ -443,6 +474,7 @@ def instalar(ruta, plantilla=None):
             creados.append(os.path.relpath(destino, ruta).replace("\\", "/"))
     if seleccion:
         _purgar_checks_no_seleccionados(ruta, seleccion)
+        _purgar_checks_legacy(ruta)
         _escribir_marcador(ruta, seleccion)
     return creados
 

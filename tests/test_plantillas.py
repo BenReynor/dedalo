@@ -677,3 +677,22 @@ def test_check_tsc_sin_tsconfig_o_sin_typescript_se_omite(tmp_path, monkeypatch)
     env = _EnvCheck(str(tmp_path))
     assert modulo.run(env) == 0
     assert env.mensajes[0][0] == "aviso"
+
+
+def test_migrar_a_plantilla_quita_checks_legacy_sin_tocar_los_editados(tmp_path):
+    """An old project (default Django checks) switched to rust+node must not
+    keep running 01_db..05_tests; edited checks and 99_custom stay."""
+    ruta = str(tmp_path)
+    plantillas.instalar(ruta)  # legacy default checks, no marker
+    checks = rutas.gate_checks(ruta)
+    assert os.path.exists(os.path.join(checks, "01_db.py"))
+    with open(os.path.join(checks, "05_tests.sh"), "a", encoding="utf-8") as f:
+        f.write("# tocado\n")
+    plantillas.instalar(ruta, "rust,node")
+    presentes = set(os.listdir(checks))
+    for legacy in ("01_db.py", "01_db.sh", "02_migrations.py", "03_backend.sh",
+                   "04_imports.py", "05_tests.py"):
+        assert legacy not in presentes
+    for queda in ("05_tests.sh", "99_custom.py", "99_custom.sh", "_env.sh",
+                  "98_criterio.py", "02_check_rust.py", "04_tsc_node.py"):
+        assert queda in presentes
