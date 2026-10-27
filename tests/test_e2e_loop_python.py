@@ -22,6 +22,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dedalo import loop  # noqa: E402
 from dedalo.loop import Config, run  # noqa: E402
 from dedalo.loop_args import parse_args  # noqa: E402
 
@@ -443,3 +444,19 @@ def test_juez_no_opino_reconoce_los_avisos_de_py_y_sh():
         assert _juez_no_opino("[GATE] ✓ ruff OK\n" + aviso), aviso
     assert not _juez_no_opino("[GATE] ✓ juez: criterio cumplido — ok")
     assert not _juez_no_opino("[GATE] ✗ juez: criterio NO cumplido (falta x)")
+
+
+def test_resumen_gate_prioriza_errores_sobre_la_cola():
+    """A Rust failure must reach the agent with the compiler error, not only
+    the per-check recap at the end of the gate output."""
+    salida = "\n".join(
+        ["[GATE] ✗ [rust] cargo check falló",
+         "src/commands.rs:213:1: error: future cannot be sent between threads safely"]
+        + [f"\x1b[32mruido {i}\x1b(B\x1b[m" for i in range(40)]
+        + ["[GATE] ✓ [node] tsc OK", "[GATE] ✗ rust: 02_check_rust.py falló",
+           "[GATE] ❌ 1 check(s) fallaron"])
+    resumen = loop._resumen_gate(salida)
+    assert resumen.startswith("[GATE] ✗ [rust] cargo check falló src/commands.rs:213:1")
+    assert "\x1b" not in resumen and "tsc OK" not in resumen
+    assert "02_check_rust.py falló" not in resumen
+    assert len(resumen) <= 1200

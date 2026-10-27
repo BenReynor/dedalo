@@ -238,6 +238,22 @@ def _juez_no_opino(salida_gate):
     return m.group(1) if m else ""
 
 
+_ANSI = re.compile(r"\x1b(\[[0-9;?]*[A-Za-z]|\([AB0-2])")
+_RUIDO_GATE = re.compile(r"^\[GATE\] (✓|⚠|❌|✗ \S+: \S+ falló$)")
+_LINEA_ERROR = re.compile(r"\berror\b|✗|FAILED|panicked", re.I)
+
+
+def _resumen_gate(salida, limite=1200):
+    """Retry feedback from a failed gate: error lines first, then the tail.
+
+    Only the tail used to be kept, so a Rust/TS failure reached the agent as
+    "cargo check falló" plus the per-check recap, without the error itself.
+    """
+    lineas = [_ANSI.sub("", li).strip() for li in salida.splitlines()]
+    utiles = [li for li in lineas if li and not _RUIDO_GATE.match(li)]
+    errores = [li for li in utiles if _LINEA_ERROR.search(li)]
+    return " ".join(dict.fromkeys(errores + utiles[-15:]))[:limite]
+
 def _checks_del_gate(cfg, rel_scripts):
     """Prompt line naming the gate checks, so the agent verifies the same way.
 
@@ -959,9 +975,7 @@ def run(cfg):
                       f"(intento {intento}/{cfg.max_reintentos})")
                 fb = _leer(gate_out)
                 _append_log(cfg, fb)
-                sin_ruido = [li for li in fb.splitlines()
-                             if not re.match(r"^\[GATE\] (✓|⚠)", li)]
-                resumen_gate = " ".join(sin_ruido[-15:])[:500]
+                resumen_gate = _resumen_gate(fb)
                 fallos_gate += [li for li in fb.splitlines()
                                 if li.startswith("[GATE] ✗")][:3]
                 _incidencia(cfg, "gate_fail",

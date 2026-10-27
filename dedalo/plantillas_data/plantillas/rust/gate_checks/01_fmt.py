@@ -24,10 +24,11 @@ def run(env):
     if not cargo:
         env.aviso(f"{HERRAMIENTA} cargo no disponible, se omite")
         return 0
-    p = subprocess.run([cargo, "fmt", "--check"], cwd=carpeta,
+    p = subprocess.run([cargo, "fmt", "--check", "--", "-l"], cwd=carpeta,
                        capture_output=True, text=True)
     if p.returncode != 0:
-        env.fail(f"{HERRAMIENTA} cargo fmt: hay archivos sin formatear")
+        env.fail(f"{HERRAMIENTA} cargo fmt: hay archivos sin formatear "
+                 f"(ejecuta `cargo fmt` en {os.path.relpath(carpeta, env.proyecto)})")
         print(p.stdout or p.stderr)
         return 1
     env.ok(f"{HERRAMIENTA} cargo fmt OK")

@@ -696,3 +696,21 @@ def test_migrar_a_plantilla_quita_checks_legacy_sin_tocar_los_editados(tmp_path)
     for queda in ("05_tests.sh", "99_custom.py", "99_custom.sh", "_env.sh",
                   "98_criterio.py", "02_check_rust.py", "04_tsc_node.py"):
         assert queda in presentes
+
+
+def test_check_rust_muestra_solo_errores_sin_color(tmp_path, monkeypatch):
+    _tocar(str(tmp_path), "Cargo.toml")
+    modulo = _check_de_plantilla("rust", "02_check.py")
+    ruido = "\n".join(f"warning: unused {i}" for i in range(500))
+    vistos = {}
+
+    def falso_run(argv, env=None, **_k):
+        vistos["argv"], vistos["color"] = argv, (env or {}).get("CARGO_TERM_COLOR")
+        return subprocess.CompletedProcess(
+            argv, 101, "", ruido + "\nsrc/a.rs:1:1: error[E0308]: mismatched types\n")
+
+    monkeypatch.setattr(modulo.shutil, "which", lambda _n: "/usr/bin/cargo")
+    monkeypatch.setattr(modulo.subprocess, "run", falso_run)
+    assert modulo._errores(ruido + "\nsrc/a.rs:1:1: error[E0308]: x") == "src/a.rs:1:1: error[E0308]: x"
+    assert modulo.run(_EnvCheck(str(tmp_path))) == 1
+    assert vistos["color"] == "never" and "short" in vistos["argv"]
