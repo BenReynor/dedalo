@@ -42,6 +42,7 @@ from . import (
 from .gate import argv_gate
 from .loop_agentes import (
     agente_ok,
+    bash_permitidos,
     cli_agente,
     detectar_agente,
     elegir_revisor,
@@ -273,6 +274,26 @@ def _checks_del_gate(cfg, rel_scripts):
             f"{', '.join(checks)}. Léelos y verifica tu trabajo con sus mismos "
             "comandos antes de terminar.\n")
 
+
+def _comandos_permitidos(cfg):
+    """Prompt line with the Bash commands Claude's task role may run.
+
+    Claude's allowlist matches the command prefix (`Bash(cargo:*)`), so
+    `source ~/.cargo/env && cargo …`, `PATH=… cargo` or an absolute path all
+    asked for approval nobody gives in -p mode: the agent never compiled and
+    handed in code that did not build (seen on ARGUS).
+    """
+    if cfg.agente_tarea != "claude":
+        return ""
+    cmds = bash_permitidos(cfg.proyecto)
+    if not cmds:
+        return ""
+    return ("Comandos Bash permitidos (ya están en el PATH): "
+            f"{', '.join(cmds)}. Escríbelos por su nombre, uno por llamada: sin "
+            "source, export, PATH=, rutas absolutas, cd, && ni pipes, o se "
+            "rechazarán. Para una subcarpeta usa la opción del propio comando "
+            "(p. ej. cargo --manifest-path src-tauri/Cargo.toml, npm --prefix "
+            "web).\n")
 
 def _mapear(cfg):
     """Regenerates mapeo.txt (silent: a map failure never stops the loop)."""
@@ -748,6 +769,7 @@ def run(cfg):
                       "código que vas a tocar y úsalos como contrato.\n"
                       f"{nav_ctx}{contexto_block}{memoria_ctx}"
                       f"{_checks_del_gate(cfg, rel_scripts)}"
+                      f"{_comandos_permitidos(cfg)}"
                       "Ejecuta ÚNICAMENTE esta tarea.\n"
                       "NO hagas commits, NO crees, cambies ni borres ramas: el "
                       "script gestiona git.\n"

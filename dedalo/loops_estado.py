@@ -59,12 +59,32 @@ def _escribir(datos):
         pass
 
 
+def _zombie(pid):
+    """True if `pid` is a zombie (Linux /proc). Never reaps: waitpid here
+    would steal the exit status from the GUI's QProcess."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="ascii", errors="replace") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        return False
+
 def vivo(pid):
-    """Whether `pid` is alive (signal 0). PermissionError counts as alive."""
+    """Whether `pid` is alive (signal 0). PermissionError counts as alive.
+
+    A zombie is dead: a loop launched by the MCP server stays a zombie after
+    it exits until reaped, and signal 0 still succeeds on it, so
+    `detener_loop` reported "sigue vivo" and the loop looked like running.
+    """
     if not pid:
         return False
     try:
-        os.kill(int(pid), 0)
+        pid = int(pid)
+    except (ValueError, TypeError):
+        return False
+    if _zombie(pid):
+        return False
+    try:
+        os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:

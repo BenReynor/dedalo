@@ -460,3 +460,22 @@ def test_resumen_gate_prioriza_errores_sobre_la_cola():
     assert "\x1b" not in resumen and "tsc OK" not in resumen
     assert "02_check_rust.py falló" not in resumen
     assert len(resumen) <= 1200
+
+
+def test_prompt_de_claude_lista_comandos_permitidos(tmp_path):
+    """Claude's allowlist matches the command prefix: the agent must be told to
+    run `cargo …` plainly (on ARGUS it tried `source ~/.cargo/env && cargo`,
+    every call needed approval and it never compiled)."""
+    from types import SimpleNamespace
+
+    from dedalo import plantillas
+    (tmp_path / "src-tauri").mkdir()
+    (tmp_path / "src-tauri" / "Cargo.toml").write_text("[package]\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text('{"name": "x"}', encoding="utf-8")
+    plantillas.instalar(str(tmp_path), "rust,node")
+    cfg = SimpleNamespace(agente_tarea="claude", proyecto=str(tmp_path))
+    linea = loop._comandos_permitidos(cfg)
+    assert "cargo, npm, npx, node" in linea
+    assert "--manifest-path src-tauri/Cargo.toml" in linea and "source" in linea
+    cfg.agente_tarea = "opencode"
+    assert loop._comandos_permitidos(cfg) == ""

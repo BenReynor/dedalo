@@ -88,3 +88,25 @@ def test_matar_pid_muerto_devuelve_true(aislado):
 
 def test_matar_pid_vacio_devuelve_false(aislado):
     assert le.matar(None) is False
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="zombie detection reads /proc")
+def test_vivo_considera_muerto_a_un_zombie():
+    """An exited child nobody reaped yet is a zombie: signal 0 still works on
+    it, but the loop is over (detener_loop said "sigue vivo" forever)."""
+    import time
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    fin = time.time() + 10
+    while time.time() < fin:
+        try:
+            with open(f"/proc/{proc.pid}/stat") as f:
+                if f.read().rsplit(")", 1)[1].split()[0] == "Z":
+                    break
+        except OSError:
+            break
+        time.sleep(0.05)
+    try:
+        assert le.vivo(proc.pid) is False
+    finally:
+        proc.wait()

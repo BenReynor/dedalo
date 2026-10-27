@@ -170,6 +170,12 @@ def _ruta_de_fichero(nombre, fichero):
     return os.path.join(proyecto, fichero)
 
 
+def _recoger_terminados():
+    """Reaps loops this server launched that already exited (no zombies)."""
+    for nombre, proc in list(_LOOPS.items()):
+        if proc.poll() is not None:
+            _LOOPS.pop(nombre, None)
+
 def _estado_loop(nombre):
     """Dict with the project's loop state: running, pid, origin, pending review.
 
@@ -177,6 +183,7 @@ def _estado_loop(nombre):
     also reads/writes, so this reflects loops started by EITHER the MCP or the
     GUI (not just this process's own children).
     """
+    _recoger_terminados()
     est = loops_estado.estado(nombre)
     fondo = rutas.dir_review(_ruta_de(nombre))
     pendiente = os.path.isfile(os.path.join(fondo, "waiting"))
@@ -493,6 +500,7 @@ def detener_loop(nombre: str, espera_s: int = 5) -> str:
         terminado = loops_estado.matar(proc.pid, espera=espera)
         if not terminado:
             _LOOPS[nombre] = proc
+        proc.poll()  # reap it: our own child stays a zombie otherwise
     elif proc is None:
         terminado = loops_estado.matar(estado["pid"], espera=espera)
     if not terminado:
