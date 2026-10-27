@@ -471,3 +471,22 @@ def test_agente_recibe_el_prompt_por_stdin(tmp_path):
     revisar_diff(cfg, "claude", "t1", "DIFF_UNICO_123")
     assert "DIFF_UNICO_123" in _leer(str(tmp_path / "stdin.txt"))
     assert "DIFF_UNICO_123" not in _leer(str(tmp_path / "args.txt"))
+
+
+def test_revisar_diff_recibe_lo_que_el_gate_ya_verifico(tmp_path):
+    """The read-only reviewer rejected a diff on ARGUS because "tsc would
+    fail" right after the gate ran tsc green: it must see the gate result."""
+    prompt = tmp_path / "prompt.txt"
+    bin_ = tmp_path / "claude"
+    bin_.write_text(f"#!/usr/bin/env bash\ncat > '{prompt}'\necho 'VERDICT: PASS'\n",
+                    encoding="utf-8")
+    bin_.chmod(0o755)
+    cfg = _config(tmp_path, {"CLI_CLAUDE": str(bin_)})
+    cfg.revisor, cfg.modelo_revisor, cfg.timeout_por_tarea = "claude", "", 30
+    resultado, _fb = revisar_diff(cfg, "claude", "t1", "diff",
+                                  gate_ok="[GATE] ✓ [node] tsc OK")
+    texto = prompt.read_text(encoding="utf-8")
+    assert resultado == "pass"
+    assert "El gate YA pasó" in texto and "[GATE] ✓ [node] tsc OK" in texto
+    revisar_diff(cfg, "claude", "t1", "diff")
+    assert "El gate YA pasó" not in prompt.read_text(encoding="utf-8")

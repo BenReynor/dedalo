@@ -904,7 +904,10 @@ def run(cfg):
                     vstat, vdiff = diff_para_revisor(cfg.proyecto)
                     resultado, feedback = revisar_diff(
                         cfg, cfg.revisor, tarea,
-                        f"{vstat}\n{vdiff}" if vdiff else vstat)
+                        f"{vstat}\n{vdiff}" if vdiff else vstat,
+                        gate_ok="\n".join(
+                            li for li in gate_salida.splitlines()
+                            if li.startswith("[GATE] ✓")))
                     resultado_revision = resultado or "fail"
                     feedback_revision = feedback or ""
                     if resultado == "sin_auth":

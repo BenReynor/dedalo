@@ -397,8 +397,21 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
     return rc, vivo
 
 
-def revisar_diff(cfg, rev, tarea, vdiff):
+def _bloque_gate_ok(gate_ok):
+    """Reviewer prompt block: what the gate already verified on this diff."""
+    if not gate_ok.strip():
+        return ""
+    return ("El gate YA pasó sobre este diff (compilación, tipos, tests y "
+            f"build):\n{gate_ok.strip()}\nNo tienes Bash ni lo necesitas: no "
+            "rechaces por errores de compilación/tipos/tests supuestos; juzga "
+            "el criterio, la corrección lógica y el alcance.\n\n")
+
+def revisar_diff(cfg, rev, tarea, vdiff, gate_ok=""):
     """Dual reviewer of the diff (revisar_diff + script tail).
+
+    `gate_ok`: the checks that already passed on this diff. The reviewer is
+    read-only (no Bash), so without them it guessed: on ARGUS it rejected a
+    diff because "tsc would fail" right after the gate ran tsc green.
 
     Returns (result, feedback):
       result: "pass" | "fail" | "sin_auth" | "sin_tokens"
@@ -416,6 +429,7 @@ def revisar_diff(cfg, rev, tarea, vdiff):
               "participado de ella.\n"
               f"{contexto_block}"
               f"Tarea: {tarea}\n\n{vdiff}\n\n"
+              f"{_bloque_gate_ok(gate_ok)}"
               "Evalúa SOLO: (1) la tarea satisface su criterio, (2) no rompe "
               "nada obvio del proyecto,\n(3) sin secretos, (4) sin scope creep "
               "(cambios ajenos a la tarea).\n"
