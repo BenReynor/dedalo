@@ -96,7 +96,8 @@ ${ESTADO:-<árbol limpio>}
 ${DETECTADO:+- Mapa del proyecto (mapeo.txt): 
 $DETECTADO
 }
-Corre los tests relevantes (pytest/vitest/npm test...) si el criterio lo exige y lee los archivos clave. NO modifiques nada: solo evalúa.
+${GATE_CHECKS_OK:+Checks automáticos ya ejecutados en este gate: OK: ${GATE_CHECKS_OK}; fallaron: ${GATE_CHECKS_FALLO:--}.
+}Si el criterio pide que compile, pasen los tests, tsc o el build, eso lo verifica el propio gate (lista de arriba y checks posteriores): no lo evalúes ni rechaces por no poder ejecutarlo. Lee los archivos clave y juzga el resto del criterio. NO modifiques nada: solo evalúa.
 
 Respondes ÚNICAMENTE con JSON en la última línea, sin markdown:
 {\"met\": true, \"reason\": \"<por qué se cumple, máx 120 caracteres>\"}   o

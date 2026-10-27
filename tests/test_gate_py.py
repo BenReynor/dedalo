@@ -199,3 +199,19 @@ def test_sh_con_comillas_y_dolar_en_la_ruta(tmp_path, capsys):
     assert gate.correr(str(proyecto), bash=shutil.which("bash")) == 0
     assert str(proyecto) in capsys.readouterr().out
     assert not any(p.name == "PWNED" for p in tmp_path.rglob("PWNED"))
+
+
+def test_juez_recibe_los_checks_que_ya_pasaron(tmp_path, capsys, monkeypatch):
+    """The read-only judge rejected a criterio over "tsc/cargo test pass" right
+    after the gate ran them green: it must see the earlier results."""
+    monkeypatch.delenv("GATE_CHECKS_OK", raising=False)
+    juez = ("import os\n\ndef run(env):\n"
+            "    print('VISTO OK=' + os.environ.get('GATE_CHECKS_OK', ''))\n"
+            "    print('VISTO FALLO=' + os.environ.get('GATE_CHECKS_FALLO', ''))\n"
+            "    return 0\n")
+    proyecto = _escenario(tmp_path, {"01_ok.py": CHECK_OK, "02_falla.py": CHECK_FALLA,
+                                     "98_criterio.py": juez})
+    gate.correr(str(proyecto), bash="")
+    salida = capsys.readouterr().out
+    assert "VISTO OK=01_ok.py" in salida
+    assert "VISTO FALLO=02_falla.py" in salida

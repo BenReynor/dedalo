@@ -42,6 +42,16 @@ def _elegir_agente():
     return "opencode"
 
 
+def _checks_previos():
+    """Gate checks that already ran in this same gate run (set by gate.py)."""
+    ok = os.environ.get("GATE_CHECKS_OK", "").strip()
+    fallo = os.environ.get("GATE_CHECKS_FALLO", "").strip()
+    if not (ok or fallo):
+        return ""
+    return ("Checks automáticos ya ejecutados en este gate: "
+            f"OK: {ok or '-'}; fallaron: {fallo or '-'}.\n")
+
+
 def _prompt(env, criterio):
     estado = ""
     try:
@@ -64,8 +74,11 @@ def _prompt(env, criterio):
         "ESTADO ACTUAL (git status):\n"
         f"{estado or '<árbol limpio>'}\n\n"
         + (f"- Mapa del proyecto (mapeo.txt): \n{detectado}\n" if detectado else "")
-        + "Corre los tests relevantes (pytest/vitest/npm test...) si el criterio "
-        "lo exige y lee los archivos clave. NO modifiques nada: solo evalúa.\n\n"
+        + _checks_previos()
+        + "Si el criterio pide que compile, pasen los tests, tsc o el build, eso "
+        "lo verifica el propio gate (lista de arriba y checks posteriores): no lo "
+        "evalúes ni rechaces por no poder ejecutarlo. Lee los archivos clave y "
+        "juzga el resto del criterio. NO modifiques nada: solo evalúa.\n\n"
         "Respondes ÚNICAMENTE con JSON en la última línea, sin markdown:\n"
         '{"met": true, "reason": "<por qué se cumple, máx 120 caracteres>"}   o\n'
         '{"met": false, "reason": "<qué falta, máx 120 caracteres>"}'

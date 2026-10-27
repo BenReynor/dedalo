@@ -175,8 +175,13 @@ def correr(proyecto, bash=None):
         return 0
     entorno = None
     fallos = []
+    pasados = []
     for clave in sorted(grupos):
         grupo = grupos[clave]
+        # The judge (98_criterio) is read-only: tell it what already ran so it
+        # does not reject a criterio over "tsc/cargo test pass" it cannot run.
+        os.environ["GATE_CHECKS_OK"] = ", ".join(pasados)
+        os.environ["GATE_CHECKS_FALLO"] = ", ".join(c for _l, c, _r in fallos)
         usado = grupo.get(".sh") or grupo.get(".py")
         if ".sh" in grupo and bash:
             usado = grupo[".sh"]
@@ -193,6 +198,8 @@ def correr(proyecto, bash=None):
         if rc != 0:
             fallos.append((_lenguaje_de(os.path.basename(usado)),
                            os.path.basename(usado), rc))
+        else:
+            pasados.append(os.path.basename(usado))
     if fallos:
         print()
         for lenguaje, check, _rc in fallos:
