@@ -196,7 +196,8 @@ def detectar_stacks(ruta):
         return any(f.lower() in nombres for f in ficheros)
 
     # Rust
-    if hay("Cargo.toml"):
+    if hay("Cargo.toml") or os.path.isfile(
+            os.path.join(proyecto, "src-tauri", "Cargo.toml")):
         encontrados.append("rust")
     # Go
     if hay("go.mod"):

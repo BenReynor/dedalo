@@ -4,8 +4,11 @@
 import glob
 import os
 import re
+import subprocess
 import sys
 import tempfile
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -590,3 +593,87 @@ def test_plantillas_instaladas_sin_marcador():
         assert plantillas.plantillas_instaladas(tmp) == ["rust"]
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_detectar_stacks_tauri_con_cargo_en_src_tauri(tmp_path):
+    (tmp_path / "src-tauri").mkdir()
+    _tocar(str(tmp_path), "package.json", os.path.join("src-tauri", "Cargo.toml"))
+    assert plantillas.detectar_stacks(str(tmp_path)) == ["rust", "node"]
+
+
+class _EnvCheck:
+    def __init__(self, proyecto):
+        self.proyecto = proyecto
+        self.mensajes = []
+
+    def ok(self, m):
+        self.mensajes.append(("ok", m))
+
+    def fail(self, m):
+        self.mensajes.append(("fail", m))
+
+    def aviso(self, m):
+        self.mensajes.append(("aviso", m))
+
+
+def _check_de_plantilla(plantilla, fichero):
+    import importlib.util
+    ruta = os.path.join(plantillas.PLANTILLAS_DIR, plantilla, "gate_checks", fichero)
+    spec = importlib.util.spec_from_file_location(f"chk_{plantilla}_{fichero[:-3]}", ruta)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+@pytest.mark.parametrize("fichero", ["01_fmt.py", "02_check.py", "03_test.py"])
+def test_checks_rust_corren_en_src_tauri(tmp_path, monkeypatch, fichero):
+    """Tauri keeps Cargo.toml in src-tauri/: the checks must not skip it."""
+    (tmp_path / "src-tauri").mkdir()
+    _tocar(str(tmp_path), os.path.join("src-tauri", "Cargo.toml"))
+    modulo = _check_de_plantilla("rust", fichero)
+    llamadas = []
+
+    def falso_run(argv, cwd=None, **_k):
+        llamadas.append(cwd)
+        return subprocess.CompletedProcess(argv, 1, "", "error[E0277]")
+
+    monkeypatch.setattr(modulo.shutil, "which", lambda _n: "/usr/bin/cargo")
+    monkeypatch.setattr(modulo.subprocess, "run", falso_run)
+    env = _EnvCheck(str(tmp_path))
+    assert modulo.run(env) == 1
+    assert llamadas == [os.path.join(str(tmp_path), "src-tauri")]
+
+
+def test_check_rust_sin_cargo_toml_se_omite(tmp_path):
+    env = _EnvCheck(str(tmp_path))
+    assert _check_de_plantilla("rust", "02_check.py").run(env) == 0
+    assert env.mensajes[0][0] == "aviso"
+
+
+def test_check_tsc_falla_con_errores_de_tipos(tmp_path, monkeypatch):
+    _tocar(str(tmp_path), "tsconfig.json")
+    binario = tmp_path / "node_modules" / ".bin"
+    binario.mkdir(parents=True)
+    _tocar(str(binario), "tsc.cmd" if os.name == "nt" else "tsc")
+    modulo = _check_de_plantilla("node", "04_tsc.py")
+    argvs = []
+
+    def falso_run(argv, **_k):
+        argvs.append(argv)
+        return subprocess.CompletedProcess(argv, 2, "src/App.tsx: error TS2322", "")
+
+    monkeypatch.setattr(modulo.subprocess, "run", falso_run)
+    env = _EnvCheck(str(tmp_path))
+    assert modulo.run(env) == 1
+    assert argvs[0][1:] == ["--noEmit", "-p", "tsconfig.json"]
+    assert ("fail", "[node] tsc: errores de tipos") in env.mensajes
+
+
+def test_check_tsc_sin_tsconfig_o_sin_typescript_se_omite(tmp_path, monkeypatch):
+    modulo = _check_de_plantilla("node", "04_tsc.py")
+    assert modulo.run(_EnvCheck(str(tmp_path))) == 0
+    _tocar(str(tmp_path), "tsconfig.json")
+    monkeypatch.setattr(modulo.shutil, "which", lambda _n: None)
+    env = _EnvCheck(str(tmp_path))
+    assert modulo.run(env) == 0
+    assert env.mensajes[0][0] == "aviso"

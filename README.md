@@ -409,8 +409,8 @@ language suffix so several stacks coexist without collisions
 |---|---|---|
 | `web` | `index.html` | HTML5 structure, CSS custom properties + responsive, JS theme toggle + syntax |
 | `python` | `pyproject.toml` / `requirements.txt` | `ruff check .`, `pytest -q` (if `tests/`) |
-| `node` | `package.json` | `package.json` validity, `npm run lint`, `npm test` |
-| `rust` | `Cargo.toml` | `cargo fmt --check`, `cargo check`, `cargo test` |
+| `node` | `package.json` | `package.json` validity, `npm run lint`, `npm test`, `tsc --noEmit` (when `tsconfig.json` exists) |
+| `rust` | `Cargo.toml` (or `src-tauri/Cargo.toml` for Tauri apps) | `cargo fmt --check`, `cargo check`, `cargo test` |
 | `go` | `go.mod` | `gofmt -l .`, `go vet ./...`, `go test ./...` |
 | `java` | `pom.xml` / `build.gradle` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
 | `kotlin` | `build.gradle.kts` / `*.kt` | `gradle compileKotlin`, `gradle test` |
