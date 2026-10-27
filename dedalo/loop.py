@@ -32,6 +32,7 @@ import urllib.request
 from . import (
     consentimiento,
     ficha,
+    loop_agentes,
     loop_launch,
     loops_estado,
     mapeo,
@@ -446,6 +447,13 @@ def criterio_tarea(plan_md):
     return None
 
 
+def _matar_hijos():
+    """Kills the running gate and agent groups (each has its own session)."""
+    for registro in (HIJO, loop_agentes.EN_CURSO):
+        proc = registro.get("proc")
+        if proc is not None and proc.poll() is None:
+            matar_grupo(proc, espera=0)
+
 def _instalar_senales(cfg):
     """SIGTERM→143 / SIGINT→130 (like the script's traps): kills the current
     process group, cleans up opencode sessions and exits."""
@@ -454,9 +462,7 @@ def _instalar_senales(cfg):
 
     def _manejar(sig, _frame):
         try:
-            proc = HIJO.get("proc")
-            if proc is not None and proc.poll() is None:
-                matar_grupo(proc, espera=0)
+            _matar_hijos()
             limpiar_sesiones(cli_agente("opencode", cfg), cfg.proyecto,
                              cfg.inicio_ms, cfg.log)
         finally:

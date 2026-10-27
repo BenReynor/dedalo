@@ -479,3 +479,24 @@ def test_prompt_de_claude_lista_comandos_permitidos(tmp_path):
     assert "--manifest-path src-tauri/Cargo.toml" in linea and "source" in linea
     cfg.agente_tarea = "opencode"
     assert loop._comandos_permitidos(cfg) == ""
+
+
+@pytest.mark.skipif(os.name == "nt", reason="process groups are POSIX")
+def test_detener_el_loop_mata_tambien_al_agente_en_curso():
+    """The agent runs in its own session: on ARGUS `detener_loop` killed the
+    loop but the agent kept editing the repo, orphaned."""
+    import time
+
+    from dedalo import loop_agentes
+    agente = subprocess.Popen(["sleep", "30"], start_new_session=True)
+    loop_agentes.EN_CURSO["proc"] = agente
+    try:
+        loop._matar_hijos()
+        fin = time.time() + 5
+        while agente.poll() is None and time.time() < fin:
+            time.sleep(0.05)
+        assert agente.poll() is not None
+    finally:
+        if agente.poll() is None:
+            agente.kill()
+        loop_agentes.EN_CURSO["proc"] = None

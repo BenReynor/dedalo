@@ -138,6 +138,11 @@ CLAUDE_BASH_POR_PLANTILLA = {
 CLAUDE_SOLO_LECTURA = ("Edit", "Write", "MultiEdit", "NotebookEdit", "Bash",
                        "Agent", "Task")
 
+# Agent running right now (task, reviewer, navigator…). It runs in its own
+# session, so killing the loop's group misses it: the loop's signal handler
+# kills this one explicitly (an orphaned agent kept editing the repo).
+EN_CURSO = {"proc": None}
+
 
 def modelo_claude(seleccion):
     """Model id for `claude --model`, or "" if the selection is not Claude's.
@@ -345,7 +350,7 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
         return 2, None
 
     salida_err = salida + ".err"
-    vivo = {}
+    vivo = EN_CURSO
     t0 = ahora_ms()
     entorno = env if env is not None else cfg.environ
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
@@ -356,7 +361,7 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     dur = ahora_ms() - t0
     registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, iteracion,
                       fase=fase)
-    return rc, vivo
+    return rc, dict(vivo)
 
 
 def run_navegador(cfg, salida, modelo, tarea, agente):
@@ -386,7 +391,7 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
     else:
         return 1, {}
     salida_err = salida + ".err"
-    vivo = {}
+    vivo = EN_CURSO
     t0 = ahora_ms()
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _s, _t = run_con_timeout(
@@ -394,7 +399,7 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
             stdout=fout, stderr=ferr, vivo=vivo, entrada=entrada)
     dur = ahora_ms() - t0
     registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, 0)
-    return rc, vivo
+    return rc, dict(vivo)
 
 
 def _bloque_gate_ok(gate_ok):
