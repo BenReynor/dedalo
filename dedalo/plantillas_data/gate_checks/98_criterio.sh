@@ -185,7 +185,8 @@ if [ "$RC" -eq 124 ]; then
     exit 0
 fi
 if [ "$RC" -ne 0 ]; then
-    echo "[GATE] ⚠ juez salió con rc=$RC (¿cuota o red?); se omite (no bloqueante)"
+    ULTIMA="$(printf '%s\n' "$SALIDA" | sed '/^[[:space:]]*$/d' | tail -n 1 | cut -c1-200)"
+    echo "[GATE] ⚠ juez salió con rc=$RC (¿cuota o red?): ${ULTIMA:-sin salida}; se omite (no bloqueante)"
     exit 0
 fi
 

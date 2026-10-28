@@ -225,7 +225,7 @@ def rama_run_nombre():
 REINTENTOS_JUEZ = 2
 # "[GATE] ⚠" lines of 98_criterio (.py and .sh) meaning the judge did not judge.
 _JUEZ_SIN_OPINION = re.compile(
-    r"\[GATE\] ⚠ (juez agotó el timeout[^;]*|juez salió con rc=\d+"
+    r"\[GATE\] ⚠ (juez agotó el timeout[^;]*|juez salió con rc=\d+[^;]*"
     r"|juez sin veredicto legible|\S+ no disponible para el juez"
     r"|sin CRITERIO)")
 
@@ -895,6 +895,14 @@ def run(cfg):
                 gate_salida = _leer(gate_out)
             if rc_gate == 0 and criterio and _juez_no_opino(gate_salida):
                 motivo = _juez_no_opino(gate_salida)
+                if loop_agentes._PATRON_TOKENS.search(motivo):
+                    mensaje(cfg, f"[dedalo] ✗✗ el juez se quedó sin cuota ({motivo})"
+                                 " — deteniendo loop sin marcar la tarea")
+                    logx(cfg.log, f"ABORTADO: tokens/cuota agotados (juez): {motivo}")
+                    _notificar(cfg, "error", detalle=f"juez sin cuota: {motivo}")
+                    _incidencia(cfg, "aborto_tokens", motivo, tarea=tarea,
+                                iteracion=iteracion, rama=rama_tarea)
+                    return 5
                 mensaje(cfg, "[dedalo] ✗ el juez no pudo verificar el criterio "
                              f"({motivo}) — deteniendo loop sin marcar la tarea")
                 logx(cfg.log, f"ABORTADO: juez no disponible ({motivo})")

@@ -500,3 +500,37 @@ def test_detener_el_loop_mata_tambien_al_agente_en_curso():
         if agente.poll() is None:
             agente.kill()
         loop_agentes.EN_CURSO["proc"] = None
+
+
+def test_juez_sin_cuota_detiene_con_codigo_de_tokens(tmp_path):
+    """The judge's real error must reach the log; a quota error is rc 5."""
+    aviso = ("[GATE] ⚠ juez salió con rc=1 (¿cuota o red?): Credit balance is too "
+             "low; se omite (no bloqueante)")
+    gate, _c = _gate_con_juez(tmp_path, [aviso] * 3)
+    proyecto = _escenario(tmp_path, gate)
+    env = _entorno(_agente_falso(tmp_path / "bin"))
+    env["ESPERA_JUEZ"] = "0"
+    rc, _cfg = _correr(proyecto, env)
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8", errors="replace")
+    assert rc == 5, log[-1500:]
+    assert "Credit balance is too low" in log
+    assert "- [ ] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+
+
+def test_juez_py_muestra_la_ultima_linea_del_error(tmp_path, monkeypatch, capsys):
+    import importlib.util
+
+    from dedalo import plantillas
+    ruta = os.path.join(plantillas.PLANTILLA_DIR, "gate_checks", "98_criterio.py")
+    spec = importlib.util.spec_from_file_location("juez98", ruta)
+    juez = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(juez)
+    monkeypatch.setenv("CRITERIO", "algo")
+    monkeypatch.setenv("AGENTE_JUEZ", "claude")
+    monkeypatch.setattr(juez.shutil, "which", lambda _n: "/usr/bin/claude")
+    monkeypatch.setattr(juez, "_invocar", lambda *a, **k: ("Error\nCredit balance is too low\n", 1))
+    avisos = []
+    env = type("E", (), {"proyecto": str(tmp_path), "aviso": lambda self, m: avisos.append(m),
+                         "ok": lambda self, m: None, "fail": lambda self, m: None})()
+    assert juez.run(env) == 0
+    assert any("Credit balance is too low" in a for a in avisos), avisos

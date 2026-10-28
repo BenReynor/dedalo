@@ -157,7 +157,9 @@ def run(env):
         env.aviso(f"juez agotó el timeout ({timeout}s); se omite (no bloqueante)")
         return 0
     if rc != 0:
-        env.aviso(f"juez salió con rc={rc} (¿cuota o red?); se omite (no bloqueante)")
+        ultima = next((li.strip() for li in reversed(salida.splitlines()) if li.strip()), "")
+        env.aviso(f"juez salió con rc={rc} (¿cuota o red?): {ultima[:200] or 'sin salida'}; "
+                  "se omite (no bloqueante)")
         return 0
 
     m = re.findall(r'"met"\s*:\s*(true|false)', salida)
