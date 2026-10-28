@@ -93,20 +93,36 @@ def cambios_entre(before_path, after_path, control=CONTROL):
     return nuevos, borrados
 
 
+# stderr of the last failed commit_tarea(), for the loop to log it.
+ULTIMO_ERROR = {"git": ""}
+
+
 def commit_tarea(proyecto, archivos, subject, cuerpo):
-    """`git add -- <archivos> && git commit -q -m <subject> -m <cuerpo>`.
+    """`git add -A -- <archivos> && git commit -q -m <subject> -m <cuerpo>`.
 
-    Returns 0 if the commit was created; paths with spaces are passed as
-    separate elements. With no files it does nothing (same as the bash `[ -n ]`
-    guard).
+    Returns 0 if the commit was created. Paths come from `git status
+    --porcelain`: quotes are stripped and a path that neither exists nor is
+    tracked is skipped, because a single unmatched pathspec makes `git add`
+    stage NOTHING (rc 128) and the task's work was left uncommitted. `-A`
+    records deletions too. On failure, git's stderr is in ULTIMO_ERROR["git"].
+    With no files it does nothing (same as the bash `[ -n ]` guard).
     """
-    if not archivos:
+    ULTIMO_ERROR["git"] = ""
+    rutas = []
+    for a in archivos:
+        ruta = a.strip().strip('"')
+        if ruta and (os.path.lexists(os.path.join(proyecto, ruta))
+                     or _ok(proyecto, "ls-files", "--error-unmatch", "--", ruta)):
+            rutas.append(ruta)
+    if not rutas:
         return 0
-    rc, _, _ = run_git(proyecto, "add", "--", *archivos)
+    rc, _, err = run_git(proyecto, "add", "-A", "--", *rutas)
     if rc != 0:
+        ULTIMO_ERROR["git"] = err.strip()
         return rc
-    return run_git(proyecto, "commit", "-q", "-m", subject, "-m", cuerpo)[0]
-
+    rc, _, err = run_git(proyecto, "commit", "-q", "-m", subject, "-m", cuerpo)
+    ULTIMO_ERROR["git"] = err.strip() if rc else ""
+    return rc
 
 def merge_ff(proyecto, rama):
     """`git merge -q --ff-only <rama>`; rc 0 if the fast-forward went well."""

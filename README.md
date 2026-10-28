@@ -175,6 +175,9 @@ and it stops before starting a new iteration once the **estimated** budget
   (exit code 8, error notification) and leaves the task `[ ]`: an unverified
   criterio is never counted as done. A manual gate run (GUI button, MCP
   `correr_gate`) still only warns.
+- If committing a task fails, the loop **stops** (exit code 9) without marking
+  it done and leaves the task branch and its changes untouched, with git's error
+  in progreso.log: work is never left loose for the next task to pick up.
 - `[x]` is done, `[B]` is blocked. The loop writes both; you can edit the file
   by hand to retry or reorder work.
 - Order is dependency order: the loop always takes the first pending task.

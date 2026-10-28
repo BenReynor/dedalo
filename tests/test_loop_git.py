@@ -103,6 +103,36 @@ def test_commit_tarea_con_espacios(tmp_path):
     assert log.startswith("dedalo: tarea\ncuerpo de la tarea")
 
 
+
+def test_commit_tarea_incluye_borrados_y_no_se_rompe_por_una_ruta_perdida(tmp_path):
+    """On ARGUS one unmatched path made `git add` stage nothing (rc 128): the
+    task was marked done with its work uncommitted. Deletions, quoted paths
+    and a vanished path must not stop the commit."""
+    proy = _repo(tmp_path)
+    (proy / "base.txt").unlink()                       # tracked, deleted
+    (proy / "con espacio.css").write_text("a\n", encoding="utf-8")
+    (proy / "nuevo.tsx").write_text("b\n", encoding="utf-8")
+    archivos = ["base.txt", '"con espacio.css"', "nuevo.tsx", "ya-no-existe.css"]
+    assert commit_tarea(proy, archivos, "dedalo: t", "cuerpo") == 0
+    _, out, _ = run_git(proy, "status", "--porcelain")
+    assert out.strip() == ""
+    _, ls, _ = run_git(proy, "ls-files")
+    assert "base.txt" not in ls and "con espacio.css" in ls and "nuevo.tsx" in ls
+
+
+def test_commit_tarea_fallido_guarda_el_error_de_git(tmp_path):
+    from dedalo import loop_git
+    proy = _repo(tmp_path)
+    (proy / "x.txt").write_text("x\n", encoding="utf-8")
+    run_git(proy, "config", "core.hooksPath", str(tmp_path / "hooks"))
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    (hooks / "pre-commit").write_text("#!/bin/sh\necho 'rechazado por hook' >&2\nexit 1\n",
+                                      encoding="utf-8")
+    (hooks / "pre-commit").chmod(0o755)
+    assert commit_tarea(proy, ["x.txt"], "s", "c") != 0
+    assert "rechazado por hook" in loop_git.ULTIMO_ERROR["git"]
+
 def test_commit_tarea_sin_archivos_no_hace_nada(tmp_path):
     proy = _repo(tmp_path)
     assert commit_tarea(proy, [], "subj", "b") == 0
@@ -283,6 +313,7 @@ if __name__ == "__main__":
                test_cambios_entre_control_excluye_marco,
                test_commit_tarea_con_espacios,
                test_commit_tarea_sin_archivos_no_hace_nada,
+               test_commit_tarea_incluye_borrados_y_no_se_rompe_por_una_ruta_perdida,
                test_merge_ff_y_borrar_rama,
                test_merge_ff_aborta_con_divergencia,
                test_revertir_restaura_y_quita_untracked,

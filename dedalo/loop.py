@@ -33,6 +33,7 @@ from . import (
     consentimiento,
     ficha,
     loop_agentes,
+    loop_git,
     loop_launch,
     loops_estado,
     mapeo,
@@ -1040,7 +1041,18 @@ def run(cfg):
                     logx(cfg.log, f"commit en {rama_tarea}: {subj}")
                     print(f"[dedalo] ✔ commit: {subj}")
                 else:
-                    logx(cfg.log, f"⚠ commit falló en {rama_tarea} (rc={rc_c})")
+                    # Never mark a task done whose work is not committed: it
+                    # stayed loose in the tree and leaked into later tasks.
+                    detalle = loop_git.ULTIMO_ERROR["git"] or "sin detalle"
+                    logx(cfg.log, f"ABORTADO: commit falló en {rama_tarea} "
+                                  f"(rc={rc_c}): {detalle}")
+                    mensaje(cfg, f"[dedalo] ✗✗ no se pudo commitear la tarea "
+                                 f"en {rama_tarea}: {detalle}. Los cambios "
+                                 "quedan en la rama sin tocar.")
+                    _incidencia(cfg, "aborto_commit", detalle, tarea=tarea,
+                                iteracion=iteracion, rama=rama_tarea)
+                    _notificar(cfg, "error", detalle=f"commit falló: {detalle}")
+                    return 9
             else:
                 logx(cfg.log, "tarea completada sin cambios nuevos")
                 print("[dedalo] ✔ tarea completada sin cambios nuevos")
