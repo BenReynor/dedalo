@@ -38,7 +38,9 @@ _PATRON_TOKENS = re.compile(
     r"credit.balance.is.too.low|billing.hard.limit|RESOURCE_EXHAUSTED|"
     r"tokens?.exhausted|out.of.tokens|no.quota|quota.depleted|"
     r"monthly.limit|usage.limit|requires.usage.credits|"
-    r"usage.credits.to.continue", re.IGNORECASE)
+    r"usage.credits.to.continue|"
+    # claude: "You've hit your 5-hour limit · resets 1pm" / "...weekly limit"
+    r"hit.your.(\S+.)?limit", re.IGNORECASE)
 
 _USAGE = re.compile(
     r"\"usage\":\s*\{[^}]*\"input_tokens\":\s*(\d+)[^}]*"

@@ -728,6 +728,7 @@ def run(cfg):
         # reached the agent.
         pre = ""
         fallos_gate = []  # "[GATE] ✗" lines of failed attempts, for lecciones.md
+        fallos_agente = 0  # attempts where the agent failed without changes
         for intento in range(1, cfg.max_reintentos + 1):
             if intento > 1 and not pre:
                 pre = ("El intento anterior no pasó la verificación: no repitas "
@@ -854,6 +855,29 @@ def run(cfg):
                 _incidencia(cfg, "agente_fallo",
                             f"{cfg.agente_tarea} salió con rc={rc} sin cambios",
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
+                fallos_agente += 1
+                if fallos_agente == cfg.max_reintentos:
+                    # Every attempt crashed without touching anything: the
+                    # agent is broken (unrecognised quota/limit message, CLI
+                    # error...), not the task. Blocking it would only cascade
+                    # through the rest of plan.md in seconds; stop instead and
+                    # leave the task pending.
+                    checkout(cfg.proyecto, rama_run)
+                    borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
+                    revertir(cfg.proyecto)
+                    mensaje(cfg, f"[dedalo] ✗✗ {cfg.agente_tarea} falló "
+                                 f"{fallos_agente} veces sin hacer nada (rc={rc}) "
+                                 "— deteniendo loop; la tarea sigue pendiente.")
+                    logx(cfg.log, f"ABORTADO: el agente falla sin hacer nada "
+                                  f"(rc={rc})")
+                    _notificar(cfg, "error",
+                               detalle=f"{cfg.agente_tarea} falla sin hacer nada (rc={rc})")
+                    _incidencia(cfg, "aborto_agente_fallo",
+                                f"{cfg.agente_tarea} falló {fallos_agente} veces "
+                                f"sin cambios (rc={rc}); tarea sin bloquear",
+                                tarea=tarea, iteracion=iteracion, rama=rama_tarea)
+                    alerta(cfg.voz, "El agente falla sin hacer nada, se detiene el dedalo")
+                    return 6
                 pre = (f"Tu ejecución anterior terminó con error (rc={rc}) sin "
                        "cambiar nada. Completa la tarea. ")
                 continue

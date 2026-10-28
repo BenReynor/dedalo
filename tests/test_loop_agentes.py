@@ -166,6 +166,11 @@ def test_tokens_agotados_detecta_cuota(tmp_path):
     out.write_text("Error: insufficient_quota for the request",
                    encoding="utf-8")
     assert tokens_agotados(str(out))
+    for texto in ("You've hit your 5-hour limit · resets 1pm (America/Lima)",
+                  "You've hit your weekly limit · resets Mon 9am",
+                  "You've hit your limit"):
+        out.write_text(texto, encoding="utf-8")
+        assert tokens_agotados(str(out)), texto
     out.write_text("todo ok", encoding="utf-8")
     assert not tokens_agotados(str(out))
 

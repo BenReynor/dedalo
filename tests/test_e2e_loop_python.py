@@ -320,12 +320,28 @@ def test_agente_que_falla_sin_cambios_no_marca_la_tarea_hecha(tmp_path):
     plan = (proyecto / "plan.md").read_text(encoding="utf-8")
 
     assert "- [x] t1" not in plan, log[-2000:]
-    assert "- [B] t1" in plan
     assert "AGENTE FALLÓ sin cambios" in log
     # Only the baseline ran the gate; failed attempts never reach it.
     corridas = marca.read_text(encoding="utf-8").split()
     assert len(corridas) == 1, corridas
-    assert rc == 0
+    # An agent that never does anything is broken, not the task: stop and
+    # leave the task pending instead of blocking the whole plan.
+    assert "- [ ] t1" in plan
+    assert "- [B]" not in plan
+    assert "ABORTADO: el agente falla sin hacer nada" in log
+    assert rc == 6
+
+
+def test_limite_de_5_horas_de_claude_detiene_el_loop(tmp_path):
+    """Claude Code's "You've hit your 5-hour limit" is quota: stop, rc 5."""
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    bin_falso = _agente_que_falla(
+        tmp_path / "bin", "You've hit your 5-hour limit · resets 1pm (America/Lima)")
+    rc, _cfg = _correr(proyecto, _entorno(bin_falso))
+    plan = (proyecto / "plan.md").read_text(encoding="utf-8")
+    assert rc == 5
+    assert "- [ ] t1" in plan
+    assert "- [B]" not in plan
 
 
 def test_agente_sin_creditos_detiene_el_loop(tmp_path):
