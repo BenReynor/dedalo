@@ -759,7 +759,7 @@ revisar_diff() {
     local rev="$1" rev_out vdiff
     rev_out="$(mktemp)"
     vdiff="$(diff_revision)"
-    local PROMPT_REV="Eres el REVISOR en modo dedalo. Usa únicamente las skills que tu sesión ya tenga cargadas; no intentes cargar ninguna otra.
+    local PROMPT_REV="Eres el REVISOR en modo dedalo. Si la tarea nombra una skill, cárgala y comprueba que el diff sigue sus reglas; no cargues otras.
 Revisas el diff COMPLETO de una tarea, en frío, sin haber participado de ella.
 Tarea: ${TAREA}
 
@@ -1252,7 +1252,7 @@ while (( iter < MAX_ITER )); do
             NAV_CONTEXTO=""
         fi
 
-        PROMPT="Estás en MODO DEDALO. Usa únicamente las skills que tu sesión ya tenga cargadas; no intentes cargar ninguna otra.
+        PROMPT="Estás en MODO DEDALO. Si la tarea o su criterio nombran una skill, cárgala con tu herramienta de skills antes de empezar y sigue sus reglas; no cargues otras.
 Tarea actual (solo esta): ${TAREA}
 ${PRE}Criterio de aceptación que debe cumplir tu trabajo (el gate lo verificará): ${CRITERIO:-<sin criterio explícito; usa los tests/mapeo.txt como contrato>}
 Lee plan.md y ${LOG_REL} antes de tocar nada. Lee también ${MAPA_REL} (mapa módulos→tests): localiza el/los test del código que vas a tocar y úsalos como contrato.

@@ -490,3 +490,18 @@ def test_revisar_diff_recibe_lo_que_el_gate_ya_verifico(tmp_path):
     assert "El gate YA pasó" in texto and "[GATE] ✓ [node] tsc OK" in texto
     revisar_diff(cfg, "claude", "t1", "diff")
     assert "El gate YA pasó" not in prompt.read_text(encoding="utf-8")
+
+
+def test_revisor_carga_las_skills_que_nombra_la_tarea(tmp_path):
+    """Skills are named in plain plan.md text; prompts must not forbid them."""
+    prompt = tmp_path / "prompt.txt"
+    bin_ = tmp_path / "claude"
+    bin_.write_text(f"#!/usr/bin/env bash\ncat > '{prompt}'\necho 'VERDICT: PASS'\n",
+                    encoding="utf-8")
+    bin_.chmod(0o755)
+    cfg = _config(tmp_path, {"CLI_CLAUDE": str(bin_)})
+    cfg.revisor, cfg.modelo_revisor, cfg.timeout_por_tarea = "claude", "", 30
+    revisar_diff(cfg, "claude", "Rehacer ajustes usando la skill estilo-retro", "diff")
+    texto = prompt.read_text(encoding="utf-8")
+    assert "Si la tarea nombra una skill, cárgala" in texto
+    assert "no intentes cargar ninguna" not in texto

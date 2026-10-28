@@ -765,9 +765,10 @@ def run(cfg):
             rel_log = os.path.relpath(cfg.log, cfg.proyecto)
             rel_mapa = os.path.relpath(cfg.mapa, cfg.proyecto)
             rel_scripts = os.path.relpath(os.path.dirname(cfg.gate), cfg.proyecto)
-            prompt = (f"Estás en MODO DEDALO. Usa únicamente las skills que "
-                      f"tu sesión ya tenga cargadas; no intentes cargar ninguna "
-                      f"otra.\nTarea actual (solo esta): {tarea}\n"
+            prompt = (f"Estás en MODO DEDALO. Si la tarea o su criterio nombran "
+                      f"una skill, cárgala con tu herramienta de skills antes de "
+                      f"empezar y sigue sus reglas; no cargues otras.\n"
+                      f"Tarea actual (solo esta): {tarea}\n"
                       f"{pre}Criterio de aceptación que debe cumplir tu trabajo "
                       f"(el gate lo verificará): {criterio_texto}\n"
                       f"Lee plan.md y {rel_log} antes de tocar nada. Lee también "

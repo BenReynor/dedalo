@@ -165,6 +165,10 @@ and it stops before starting a new iteration once the **estimated** budget
 - The optional `criterio:` line is the **literal** pass/fail condition the
   judge checks (you can also put it inline after the task). Be concrete: files,
   tests, commands. The loop does not guess what "improve the UI" means.
+- To make the agent use one of your skills (Claude Code or opencode), just name
+  it in the task or its criterio, e.g. `Restyle the settings view using the
+  estilo-retro skill`. The agent loads the skills the task names (and only
+  those); the reviewer checks the diff against them.
 - If the judge cannot give a verdict (agent error, no credits, timeout, no
   readable answer), the loop reruns **only the gate** twice (pause:
   `ESPERA_JUEZ`, default 10 s). If it still cannot judge, the loop **stops**
