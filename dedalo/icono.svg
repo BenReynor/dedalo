@@ -1,21 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="f" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1d232e"/>
-      <stop offset="1" stop-color="#0b0f14"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a2e"/><stop offset="1" stop-color="#0c0c0e"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="26" fill="url(#f)"/>
-  <circle cx="64" cy="60" r="42" fill="none" stroke="#00ff77" stroke-width="3" opacity="0.30"/>
-  <!-- Cabeza centrada en (64,60) = círculo -->
-  <rect x="38" y="34" width="52" height="52" rx="13" fill="#00ff77"/>
-  <!-- Ojos centrados en la cabeza -->
-  <rect x="49" y="48" width="13" height="13" rx="3" fill="#04080a"/>
-  <rect x="66" y="48" width="13" height="13" rx="3" fill="#04080a"/>
-  <!-- Boca centrada -->
-  <rect x="51" y="71" width="26" height="6" rx="3" fill="#04080a"/>
-  <!-- Antena sobre la cabeza (y=34) -->
-  <line x1="64" y1="34" x2="64" y2="22" stroke="#00ff77" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="64" cy="19" r="5" fill="#00ff77"/>
-  <path d="M 56 100 l 16 9 -16 9 z" fill="#00ff77" opacity="0.95"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g fill="none" stroke="#f59e0b" stroke-width="24" stroke-linecap="round">
+    <path d="M288 86 H380 A46 46 0 0 1 426 132 V380 A46 46 0 0 1 380 426 H132 A46 46 0 0 1 86 380 V132 A46 46 0 0 1 132 86 H224"/>
+    <path d="M224 374 H172 A34 34 0 0 1 138 340 V172 A34 34 0 0 1 172 138 H340 A34 34 0 0 1 374 172 V340 A34 34 0 0 1 340 374 H288"/>
+    <path d="M288 190 H298 A24 24 0 0 1 322 214 V298 A24 24 0 0 1 298 322 H214 A24 24 0 0 1 190 298 V214 A24 24 0 0 1 214 190 H224"/>
+  </g>
+  <path d="M256 48 V112 H400 V400 H256 V348 H164 V164 H256 V218" fill="none"
+        stroke="#fde68a" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="1 24"/>
+  <circle cx="256" cy="256" r="42" fill="#fbbf24"/>
+  <path d="M235 257 L251 273 L279 243" fill="none" stroke="#18181b" stroke-width="13"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
