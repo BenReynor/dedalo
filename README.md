@@ -9,6 +9,14 @@
 
 Orchestrates AI agents (opencode, claude) to iterate over tasks in `plan.md`, run tests, request code review, and commit automatically.
 
+> [!WARNING]
+> **Windows is experimental and untested on a real PC.** Dédalo is developed and
+> used on Linux. On Windows the test suite passes in CI and the packaged
+> `dedalo.exe` boots, but nobody has yet run the installer, the tray or a real
+> loop with an agent there. Use it at your own risk and
+> [open an issue](https://github.com/BenReynor/dedalo/issues) with what breaks.
+> See [Compatibility](#-compatibility).
+
 > **Working with an AI on this project?** See
 > [`docs/FICHA_TECNICA.md`](docs/FICHA_TECNICA.md) —requirements, dependencies,
 > platforms, MCP surface, and security in a single file designed so that a model
@@ -47,8 +55,8 @@ Orchestrates AI agents (opencode, claude) to iterate over tasks in `plan.md`, ru
 
 **Before you start:** Python 3.10+, `git`, and at least one agent CLI
 (`opencode` or `claude`) installed and logged in. Nothing else is
-required for the GUI or the loop; `bash` is only needed for the project map
-(`mapear.sh`) and the optional legacy engine.
+required for the GUI or the loop; `bash` is only needed for a customized
+`mapear.sh` and the optional legacy engine.
 
 ```bash
 # Clone
@@ -482,7 +490,7 @@ tokens and window settings.
 | OS | Status |
 |----|--------|
 | **Linux** | ✅ **Supported.** Reference environment: daily use plus the CI suite. |
-| **Windows** | 🧪 **Experimental.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is only needed for the optional bash engine (`dedalo.sh`); the project map is generated in Python. |
+| **Windows** | 🧪 **Experimental.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). **Not tested on a real PC:** installer and shortcut, tray, and a real loop with opencode or claude. Bash (Git Bash or WSL) is only needed for the optional bash engine (`dedalo.sh`) or a customized `mapear.sh`; the default project map is generated in Python. |
 
 What's already OS-independent: the line endings of `.sh` files
 (`.gitattributes` forces `eol=lf`, so a `clone` on Windows with `autocrlf`

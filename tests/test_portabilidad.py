@@ -137,10 +137,10 @@ def test_ejecutable(path: Path):
 # ---------------------------------------------------------------------------
 PENDIENTES_MACOS: set[str] = set()
 PENDIENTES_WINDOWS = {
-    # The loop and the gate are already Python (they do not need bash). Bash remains only
-    # for the project map (mapear.sh, "Refrescar mapa" button) and for the
-    # optional bash engine (dedalo.sh): without Git Bash those paths fail.
-    "bash": "mapear.sh/dedalo.sh siguen siendo bash: requieren WSL2 o Git Bash",
+    # The loop, the gate and the default project map are already Python (they
+    # do not need bash). Bash remains only for a user-customized mapear.sh and
+    # the optional bash engine (dedalo.sh): without Git Bash those paths fail.
+    "bash": "mapear.sh personalizado/dedalo.sh siguen siendo bash: requieren WSL2 o Git Bash",
     # "QProcess(\"bash\")" is no longer there: the GUI launches the gate as
     # `python -m dedalo.gate` (or the --dedalo-gate binary).
     # "os.pathsep" is no longer there: app.py joins the PATH with os.pathsep (it was fixed
