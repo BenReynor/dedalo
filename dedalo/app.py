@@ -30,8 +30,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import configuracion as cfg
 from . import (
+    cabina,
     consentimiento,
     loop_launch,
     loops_estado,
@@ -42,6 +42,7 @@ from . import (
     rutas,
     sensor,
 )
+from . import configuracion as cfg
 from .gate import argv_gate
 from .i18n import IDIOMAS, NOMBRES_IDIOMA, idioma, set_idioma, t
 from .paneles import (
@@ -75,7 +76,7 @@ from .proyectos import (
     leer_webhooks,
     verificar_registro,
 )
-from .temas import NOMBRES, inicializar_temas, obtener_temas
+from .temas import NOMBRES, inicializar_temas, obtener_temas, paleta_tema
 from .webhooks import WebhookManager
 
 
@@ -214,6 +215,43 @@ class Ventana(QMainWindow):
         self.timer_estado = QTimer(self)
         self.timer_estado.timeout.connect(self._sincronizar_estado)
         self.timer_estado.start(2000)
+
+        # Run cockpit: reads the engine's estado_loop.json every second, for
+        # loops launched here AND by an MCP agent (the old stepper only moved
+        # for loops this GUI had started itself).
+        self.timer_cabina = QTimer(self)
+        self.timer_cabina.timeout.connect(self._refrescar_cabina)
+        self.timer_cabina.start(1000)
+        QTimer.singleShot(0, self._abrir_ejecucion_si_corre)
+
+    def _refrescar_cabina(self):
+        p = self._proyecto_actual()
+        if not p:
+            return
+        local = bool(self.loop) and self.loop.state() != QProcess.NotRunning
+        vista = cabina.vista_loop(p[0], p[1], local)
+        if vista["corriendo"] and not vista["e"].get("fase") \
+                and vista["estado"] == "arrancando" and not vista["e"]:
+            # Engine without estado_loop.json (older run): guess from the log.
+            vista["e"] = {"fase": fase_actual(rutas.log(p[1]))}
+        self.pan_ejec.cabina.actualizar(vista)
+        self.pan_ejec.sincronizar_botones()
+        self.pill_loop.set_vista(vista)
+        self.pan_plan.marcar_en_curso(
+            vista["e"].get("tarea") if vista["corriendo"] else None)
+
+    def _abrir_ejecucion_si_corre(self):
+        """Opening Dédalo while a loop runs lands on Run, not on Plan."""
+        self._refrescar_cabina()
+        p = self._proyecto_actual()
+        if p and cabina.vista_loop(p[0], p[1])["corriendo"]:
+            self._cambiar_seccion(self._indice_ejecucion())
+
+    def _indice_ejecucion(self):
+        for i, (_n, panel) in enumerate(self._secciones):
+            if panel is self.pan_ejec:
+                return i
+        return 0
 
     def _sincronizar_estado(self):
         self._refrescar_proyectos()
@@ -450,6 +488,8 @@ class Ventana(QMainWindow):
         self.estado = QLabel(t("No project"))
         self.barra_estado.addWidget(self.estado)
         self.pill_loop = LoopPill()
+        self.pill_loop.pulsada.connect(
+            lambda: self._cambiar_seccion(self._indice_ejecucion()))
         self.barra_estado.addPermanentWidget(self.pill_loop)
         self.setStatusBar(self.barra_estado)
 
@@ -458,22 +498,21 @@ class Ventana(QMainWindow):
         if 0 <= indice < self.stack.count():
             self.stack.setCurrentIndex(indice)
             self.sidebar.setCurrentRow(indice)
+            if self.stack.widget(indice) is self.pan_metricas:
+                self._actualizar_metricas()
 
     def _set_fase_loop(self, iter_actual=0, total=0, corriendo=True):
-        """Updates the pipeline stepper and the loop status pill."""
-        p = self._proyecto_actual()
-        ruta_log = rutas.log(p[1]) if p else ""
-        fase = fase_actual(ruta_log) if corriendo else ""
-        self.pan_ejec.pipeline.setFase(fase)
-        if not corriendo:
-            self.pan_ejec.pipeline.setPendiente()
-        self.pill_loop.setEstado(iter_actual, total, fase, corriendo)
+        """Updates the cockpit and the status pill now (start/stop/tail)."""
+        self._refrescar_cabina()
 
     def _aplicar_tema(self, nombre):
         temas = obtener_temas()
         if nombre in temas:
             QApplication.instance().setStyleSheet(temas[nombre])
-        self.pan_ejec.pipeline.set_tema(nombre)
+            # palette(base)/palette(alternate-base) in widget stylesheets
+            # (kanban, KPI cards) follow the theme instead of Qt's white.
+            QApplication.instance().setPalette(paleta_tema(nombre))
+        self.pan_ejec.cabina.set_tema(nombre)
 
     # ---------- Thermal monitoring ----------
 
@@ -677,6 +716,11 @@ class Ventana(QMainWindow):
         self.pan_logs.panel_loop.clear()
         self._log_marca = self._log_inicio = self._tam_log(ruta)
         self._tail_log()
+        # Metrics and cockpit show the new project at once (the metrics used to
+        # read "No project" until their 5 s timer fired).
+        self._actualizar_metricas()
+        if hasattr(self, "timer_cabina"):
+            self._refrescar_cabina()
 
         # instalar() is idempotent: it propagates NEW scripts and gate_checks
         # from the template without touching what already exists (plan.md,
@@ -832,6 +876,11 @@ class Ventana(QMainWindow):
     def _comprobar_net(self):
         net.verificar_async()
         self.pan_ejec.nota_net(net.ultimo_estado())
+        # The check runs in the background: show its result as soon as it
+        # lands instead of a "?" until the next 15 s tick.
+        for ms in (1000, 4000):
+            QTimer.singleShot(
+                ms, lambda: self.pan_ejec.nota_net(net.ultimo_estado()))
 
     # ---------- Loop ----------
 

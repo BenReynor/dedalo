@@ -113,8 +113,11 @@ class PanelMetricas(QWidget):
             t("Iter"), t("Task"), t("Duration"), t("Est. Cost"), t("Real Cost"),
             t("Tokens In"), t("Tokens Out"), t("Latency"), t("Model"),
             t("Gate"), t("Reviewer"), t("Status")])
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        # Numbers keep their whole header; the task name takes what is left.
+        cab = self.tabla.horizontalHeader()
+        cab.setSectionResizeMode(QHeaderView.ResizeToContents)
+        cab.setSectionResizeMode(1, QHeaderView.Stretch)
+        cab.setMinimumSectionSize(48)
         _fuente_monospace(self.tabla)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)

@@ -36,6 +36,12 @@ class SelectorModelo(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         self.cmb_proveedor = QComboBox()
         self.cmb_modelo = QComboBox()
+        # Long model ids must not force a horizontal scroll at the minimum
+        # window width: the combo elides them, the popup shows them whole.
+        for combo in (self.cmb_proveedor, self.cmb_modelo):
+            combo.setSizeAdjustPolicy(
+                QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(8)
         h.addWidget(self.cmb_proveedor, 2)
         h.addWidget(QLabel("/"))
         h.addWidget(self.cmb_modelo, 3)

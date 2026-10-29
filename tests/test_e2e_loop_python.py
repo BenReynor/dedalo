@@ -553,3 +553,53 @@ def test_juez_py_muestra_la_ultima_linea_del_error(tmp_path, monkeypatch, capsys
                          "ok": lambda self, m: None, "fail": lambda self, m: None})()
     assert juez.run(env) == 0
     assert any("Credit balance is too low" in a for a in avisos), avisos
+
+
+# ---------------------------------------------------------------------------
+# estado_loop.json: the live state any observer (GUI, MCP) reads
+# ---------------------------------------------------------------------------
+
+def _estado(proyecto):
+    from dedalo import estado_loop
+    datos = estado_loop.leer(str(proyecto))
+    assert datos is not None, "estado_loop.json no se escribió"
+    return datos
+
+
+def test_estado_vivo_de_una_tarea_hecha(tmp_path):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    rc, _cfg = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    assert rc == 0
+    e = _estado(proyecto)
+    assert e["estado"] == "finalizado" and e["rc"] == 0
+    assert e["fase"] == "" and not e["esperando_humano"]
+    assert [h["resultado"] for h in e["historial"]] == ["hecha"]
+    h = e["historial"][0]
+    assert h["tarea"] == "t1: crear modulo nuevo"
+    assert h["intentos"] == 1 and h["fallos"] == []
+    # Every phase of the last attempt closed green, each with its excerpt.
+    assert e["fases"] == {"Agente": "ok", "Gate": "ok", "Commit": "ok"}
+    assert "[GATE]" in e["detalles"]["Gate"]
+
+
+def test_estado_vivo_de_una_tarea_bloqueada_marca_la_fase_que_fallo(tmp_path):
+    gate = "#!/usr/bin/env bash\nif [ -e src/nuevo.py ]; then exit 1; fi\nexit 0\n"
+    proyecto = _escenario(tmp_path, gate)
+    rc, _cfg = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    assert rc == 0
+    e = _estado(proyecto)
+    h = e["historial"][0]
+    assert h["resultado"] == "bloqueada"
+    assert h["intentos"] == 2 and h["fallos"] == ["Gate", "Gate"]
+    assert e["fases"] == {"Agente": "ok", "Gate": "fail"}
+
+
+def test_estado_vivo_de_un_loop_abortado_guarda_el_motivo(tmp_path):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    bin_falso = _agente_que_falla(tmp_path / "bin", "Error: insufficient_quota")
+    rc, _cfg = _correr(proyecto, _entorno(bin_falso))
+    assert rc == 5
+    e = _estado(proyecto)
+    assert e["estado"] == "abortado" and e["rc"] == 5
+    assert "cuota" in e["motivo"], e["motivo"]
+    assert e["historial"] == []

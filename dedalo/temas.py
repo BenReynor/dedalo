@@ -954,6 +954,47 @@ def colores_tema(tema: str) -> dict:
     }
 
 
+def paleta_tema(tema: str):
+    """QPalette from the theme tokens.
+
+    The QSS colors the widgets, but stylesheets that say `palette(base)` or
+    `palette(alternate-base)` (kanban columns, KPI cards) read the
+    application palette, which stayed Qt's light default: white cards on a
+    dark theme."""
+    from PySide6.QtGui import QColor, QPalette
+    c = _qss_variables(tema)
+
+    def _col(v):
+        v = v.strip()
+        if v.startswith("rgba"):
+            nums = re.findall(r"[\d.]+", v)
+            if len(nums) == 4:
+                return QColor(int(float(nums[0])), int(float(nums[1])),
+                              int(float(nums[2])), int(float(nums[3]) * 255))
+        return QColor(v)
+
+    pal = QPalette()
+    roles = {
+        QPalette.Window: c["bg_app"],
+        QPalette.WindowText: c["text_primary"],
+        QPalette.Base: c["bg_panel"],
+        QPalette.AlternateBase: c["bg_elevated"],
+        QPalette.Text: c["text_primary"],
+        QPalette.PlaceholderText: c["text_tertiary"],
+        QPalette.Button: c["bg_elevated"],
+        QPalette.ButtonText: c["text_primary"],
+        QPalette.ToolTipBase: c["bg_elevated"],
+        QPalette.ToolTipText: c["text_primary"],
+        QPalette.Highlight: c["action_primary"],
+        QPalette.HighlightedText: c["action_primary_text"],
+        QPalette.Mid: c["text_tertiary"],
+        QPalette.Midlight: c["border_default"],
+    }
+    for rol, valor in roles.items():
+        pal.setColor(rol, _col(valor))
+    return pal
+
+
 def inicializar_temas():
     """Generates the QSS themes. Must be called after creating QApplication."""
     global _TEMAS_CACHE

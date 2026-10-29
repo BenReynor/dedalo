@@ -31,6 +31,7 @@ import urllib.request
 
 from . import (
     consentimiento,
+    estado_loop,
     ficha,
     loop_agentes,
     loop_git,
@@ -99,6 +100,7 @@ class Config:
         self.incidencias = rutas.incidencias(self.proyecto)
         self.metrics = rutas.metrics(self.proyecto)
         self.ultimo_motivo = None  # dict of the last failure of the current task
+        self.vivo = estado_loop.NULO  # live state for observers (set by run)
 
         self.max_iter = int(env.get("MAX_ITER", "40"))
         self.timeout_por_tarea = int(env.get("TIMEOUT_POR_TAREA", "900"))
@@ -540,7 +542,33 @@ def _resumen_bloqueadas(cfg):
 
 
 def run(cfg):
-    """Full loop; returns the exit code (0-7, like the script)."""
+    """Full loop; returns the exit code (0-9, like the script).
+
+    Publishes `estado_loop.json` for observers and always closes it with the
+    final state, whichever of the many return paths the run takes."""
+    try:
+        cfg.vivo = estado_loop.EstadoLoop(
+            cfg.proyecto, cfg.max_iter, cfg.max_reintentos,
+            agente=cfg.agente_tarea, revisor=cfg.agente_revisor)
+    except Exception:  # noqa: BLE001 — observing must never stop the loop
+        cfg.vivo = estado_loop.NULO
+    rc = 1
+    try:
+        rc = _run(cfg)
+        return rc
+    finally:
+        cfg.vivo.terminar(rc, "" if rc == 0 else _motivo_aborto(cfg))
+
+
+def _motivo_aborto(cfg):
+    """Last 'ABORTADO: …' line of the log, for the observers."""
+    for linea in reversed(_leer(cfg.log).splitlines()[-60:]):
+        if "ABORTADO:" in linea:
+            return linea.split("ABORTADO:", 1)[1].strip()
+    return ""
+
+
+def _run(cfg):
     _proteger_salidas()
     _RECHAZO_MOTIVO["txt"] = ""
     _instalar_senales(cfg)
@@ -637,6 +665,7 @@ def run(cfg):
         alerta(cfg.voz, "Baseline falló, el dedalo no arranca")
         return 1
     logx(cfg.log, "Baseline GATE OK")
+    cfg.vivo.corriendo(cfg.agente_tarea, cfg.revisor)
 
     _mapear(cfg)
     if os.path.exists(cfg.mapa) and os.path.getsize(cfg.mapa) > 0:
@@ -700,6 +729,7 @@ def run(cfg):
         logx(cfg.log, f"== Iteración {iteracion}: {tarea} (rama {rama_tarea})"
                       + (f" | criterio: {criterio}" if criterio else "") + " ==")
         print(f"[dedalo] [{iteracion}/{cfg.max_iter}] {tarea} -> {rama_tarea}")
+        cfg.vivo.nueva_tarea(iteracion, tarea, criterio)
         if criterio:
             print(f"[dedalo]   criterio: {criterio}")
 
@@ -737,6 +767,7 @@ def run(cfg):
         fallos_gate = []  # "[GATE] ✗" lines of failed attempts, for lecciones.md
         fallos_agente = 0  # attempts where the agent failed without changes
         for intento in range(1, cfg.max_reintentos + 1):
+            cfg.vivo.nuevo_intento(intento)
             if intento > 1 and not pre:
                 pre = ("El intento anterior no pasó la verificación: no repitas "
                        "tu cambio, corrígelo. ")
@@ -796,6 +827,7 @@ def run(cfg):
                       "cambiaste y qué tests corriste.")
 
             pre = ""  # consumed: later failures set it again
+            cfg.vivo.fase("Agente")
             rc, _vivo = run_agente(cfg, cfg.agente_tarea, out,
                                    cfg.modelo_tarea, prompt, tarea, iteracion)
             if rc == 124:
@@ -827,6 +859,9 @@ def run(cfg):
             iter_sin_trabajo = 0
             if not nuevos and not borrados:
                 iter_sin_trabajo = 1
+            cfg.vivo.resultado(
+                "Agente", not (rc != 0 and iter_sin_trabajo),
+                contenido.strip()[-1500:] or f"rc={rc}, sin salida")
             if sin_autenticacion(out + ".err", out, iter_sin_trabajo):
                 mensaje(cfg, f"[dedalo] ✗✗ {cfg.agente_tarea} no está "
                              f"autenticado (CLI instalado, sin sesión). Haz "
@@ -907,10 +942,13 @@ def run(cfg):
                              "gate restaurado, intento anulado.")
                 logx(cfg.log, f"GATE ALTERADO por el agente (intento {intento}), "
                               "restaurado")
+                cfg.vivo.resultado("Gate", False,
+                                   "el agente alteró gate.sh/gate_checks")
                 pre = "No edites gate.sh ni gate_checks/*.sh (son del framework). Tu cambio a esos archivos se descartó. "
                 continue
 
             logx(cfg.log, f"GATE: ejecutando gate.sh (intento {intento})")
+            cfg.vivo.fase("Gate")
             rc_gate, gate_out = _run_gate(cfg, criterio)
             gate_salida = _leer(gate_out)
             # A green gate whose judge could not give an opinion has not
@@ -943,12 +981,16 @@ def run(cfg):
                 alerta(cfg.voz, "El juez no responde, se detiene el dedalo")
                 return 8
             gate_rc = rc_gate
+            cfg.vivo.resultado("Gate", rc_gate == 0, "\n".join(
+                li for li in gate_salida.splitlines()
+                if li.startswith("[GATE]")))
             if rc_gate == 0:
                 if cfg.revision_dual == "1" and cfg.revisor:
                     revisor_modo = "dual"
                     costo_iter = suma_coste(costo_iter,
                                             float(cfg.costo_por_iter) / 2)
                     vstat, vdiff = diff_para_revisor(cfg.proyecto)
+                    cfg.vivo.fase("Revisor")
                     resultado, feedback = revisar_diff(
                         cfg, cfg.revisor, tarea,
                         f"{vstat}\n{vdiff}" if vdiff else vstat,
@@ -957,6 +999,12 @@ def run(cfg):
                             if li.startswith("[GATE] ✓")))
                     resultado_revision = resultado or "fail"
                     feedback_revision = feedback or ""
+                    if resultado in ("pass", "fail", None, ""):
+                        cfg.vivo.resultado(
+                            "Revisor", resultado == "pass",
+                            ("VERDICT: PASS" if resultado == "pass"
+                             else "VERDICT: FAIL")
+                            + (f"\n{feedback}" if feedback else ""))
                     if resultado == "sin_auth":
                         mensaje(cfg, f"[dedalo] ✗✗ revisor ({cfg.revisor}) "
                                      "no está autenticado — deteniendo loop")
@@ -1069,6 +1117,7 @@ def run(cfg):
         snapshot(cfg.proyecto, after)
 
         if hecho == 1:
+            cfg.vivo.fase("Commit")
             nuevos, _b = cambios_entre(before, after)
             if nuevos:
                 subj = "dedalo: " + tarea[:40]
@@ -1104,6 +1153,9 @@ def run(cfg):
                 _mapear(cfg)
                 logx(cfg.log, f"mapeo.txt actualizado tras {tarea}")
                 _marcar(cfg, "x")
+                cfg.vivo.resultado("Commit", True, commit_msg or
+                                   "sin cambios nuevos")
+                cfg.vivo.cerrar_tarea("hecha")
                 if fallos_gate:
                     # Kept short: lecciones.md goes into every later prompt.
                     registrar_leccion(
@@ -1121,6 +1173,8 @@ def run(cfg):
                 mensaje(cfg, f"[dedalo] ⚠ merge fallido; rama {rama_tarea} "
                              "conservada y tarea marcada [B].")
                 _marcar(cfg, "B")
+                cfg.vivo.resultado("Commit", False, "merge fallido")
+                cfg.vivo.cerrar_tarea("bloqueada")
                 _incidencia(cfg, "merge_fail",
                             f"git merge --ff-only {rama_tarea} -> {rama_run} "
                             "falló; rama conservada",
@@ -1139,6 +1193,7 @@ def run(cfg):
             borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
             revertir(cfg.proyecto)
             _marcar(cfg, "B")
+            cfg.vivo.cerrar_tarea("bloqueada")
             _notificar(cfg, "bloqueada", tarea=tarea)
             logx(cfg.log, f"tarea BLOQUEADA: {tarea} (rama {rama_tarea} "
                           "descartada)")
@@ -1362,6 +1417,7 @@ def _esperar_revision_manual(cfg, tarea):
     (aborts the run like the script's `exit 4`)."""
     if cfg.revision_manual != "1":
         return 0
+    cfg.vivo.fase("Revisor", esperando_humano=True)
     dir_rev = rutas.dir_review(cfg.proyecto)
     os.makedirs(dir_rev, exist_ok=True)
     _, diff_all, _ = run_git(cfg.proyecto, "diff", "--stat")

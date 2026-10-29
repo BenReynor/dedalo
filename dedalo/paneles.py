@@ -10,6 +10,7 @@ import re
 import subprocess
 
 from PySide6.QtCore import QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -40,6 +41,7 @@ from PySide6.QtWidgets import (
 
 from . import configuracion as cfg
 from . import mapeo, modelos, plan, plantillas
+from .cabina import CabinaLoop, PipelineLoop  # noqa: F401 (re-exported)
 from .i18n import t
 from .loop_agentes import modelo_claude
 from .modelos import PROVEEDORES_CATALOGO
@@ -200,200 +202,65 @@ def _sincronizar_modelo(selector, cmb_cli):
 
 
 def fase_actual(log_ruta: str) -> str:
-    """Deduces the current loop phase from progreso.log (last ~40 lines).
+    """Fallback phase from progreso.log when there is no estado_loop.json.
 
-    The program decides the phase: reviewer/gate/commit are detected by
-    markers dedalo.sh already emits. Returns PIPELINE_FASES or "" if not running.
+    Walks the last lines from the END and returns the phase of the most
+    recent marker (matching anywhere in a 40-line blob made an old GATE line
+    hide a later commit, and never yielded Plan). "" if not running.
     """
     if not log_ruta or not os.path.isfile(log_ruta):
         return ""
     try:
         with open(log_ruta, encoding="utf-8", errors="replace") as f:
-            lineas = f.readlines()[-40:]
+            lineas = f.readlines()[-60:]
     except OSError:
         return ""
-    texto = "\n".join(lineas)
-    if re.search(r"DEDALO FINALIZADO|ABORTADO|tarea BLOQUEADA", texto):
-        return ""
-    if re.search(r"sin login|no hay sesión|credenciales|API key inválida|"
-                 r"no autenticado|autenticarse", texto):
-        return "Gate"
-    if re.search(r"ESPERANDO REVISIÓN MANUAL|REVISIÓN MANUAL", texto):
-        return "Revisor"
-    if re.search(r"revisor.*(PASS|FAIL)|VERDICT:", texto):
-        return "Revisor"
-    if re.search(r"GATE|gate\.sh|gate_checks", texto):
-        return "Gate"
-    if re.search(r"commit en|commit:", texto):
-        return "Commit"
-    if re.search(r"== Iteración", texto):
-        return "Agente"
-    if re.search(r"DEDALO INICIADO|-- Iteración", texto):
-        return "Agente"
+    marcas = (
+        (r"DEDALO FINALIZADO|ABORTADO|tarea BLOQUEADA", ""),
+        (r"commit en |mergeada ", "Commit"),
+        (r"ESPERANDO REVISIÓN MANUAL|REVISOR (PASS|FAIL)", "Revisor"),
+        (r"GATE: ejecutando|GATE FALLÓ|GATE ALTERADO", "Gate"),
+        (r"AGENTE FALLÓ", "Agente"),
+        (r"== Iteración", "Plan"),
+        (r"DEDALO INICIADO|Baseline", "Plan"),
+    )
+    for linea in reversed(lineas):
+        for patron, fase in marcas:
+            if re.search(patron, linea):
+                return fase
     return ""
 
 
-class PipelineLoop(QWidget):
-    """Painted pipeline flow: rounded nodes joined by connectors.
-
-    Colors from the active theme (temas.colores_tema) so it matches the
-    QSS. With cfg.MOTION the active node "breathes" (soft expanding halo).
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("pipeline_loop")
-        self._tema_actual = cfg.TEMA_DEFECTO
-        from .temas import colores_tema
-        self._colores = colores_tema(self._tema_actual)
-        self._estados = {nombre: "idle" for nombre in PIPELINE_FASES}
-        self._pulso = 0.0
-        self.setMinimumHeight(44)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        _fuente_ui(self)
-        self._timer_pulso = QTimer(self)
-        self._timer_pulso.setInterval(60)
-        self._timer_pulso.timeout.connect(self._tick_pulso)
-        if cfg.MOTION:
-            self._timer_pulso.start()
-        self.update()
-
-    # ---- Public API -------------------------------------------------
-
-    def set_tema(self, nombre: str):
-        from .temas import colores_tema
-        self._tema_actual = nombre
-        self._colores = colores_tema(nombre)
-        self.update()
-
-    def setPendiente(self):
-        for nombre in PIPELINE_FASES:
-            self._estados[nombre] = "idle"
-        self.update()
-
-    def setFase(self, fase: str):
-        """Marks the current phase as 'active', the earlier ones as 'ok'."""
-        if not fase or fase not in self._estados:
-            self.setPendiente()
-            return
-        alcanzada = False
-        for nombre in PIPELINE_FASES:
-            if nombre == fase:
-                self._estados[nombre] = "active"
-                alcanzada = True
-            elif alcanzada:
-                self._estados[nombre] = "idle"
-            else:
-                self._estados[nombre] = "ok"
-        self.update()
-
-    def setOk(self):
-        for nombre in PIPELINE_FASES:
-            self._estados[nombre] = "ok"
-        self.update()
-
-    def setFail(self):
-        for nombre in PIPELINE_FASES:
-            self._estados[nombre] = "fail"
-        self.update()
-
-    # ---- Animation / painting -----------------------------------------
-
-    def _tick_pulso(self):
-        self._pulso = (self._pulso + 0.05) % 1.0
-        self.update()
-
-    def paintEvent(self, evento):
-        from PySide6.QtCore import QPointF, QRectF
-        from PySide6.QtGui import QColor, QFont, QPainter, QPen
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        c = self._colores
-        w, h = self.width(), self.height()
-
-        margen = 14.0
-        separacion = 28.0
-        n = len(PIPELINE_FASES)
-        pill_w = max(54.0, min(88.0, (w - 2 * margen - (n - 1) * separacion) / n))
-        pill_h = 30.0
-        cy = h / 2.0
-
-        def centro(i):
-            return margen + i * (pill_w + separacion) + pill_w / 2.0
-
-        # Connectors (line + small node at the midpoint)
-        p.setPen(QPen(c["border"], 2.0))
-        for i in range(1, n):
-            x0 = centro(i - 1) + pill_w / 2.0 + 3.0
-            x1 = centro(i) - pill_w / 2.0 - 3.0
-            if x1 <= x0:
-                continue
-            previo = self._estados[PIPELINE_FASES[i - 1]]
-            if previo == "ok":
-                color_linea = c["success"]
-            elif previo == "active":
-                color_linea = c["accent"]
-            else:
-                color_linea = c["border"]
-            p.setPen(QPen(color_linea, 2.0))
-            p.setBrush(color_linea)
-            p.drawLine(QPointF(x0, cy), QPointF(x1, cy))
-            p.setPen(QPen(c["bg_panel"], 1.0))
-            p.drawEllipse(QPointF((x0 + x1) / 2.0, cy), 4.0, 4.0)
-
-        # Nodes
-        for i, nombre in enumerate(PIPELINE_FASES):
-            estado = self._estados[nombre]
-            cx = centro(i)
-            rect = QRectF(cx - pill_w / 2.0, cy - pill_h / 2.0, pill_w, pill_h)
-
-            if estado == "active" and cfg.MOTION:
-                g = 9.0 * self._pulso
-                halo = QColor(c["accent"])
-                halo.setAlphaF(max(0.0, 0.30 * (1.0 - self._pulso)))
-                p.setPen(Qt.NoPen)
-                p.setBrush(halo)
-                p.drawRoundedRect(rect.adjusted(-g, -g, g, g),
-                                  pill_h / 2.0 + g, pill_h / 2.0 + g)
-
-            if estado == "active":
-                p.setPen(QPen(c["accent_claro"], 1.5))
-                p.setBrush(c["accent"])
-                color_tx = c["text_inverse"]
-            elif estado == "ok":
-                relleno = QColor(c["success"])
-                relleno.setAlphaF(0.14)
-                p.setPen(QPen(c["success"], 1.2))
-                p.setBrush(relleno)
-                color_tx = c["success"]
-            elif estado == "fail":
-                relleno = QColor(c["error"])
-                relleno.setAlphaF(0.14)
-                p.setPen(QPen(c["error"], 1.2))
-                p.setBrush(relleno)
-                color_tx = c["error"]
-            else:
-                p.setPen(QPen(c["border"], 1.0))
-                p.setBrush(c["bg_sunken"])
-                color_tx = c["text_tertiary"]
-            p.drawRoundedRect(rect, pill_h / 2.0, pill_h / 2.0)
-
-            fuente = QFont(self.font())
-            fuente.setBold(estado == "active")
-            p.setFont(fuente)
-            p.setPen(color_tx)
-            p.drawText(rect, Qt.AlignCenter, nombre)
-
-
 class LoopPill(QLabel):
-    """Loop status pill: '● 3/40 · phase: Gate'.
+    """Loop status pill: '● 3/40 · phase: Gate'. Click it to open Run.
 
     With cfg.MOTION the pill "breathes" (amber opacity, QPropertyAnimation).
     """
 
+    pulsada = Signal()
+
+    def mousePressEvent(self, _ev):
+        self.pulsada.emit()
+
+    def set_vista(self, vista):
+        """Same summary as the cockpit, for every section of the app."""
+        from .cabina import nombre_fase
+        e = vista["e"]
+        if not vista["corriendo"]:
+            self.setEstado(0, 0, "", False)
+            return
+        fase = ""
+        if e.get("esperando_humano"):
+            fase = t("your review")
+        elif e.get("fase"):
+            fase = nombre_fase(e["fase"])
+        self.setEstado(e.get("iteracion", 0), e.get("max_iter", 0), fase, True)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("pill_loop")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(t("Open the Run section"))
         self.setProperty("running", False)
         self.setText(t("Loop stopped"))
         self._efecto = QGraphicsOpacityEffect(self)
@@ -600,6 +467,13 @@ class KanbanWidget(QWidget):
         self._plan = plan_obj
         self._actualizar()
 
+    def marcar_en_curso(self, tarea):
+        """Highlights the task the loop is working on (None = none)."""
+        tarea = (tarea or "").strip() or None
+        if tarea != getattr(self, "_en_curso", None):
+            self._en_curso = tarea
+            self._actualizar()
+
     def _actualizar(self):
         for col in (self.col_pend, self.col_hecha, self.col_bloq):
             col.lista.clear()
@@ -612,7 +486,17 @@ class KanbanWidget(QWidget):
             item.setToolTip(t("Line {linea}", linea=tarea["linea"]))
             # Visual states
             if tarea["estado"] == "pendiente":
-                self.col_pend.lista.addItem(item)
+                if getattr(self, "_en_curso", None) == tarea["texto"].strip():
+                    from .temas import ACCENTO_CABINA
+                    item.setText(t("▶ Now · {tarea}", tarea=tarea["texto"]))
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+                    item.setForeground(QColor(ACCENTO_CABINA))
+                    item.setToolTip(t("The loop is working on this task"))
+                    self.col_pend.lista.insertItem(0, item)
+                else:
+                    self.col_pend.lista.addItem(item)
                 pend += 1
             elif tarea["estado"] == "hecha":
                 # Visual strikethrough
@@ -665,6 +549,7 @@ class PanelPlan(QWidget):
         self.splitter.setChildrenCollapsible(False)
 
         self.kanban = KanbanWidget()
+        self.marcar_en_curso = self.kanban.marcar_en_curso
         self.kanban.tarea_seleccionada.connect(self._en_editor_seleccionar)
         self.splitter.addWidget(self.kanban)
 
@@ -1273,17 +1158,27 @@ class PanelEjecucion(QWidget):
         contenido.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         scroll.setWidget(contenido)
 
+        # ===== COCKPIT: fixed header (status, progress, pipeline, buttons) =====
+        self.b_iniciar = _BtnPrimary(t("▶ Start loop"))
+        self.b_iniciar.clicked.connect(self.iniciar)
+        self.b_detener = _BtnDanger(t("■ Stop"))
+        self.b_detener.clicked.connect(self.detener)
+        self.b_detener.setEnabled(False)
+        self.b_gate = _BtnGhost(t("Run gate"))
+        self.b_gate.setToolTip(t("Run the project's checks now, without an agent"))
+        self.b_gate.clicked.connect(self.gate)
+        self.cabina = CabinaLoop((self.b_iniciar, self.b_detener, self.b_gate))
+        self.pipeline = self.cabina.pipeline
+
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.addWidget(scroll)
+        raiz.setSpacing(8)
+        raiz.addWidget(self.cabina)
+        raiz.addWidget(scroll, 1)
 
         v = QVBoxLayout(contenido)
         v.setSpacing(8)
         v.setContentsMargins(0, 0, 0, 0)
-
-        # ===== HEADER: loop pipeline (lit phases) =====
-        self.pipeline = PipelineLoop()
-        v.addWidget(self.pipeline)
 
         # ===== ZONE 1: LAUNCH OPTIONS =====
         grupo = QGroupBox(t("Launch options"))
@@ -1356,7 +1251,9 @@ class PanelEjecucion(QWidget):
             h.setSpacing(8)
             cmb_cli = QComboBox()
             _llenar_combo_agente(cmb_cli)
-            cmb_cli.setMinimumWidth(170)
+            cmb_cli.setSizeAdjustPolicy(
+                QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            cmb_cli.setMinimumContentsLength(10)
             cmb_cli.currentIndexChanged.connect(
                 lambda _i, s=selector, c=cmb_cli: _sincronizar_modelo(s, c))
             h.addWidget(cmb_cli, 0)
@@ -1468,22 +1365,9 @@ class PanelEjecucion(QWidget):
 
         v.addWidget(grupo)
 
-        # ===== CONTROL BUTTONS =====
+        # ===== GATE TEMPLATES (the start/stop buttons live in the cockpit) =====
         h_ctrl = QHBoxLayout()
         h_ctrl.setSpacing(8)
-        self.b_iniciar = _BtnPrimary(t("▶ Start loop"))
-        self.b_iniciar.clicked.connect(self.iniciar)
-        self.b_detener = _BtnDanger(t("■ Stop"))
-        self.b_detener.clicked.connect(self.detener)
-        self.b_detener.setEnabled(False)
-        self.b_gate = _BtnGhost(t("Run gate"))
-        self.b_gate.clicked.connect(self.gate)
-        h_ctrl.addWidget(self.b_iniciar)
-        h_ctrl.addWidget(self.b_detener)
-        h_ctrl.addWidget(self.b_gate)
-
-        # Gate templates selector
-        h_ctrl.addSpacing(12)
         h_ctrl.addWidget(QLabel(t("Gate templates:")))
         self.cmb_gate_templates = QComboBox()
         self.cmb_gate_templates.setEditable(True)
@@ -1713,7 +1597,7 @@ class PanelEjecucion(QWidget):
 
     def nota_net(self, ok):
         if ok is None:
-            self.lbl_net.setText(t("Internet: ?"))
+            self.lbl_net.setText(t("Checking internet…"))
             self.lbl_net.setProperty("status", "info")
         elif ok:
             self.lbl_net.setText(t("🟢 Internet: OK"))
@@ -1775,6 +1659,13 @@ class PanelEjecucion(QWidget):
     def establecer_running(self, corriendo):
         self.b_iniciar.setEnabled(not corriendo)
         self.b_detener.setEnabled(corriendo)
+        self.sincronizar_botones()
+
+    def sincronizar_botones(self):
+        """Only the button that makes sense is shown: Start or Stop."""
+        parar = self.b_detener.isEnabled()
+        self.b_detener.setVisible(parar)
+        self.b_iniciar.setVisible(not parar)
 
     def revision_manual_activa(self):
         return self.chk_revision_manual.isChecked()
