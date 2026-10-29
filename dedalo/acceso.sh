@@ -27,7 +27,9 @@ PAQUETE="$(dirname "$ORIGEN")"
 PROYECTO="$(dirname "$PAQUETE")"
 
 BIN="$HOME/.local/bin"
-DIR_ICONOS="$HOME/.local/share/icons"
+# Named icon in the user's hicolor theme (`Icon=dedalo`): desktops cache icons
+# by file path, so pointing at a fixed .svg never showed a changed icon.
+DIR_ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
 LANZADOR="dedalo"
 
 # Real desktop folder of the user: we prefer xdg-user-dir (respects locales
@@ -47,6 +49,7 @@ DESKTOP_FILE="$DIR_DESKTOP/dedalo.desktop"
 
 mkdir -p "$BIN" "$DIR_ICONOS"
 cp "$PAQUETE/icono.svg" "$DIR_ICONOS/dedalo.svg"
+gtk-update-icon-cache -q -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
 # ── 1) Dynamic resolver: finds the project via its marker ────────────────────
 # The checkout that installs the shortcut is recorded first, so the launcher is
@@ -135,7 +138,7 @@ Type=Application
 Name=Dédalo
 Comment=Panel de control de Dédalo
 Exec=$BIN/$LANZADOR
-Icon=$DIR_ICONOS/dedalo.svg
+Icon=dedalo
 Terminal=false
 StartupWMClass=dedalo
 Categories=Development;Utility;
