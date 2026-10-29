@@ -100,6 +100,86 @@ def soporta_dir(binario, cwd=None):
     return soportado
 
 
+# opencode counterpart of flags_claude(): agents Dédalo defines itself through
+# OPENCODE_CONFIG_CONTENT (merged over the user's config). The task agent may
+# edit and run commands but never git (the loop owns branches and commits);
+# read-only roles (reviewer, navigator, judge, ficha) cannot edit, write, run
+# commands, spawn subagents or browse. `build` (the old default) could edit
+# from the reviewer, and the built-in `plan` still runs bash.
+OPENCODE_AGENTE_TAREA = "dedalo-tarea"
+OPENCODE_AGENTE_LECTURA = "dedalo-lectura"
+_AGENTES_OPENCODE = {
+    OPENCODE_AGENTE_TAREA: {
+        "description": "Dédalo: ejecuta una tarea del plan (sin git)",
+        "mode": "primary",
+        "permission": {"bash": {"*": "allow", "git": "deny", "git *": "deny"}},
+    },
+    OPENCODE_AGENTE_LECTURA: {
+        "description": "Dédalo: revisor/navegador/juez de solo lectura",
+        "mode": "primary",
+        "permission": {"edit": "deny", "bash": "deny", "webfetch": "deny",
+                       "task": "deny"},
+    },
+}
+# MCP servers the user's opencode config declares, per (binary, directory).
+_MCP_OPENCODE = {}
+
+
+def agente_opencode(cfg, rol):
+    """opencode agent for a role; OPENCODE_AGENT_TAREA/_LECTURA override it."""
+    if rol == "tarea":
+        return cfg.environ.get("OPENCODE_AGENT_TAREA") or OPENCODE_AGENTE_TAREA
+    return cfg.environ.get("OPENCODE_AGENT_LECTURA") or OPENCODE_AGENTE_LECTURA
+
+
+def mcp_de_opencode(binario, directorio=None):
+    """Names of the MCP servers in the resolved opencode config (cached).
+
+    Read with `opencode debug config` so global, project and env configs all
+    count; any failure means "none known" (nothing to disable)."""
+    clave = (binario, directorio or "")
+    if clave in _MCP_OPENCODE:
+        return _MCP_OPENCODE[clave]
+    nombres = []
+    try:
+        p = subprocess.run([binario, "debug", "config"], capture_output=True,
+                           text=True, timeout=30, cwd=directorio or None,
+                           stdin=subprocess.DEVNULL)
+        texto = p.stdout or ""
+        datos = json.loads(texto[texto.index("{"):]) if "{" in texto else {}
+        mcp = datos.get("mcp") if isinstance(datos, dict) else None
+        if isinstance(mcp, dict):
+            nombres = sorted(mcp)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        nombres = []
+    _MCP_OPENCODE[clave] = nombres
+    return nombres
+
+
+def entorno_opencode(binario, env, directorio=None):
+    """Copy of `env` whose OPENCODE_CONFIG_CONTENT adds Dédalo's agents and
+    disables every MCP server, like `--strict-mcp-config` for claude: the
+    nested agent must not reach the user's tokens (GitHub, Discord...) nor
+    drive Dédalo itself. A config already in the variable is kept underneath."""
+    conf = {}
+    try:
+        previa = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+        if isinstance(previa, dict):
+            conf = previa
+    except ValueError:
+        pass
+    agentes = conf.get("agent") if isinstance(conf.get("agent"), dict) else {}
+    conf["agent"] = {**agentes, **_AGENTES_OPENCODE}
+    mcp = conf.get("mcp") if isinstance(conf.get("mcp"), dict) else {}
+    for nombre in mcp_de_opencode(binario, directorio):
+        actual = mcp.get(nombre) if isinstance(mcp.get(nombre), dict) else {}
+        mcp[nombre] = {**actual, "enabled": False}
+    conf["mcp"] = mcp
+    nuevo = dict(env)
+    nuevo["OPENCODE_CONFIG_CONTENT"] = json.dumps(conf, ensure_ascii=False)
+    return nuevo
+
+
 def _argv_opencode(binario, cfg, subagente, modelo, prompt, dir_trabajo=None):
     """argv for `opencode run`, pinning the working directory to the project.
 
@@ -336,11 +416,12 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     flags = (cfg.environ.get("CODEX_FLAGS") or "").split() \
         if agente == "codex" else []
     entrada = None
+    entorno = env if env is not None else cfg.environ
     if agente == "opencode":
         cmd = _argv_opencode(
-            binario, cfg,
-            cfg.environ.get("OPENCODE_AGENT_TAREA") or "build", modelo, prompt,
+            binario, cfg, agente_opencode(cfg, rol), modelo, prompt,
             dir_trabajo=dir_trabajo)
+        entorno = entorno_opencode(binario, entorno, dir_trabajo or cfg.proyecto)
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check",
                *flags, prompt]
@@ -354,7 +435,6 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     salida_err = salida + ".err"
     vivo = EN_CURSO
     t0 = ahora_ms()
-    entorno = env if env is not None else cfg.environ
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _salida, _t = run_con_timeout(
             cmd, timeout or cfg.timeout_por_tarea, env=entorno,
@@ -381,10 +461,13 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
               "ENDPOINTS: GET /api/...\n"
               "MODELOS: Modulo.servicio")
     entrada = None
+    entorno = cfg.environ
     if agente == "opencode":
         cmd = _argv_opencode(
             binario, cfg,
-            cfg.environ.get("OPENCODE_AGENT_NAV") or "navigate", modelo, prompt)
+            cfg.environ.get("OPENCODE_AGENT_NAV") or OPENCODE_AGENTE_LECTURA,
+            modelo, prompt)
+        entorno = entorno_opencode(binario, entorno, cfg.proyecto)
     elif agente == "codex":
         cmd = [binario, "exec", "--skip-git-repo-check", prompt]
     elif agente == "claude":
@@ -397,7 +480,7 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
     t0 = ahora_ms()
     with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _s, _t = run_con_timeout(
-            cmd, cfg.timeout_navegador, env=cfg.environ, cwd=cfg.proyecto,
+            cmd, cfg.timeout_navegador, env=entorno, cwd=cfg.proyecto,
             stdout=fout, stderr=ferr, vivo=vivo, entrada=entrada)
     dur = ahora_ms() - t0
     registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, 0)

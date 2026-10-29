@@ -43,11 +43,13 @@ from . import (
 )
 from .gate import argv_gate
 from .loop_agentes import (
+    OPENCODE_AGENTE_LECTURA,
     agente_ok,
     bash_permitidos,
     cli_agente,
     detectar_agente,
     elegir_revisor,
+    entorno_opencode,
     modelo_claude,
     revisar_diff,
     run_agente,
@@ -114,7 +116,8 @@ class Config:
         self.modelo_revisor = env.get("MODELO_REVISOR", "") or ""
         self.modelo_juez = env.get(
             "MODELO_JUEZ", "opencode/nemotron-3.5-lightning-free") or ""
-        self.opencode_agente_juez = env.get("OPENCODE_AGENT_JUEZ", "build") or ""
+        self.opencode_agente_juez = (env.get("OPENCODE_AGENT_JUEZ")
+                                     or OPENCODE_AGENTE_LECTURA)
         self.revision_dual = env.get("REVISION_DUAL", "1")
         self.revision_manual = env.get("REVISION_MANUAL", "0")
         self.timeout_revision_manual = int(
@@ -391,6 +394,10 @@ def _run_gate(cfg, criterio):
     env["CRITERIO"] = criterio or ""
     env["MODELO_JUEZ"] = cfg.modelo_juez
     env["OPENCODE_AGENT_JUEZ"] = cfg.opencode_agente_juez
+    if agente_ok("opencode", cfg):
+        # The judge may be opencode whatever the task agent is: it needs the
+        # read-only agent defined and the user's MCP servers off.
+        env = entorno_opencode(cli_agente("opencode", cfg), env, cfg.proyecto)
     # A claude judge follows the task model unless MODELO_JUEZ names a Claude one.
     loop_launch.entorno_juez(env, modelo_claude(cfg.modelo_juez) or cfg.modelo_tarea)
     if not getattr(sys, "frozen", False):

@@ -350,6 +350,12 @@ def _opencode_falso(tmp_path, soporta=True, veredicto=""):
               "  cat <<'AYUDA'\n" + ayuda + "AYUDA\n"
               "  exit 0\n"
               "fi\n"
+              "if [ \"${1:-}\" = \"debug\" ] && [ \"${2:-}\" = \"config\" ]; then\n"
+              "  echo '{\"mcp\": {\"github\": {\"type\": \"local\"}, "
+              "\"discord\": {\"type\": \"local\"}}}'\n"
+              "  exit 0\n"
+              "fi\n"
+              "printf '%s' \"${OPENCODE_CONFIG_CONTENT:-}\" > \"${CAPTURA_CONF:-/dev/null}\"\n"
               "printf '%s\\n' \"$@\" > \"${CAPTURA:-/dev/null}\"\n"
               + (f"echo '{veredicto}'\n" if veredicto else "")
               + "exit 0\n")
@@ -363,8 +369,66 @@ def _opencode_falso(tmp_path, soporta=True, veredicto=""):
 @pytest.fixture(autouse=True)
 def _limpiar_cache_dir():
     la._DIR_SOPORTADO.clear()
+    la._MCP_OPENCODE.clear()
     yield
     la._DIR_SOPORTADO.clear()
+    la._MCP_OPENCODE.clear()
+
+
+def _correr_opencode(tmp_path, rol, env_extra=None):
+    """run_agente with the fake opencode; returns (argv, config it received)."""
+    captura, conf = tmp_path / "argv.txt", tmp_path / "conf.json"
+    bin_ = _opencode_falso(tmp_path, soporta=True)
+    cfg = _config(tmp_path, {"CLI_OPENCODE": str(bin_), "CAPTURA": str(captura),
+                             "CAPTURA_CONF": str(conf), **(env_extra or {})})
+    cfg.timeout_por_tarea = 30
+    rc, _vivo = run_agente(cfg, "opencode", str(tmp_path / "out"), "",
+                           "prompt", "t1", 1, rol=rol)
+    assert rc == 0
+    argv = captura.read_text(encoding="utf-8").splitlines()
+    return argv, json.loads(conf.read_text(encoding="utf-8"))
+
+
+def test_opencode_tarea_usa_el_agente_de_dedalo_sin_git(tmp_path):
+    argv, conf = _correr_opencode(tmp_path, "tarea")
+    assert argv[argv.index("--agent") + 1] == la.OPENCODE_AGENTE_TAREA
+    bash = conf["agent"][la.OPENCODE_AGENTE_TAREA]["permission"]["bash"]
+    assert bash["git"] == "deny" and bash["git *"] == "deny"
+
+
+def test_opencode_revisor_es_de_solo_lectura(tmp_path):
+    """The reviewer used to run with `build`, which can edit the repo."""
+    argv, conf = _correr_opencode(tmp_path, "revisor")
+    assert argv[argv.index("--agent") + 1] == la.OPENCODE_AGENTE_LECTURA
+    permiso = conf["agent"][la.OPENCODE_AGENTE_LECTURA]["permission"]
+    for herramienta in ("edit", "bash", "webfetch", "task"):
+        assert permiso[herramienta] == "deny", herramienta
+
+
+def test_opencode_anidado_no_carga_los_mcp_del_usuario(tmp_path):
+    """Like --strict-mcp-config: every MCP the user's config declares is off."""
+    _argv, conf = _correr_opencode(tmp_path, "tarea")
+    assert conf["mcp"] == {"discord": {"enabled": False},
+                           "github": {"enabled": False}}
+
+
+def test_opencode_respeta_agente_y_config_del_usuario(tmp_path):
+    previa = json.dumps({"model": "opencode/x",
+                         "mcp": {"github": {"timeout": 5}}})
+    argv, conf = _correr_opencode(tmp_path, "revisor", {
+        "OPENCODE_AGENT_LECTURA": "mi-revisor",
+        "OPENCODE_CONFIG_CONTENT": previa})
+    assert argv[argv.index("--agent") + 1] == "mi-revisor"
+    assert conf["model"] == "opencode/x"
+    assert conf["mcp"]["github"] == {"timeout": 5, "enabled": False}
+
+
+def test_mcp_de_opencode_sin_config_legible_no_desactiva_nada(tmp_path):
+    malo = tmp_path / "opencode"
+    malo.write_text("#!/usr/bin/env bash\necho no-es-json\n", encoding="utf-8")
+    malo.chmod(0o755)
+    assert la.mcp_de_opencode(str(malo)) == []
+    assert la.mcp_de_opencode("/no/existe/opencode") == []
 
 
 def test_soporta_dir_detecta_la_capacidad(tmp_path):

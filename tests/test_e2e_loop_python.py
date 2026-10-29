@@ -45,6 +45,7 @@ def _agente_falso(dir_bin):
     bin_ = dir_bin / "opencode"
     bin_.write_text(
         "#!/usr/bin/env bash\n"
+        'if [ "$1" = "debug" ]; then echo "{}"; exit 0; fi\n'
         'if [ "$1" = "session" ]; then\n'
         '    case "$2" in\n'
         '        list) echo "[]"; exit 0 ;;\n'
@@ -272,6 +273,7 @@ def test_contexto_del_proyecto_llega_al_prompt_del_agente(tmp_path):
     bin_falso.parent.mkdir(parents=True, exist_ok=True)
     bin_falso.write_text(
         "#!/usr/bin/env bash\n"
+        'if [ "$1" = "debug" ]; then echo "{}"; exit 0; fi\n'
         'if [ "$1" = "session" ]; then\n'
         '    case "$2" in\n'
         '        list) echo "[]"; exit 0 ;;\n'
@@ -301,6 +303,7 @@ def _agente_que_falla(dir_bin, mensaje="boom"):
     bin_ = dir_bin / "opencode"
     bin_.write_text(
         "#!/usr/bin/env bash\n"
+        'if [ "$1" = "debug" ]; then echo "{}"; exit 0; fi\n'
         'if [ "$1" = "session" ]; then echo "[]"; exit 0; fi\n'
         f"echo '{mensaje}' >&2\n"
         "exit 1\n", encoding="utf-8")

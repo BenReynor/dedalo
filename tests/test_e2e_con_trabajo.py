@@ -59,6 +59,7 @@ def _agente_falso(dir_bin, con_trabajo: bool):
     bin_ = dir_bin / "opencode"
     bin_.write_text(textwrap.dedent(f"""\
         #!/usr/bin/env bash
+        if [ "$1" = "debug" ]; then echo "{{}}"; exit 0; fi
         if [ "$1" = "session" ]; then
             case "$2" in
                 list) echo "[]"; exit 0 ;;
