@@ -603,3 +603,15 @@ def test_estado_vivo_de_un_loop_abortado_guarda_el_motivo(tmp_path):
     assert e["estado"] == "abortado" and e["rc"] == 5
     assert "cuota" in e["motivo"], e["motivo"]
     assert e["historial"] == []
+
+
+def test_el_venv_del_proyecto_va_primero_en_el_path(tmp_path):
+    """Gate and agent call pytest/ruff/python by name: the project's own venv
+    (with its dependencies) must win over the system ones."""
+    sub = "Scripts" if os.name == "nt" else "bin"
+    (tmp_path / ".venv" / sub).mkdir(parents=True)
+    env = loop.con_venv_del_proyecto({"PATH": os.pathsep.join(["/usr/bin", "/bin"])}, str(tmp_path))
+    assert env["PATH"].split(os.pathsep)[0] == str(tmp_path / ".venv" / sub)
+    assert env["VIRTUAL_ENV"] == str(tmp_path / ".venv")
+    sin = {"PATH": "/usr/bin"}
+    assert loop.con_venv_del_proyecto(sin, str(tmp_path / "otro")) is sin

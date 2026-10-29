@@ -82,14 +82,34 @@ HIJO = {"proc": None}  # current agent/gate process (the signals kill it)
 _RECHAZO_MOTIVO = {"txt": ""}  # global variable in the style of the script's ${RECHAZO_MOTIVO}
 
 
+def con_venv_del_proyecto(environ, proyecto):
+    """Environment with the project's virtualenv first in PATH, if it has one.
+
+    The gate templates and Claude's Bash allowlist call `pytest`, `ruff` or
+    `python` by name: without this they ran the system ones, which lack the
+    project's dependencies (a PySide/customtkinter app failed to import).
+    `.venv` and `venv` are looked for, `bin/` on POSIX and `Scripts\\` on Windows.
+    """
+    sub = "Scripts" if os.name == "nt" else "bin"
+    for nombre in (".venv", "venv"):
+        carpeta = os.path.join(proyecto, nombre, sub)
+        if os.path.isdir(carpeta):
+            env = dict(environ)
+            ruta = env.get("PATH", "")
+            if carpeta not in ruta.split(os.pathsep):
+                env["PATH"] = carpeta + (os.pathsep + ruta if ruta else "")
+            env["VIRTUAL_ENV"] = os.path.dirname(carpeta)
+            return env
+    return environ
+
 class Config:
     """Configuration of the run read from the environment (same defaults as the
     script). Instantiated in main() and passed to all functions."""
 
     def __init__(self, args, environ=None, proyecto=None):
         env = environ if environ is not None else os.environ
-        self.environ = env
         self.proyecto = str(proyecto) if proyecto else os.getcwd()
+        self.environ = con_venv_del_proyecto(env, self.proyecto)
         self.plan_md = args.plan
         self.gate = rutas.gate_sh(self.proyecto)
         self.mapear = rutas.mapear_sh(self.proyecto)
