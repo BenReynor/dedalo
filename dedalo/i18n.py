@@ -466,4 +466,10 @@ _ES: dict[str, str] = {
     '✗ Stopped: {motivo}': '✗ Detenido: {motivo}',
     '✗ The loop stopped unexpectedly': '✗ El loop se detuvo inesperadamente',
     "Checking internet…": "Comprobando internet…",
+    "Reading your projects…": "Leyendo tus proyectos…",
+    "Loading themes…": "Cargando temas…",
+    "Checking agents: {agentes}…": "Comprobando agentes: {agentes}…",
+    "Agent {agente} {marca}": "Agente {agente} {marca}",
+    "Building the panel…": "Construyendo el panel…",
+    "Ready": "Listo",
 }

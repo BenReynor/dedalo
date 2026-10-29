@@ -43,6 +43,7 @@ from . import (
     sensor,
 )
 from . import configuracion as cfg
+from .carga import PantallaCarga, precalentar_agentes
 from .gate import argv_gate
 from .i18n import IDIOMAS, NOMBRES_IDIOMA, idioma, set_idioma, t
 from .paneles import (
@@ -1544,17 +1545,27 @@ def main():
     # Ventana.__init__ loads the registry and, if it comes out empty, saves it
     # again, so a broken JSON used to become "all projects deleted" silently
     # at startup.
-    try:
-        verificar_registro()
-    except RegistroCorrupto as exc:
-        if not _resolver_registro_corrupto(exc):
-            return
-        descartar_registro_corrupto()
-
-    inicializar_temas()
     icono = os.path.join(os.path.dirname(__file__), "icono.svg")
     if os.path.exists(icono):
         app.setWindowIcon(QIcon(icono))
+    carga = PantallaCarga()
+    carga.show()
+    carga.paso(t("Reading your projects…"), 5)
+    try:
+        verificar_registro()
+    except RegistroCorrupto as exc:
+        carga.hide()
+        if not _resolver_registro_corrupto(exc):
+            return
+        descartar_registro_corrupto()
+        carga.show()
+
+    carga.paso(t("Loading themes…"), 12)
+    inicializar_temas()
+    precalentar_agentes(carga.paso, desde=15, hasta=80)
+    carga.paso(t("Building the panel…"), 85)
     ventana = Ventana()
+    carga.paso(t("Ready"), 100)
     ventana.show()
+    carga.close()
     sys.exit(app.exec())
