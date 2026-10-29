@@ -5,9 +5,9 @@
 [![Latest release](https://img.shields.io/github/v/release/BenReynor/dedalo?sort=semver&color=blue)](https://github.com/BenReynor/dedalo/releases)
 [![License: MIT](https://img.shields.io/github/license/BenReynor/dedalo?color=green)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20tested%20%7C%20macOS%20%26%20Windows%20untested-informational)](#-compatibility)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20experimental-informational)](#-compatibility)
 
-Orchestrates AI agents (opencode, codex, claude) to iterate over tasks in `plan.md`, run tests, request code review, and commit automatically.
+Orchestrates AI agents (opencode, claude) to iterate over tasks in `plan.md`, run tests, request code review, and commit automatically.
 
 > **Working with an AI on this project?** See
 > [`docs/FICHA_TECNICA.md`](docs/FICHA_TECNICA.md) —requirements, dependencies,
@@ -46,7 +46,7 @@ Orchestrates AI agents (opencode, codex, claude) to iterate over tasks in `plan.
 ## 🚀 Quick Start
 
 **Before you start:** Python 3.10+, `git`, and at least one agent CLI
-(`opencode`, `codex` or `claude`) installed and logged in. Nothing else is
+(`opencode` or `claude`) installed and logged in. Nothing else is
 required for the GUI or the loop; `bash` is only needed for the project map
 (`mapear.sh`) and the optional legacy engine.
 
@@ -126,7 +126,7 @@ project and it works through `plan.md` in order, one task at a time:
 
 1. **Pick** the first pending task (`- [ ]`) and inject `CONTEXTO.md` plus
    `lecciones.md` into the agent's prompt.
-2. **Implement** it with the selected agent (`opencode`, `codex`, `claude` or
+2. **Implement** it with the selected agent (`opencode`, `claude` or
    `auto`), in its own task branch created from the run branch.
 3. **Gate** the result: the project's own checks (`gate_checks/`) must pass.
 4. **Review** the diff with a second agent and model (dual review, on by
@@ -474,19 +474,15 @@ tokens and window settings.
 
 ## 🖥️ Compatibility
 
-> **Only Linux has been validated by hand.** The full suite runs in CI on Linux,
-> macOS and Windows (headless), and the release workflow builds and boots the
-> packaged app on each platform. But Dédalo has not been used day to day on a
-> real Mac or a real Windows machine: the desktop shortcut, the tray, the
-> thermal sensor and unattended loop runs have only been exercised on Linux.
-> Treat macOS and Windows as **untested in practice** and report whatever
-> breaks.
+> **Dédalo works on Linux.** Windows support is **experimental**: the full
+> suite runs in CI on Windows (headless) and the release workflow builds and
+> boots the packaged app, but it has not been used day to day on a real Windows
+> machine. Report whatever breaks.
 
 | OS | Status |
 |----|--------|
-| **Linux** | ✅ **Tested.** Reference environment: daily use plus the CI suite. |
-| **macOS** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `macos-latest` (arm64) and the `.dmg` is built, and the known GNU-isms are gone (`timeout` → `_timeout` with a 124 fallback; `sed -i "0,/…/"` → `marcar_plan` in awk+cat, preserving permissions). Not exercised by hand: the thermal sensor is Linux-only (`/sys/class/thermal`, it degrades to "no data") and the `.dmg` is unsigned. |
-| **Windows** | ⚠️ **Not tested on real hardware.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is only needed for the optional bash engine (`dedalo.sh`); the project map is generated in Python. |
+| **Linux** | ✅ **Supported.** Reference environment: daily use plus the CI suite. |
+| **Windows** | 🧪 **Experimental.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). Not exercised by hand: installer and shortcut, tray, and real agent sessions. Bash is only needed for the optional bash engine (`dedalo.sh`); the project map is generated in Python. |
 
 What's already OS-independent: the line endings of `.sh` files
 (`.gitattributes` forces `eol=lf`, so a `clone` on Windows with `autocrlf`
@@ -495,26 +491,23 @@ Spanish locale, `awk`/`printf` wrote `0,500000` and `metrics.jsonl` ended up
 as invalid JSON).
 
 `tests/test_portabilidad.py` is the guardrail: it fails if someone
-reintroduces a non-portable construct, and a CI job on `macos-latest` runs that
-lint against real BSD binutils. The allowlist of pending blocks
-(Windows only; macOS's became empty after porting `timeout` and the plan
-marking) is at the end of that file, with the reason for each.
+reintroduces a non-portable construct. The allowlist of pending Windows blocks
+is at the end of that file, with the reason for each.
 
 ### 📦 Downloads (Release)
 
 Per-platform binaries are published to [Releases](https://github.com/BenReynor/dedalo/releases)
-when a `v*` tag is pushed (Linux: `.tar.gz`/`.deb`/`.AppImage`; Windows: `.zip`
-with `dedalo.exe`; macOS: `.dmg`). The builds are **not code-signed**:
+when a `v*` tag is pushed (Linux: `.tar.gz`/`.deb`/`.AppImage`; Windows, experimental: `.zip`
+with `dedalo.exe`). The builds are **not code-signed**:
 when installing them, the OS will ask for explicit confirmation:
 
 | OS | First launch |
 |----|-----------------|
-| **macOS** | `control + clic` on the app → *Open* (or `xattr -dr com.apple.quarantine /Applications/Dedalo.app`). |
 | **Windows** | SmartScreen will warn you: *More info → Run anyway*. |
 | **Linux** | No signature or sandbox; provenance = this repository (checksums are in the Release itself). |
 
 Each Release ships its `SHA256SUMS*`; verify them with
-`shasum -a 256 -c SHA256SUMS[-windows|-macos]`.
+`sha256sum -c SHA256SUMS[-windows]`.
 
 End-to-end validation (GUI plus a real loop run with an agent like
 opencode) is documented step by step, per OS, in
@@ -548,7 +541,7 @@ GUI fills them in from the Run form). The most useful ones:
 
 | Variable | Description |
 |----------|-------------|
-| `AGENTE_TAREA` | Agent that implements: `opencode`\|`codex`\|`claude`\|`auto` (default). |
+| `AGENTE_TAREA` | Agent that implements: `opencode`\|`claude`\|`auto` (default). |
 | `AGENTES_PREFERIDOS` | Preference order for `auto` and the reviewer. |
 | `MODELO_TAREA` | Task model `provider/model` (opencode only). |
 | `AGENTE_REVISOR` / `MODELO_REVISOR` | Agent and model for the dual gate (diff reviewer). |
@@ -577,21 +570,29 @@ GUI fills them in from the Run form). The most useful ones:
 >
 > Fichas use the canonical format in
 > `dedalo/plantillas_data/skills/ficha-dedalo/SKILL.md`; the engine injects it
-> into the observer prompt, so it works with opencode, codex and claude.
+> into the observer prompt, so it works with opencode and claude.
 >
 > These variables (plus everything prefixed `DEDALO_`, `CLI_`, `LC_`,
-> `OPENCODE_`, `CODEX_` and `CLAUDE_`) are always passed through. Any **other**
+> `OPENCODE_` and `CLAUDE_`) are always passed through. Any **other**
 > variable you need in the engine/gate must be opted in with
 > `DEDALO_ENTORNO_EXTRA` — see [Security](#-security).
 
 ### CLI Agents
 
 `auto` (default) picks the first installed CLI according to `AGENTES_PREFERIDOS`
-(`opencode codex claude`). The GUI only shows the agents it finds on the machine
+(`opencode claude`). The GUI only shows the agents it finds on the machine
 and labels the detected one in the `auto` option, so it never offers one that
 doesn't exist.
 
-- `codex` is invoked with `codex exec --skip-git-repo-check`.
+- `opencode` is invoked with `opencode run --agent <agent> --dir <project>`.
+  Dédalo defines its own agents through `OPENCODE_CONFIG_CONTENT` (merged over
+  your config) and disables every MCP server of yours in those runs, the same
+  isolation as claude's `--strict-mcp-config`:
+  - **task agent** (`dedalo-tarea`): may edit and run commands, never `git`.
+  - **reviewer, judge, navigator and ficha** (`dedalo-lectura`): read-only
+    (no edit, write, bash, subagents or web).
+  - `OPENCODE_AGENT_TAREA`, `OPENCODE_AGENT_LECTURA`, `OPENCODE_AGENT_NAV` and
+    `OPENCODE_AGENT_JUEZ` override them.
 - `claude` is invoked with `claude -p --output-format text --strict-mcp-config`
   (it never loads your MCP servers) and receives the prompt through stdin.
   Permissions depend on the role:
@@ -604,8 +605,7 @@ doesn't exist.
 - `opencode` accepts any `provider/model`; `claude` accepts Anthropic models
   (`anthropic/haiku`, `anthropic/sonnet`, `anthropic/opus` or a full
   `claude-*` id). Picking `claude` in the GUI switches a non-Claude model to
-  `anthropic/haiku`, the cheapest. `codex` takes its model from its own
-  account, so the selector is disabled for it.
+  `anthropic/haiku`, the cheapest.
 - If a CLI is installed but has no session (`Not logged in`, 401, invalid API
   key), the loop stops with a clear warning instead of marking tasks as failed
   over an authentication error.
@@ -673,8 +673,8 @@ to your `opencode.json` (global or project):
 }
 ```
 
-Config file: `~/Library/Application Support/Claude/claude_desktop_config.json`
-on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows.
+Config file: `~/.config/Claude/claude_desktop_config.json` on Linux,
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows.
 </details>
 
 **Restart the client after updating Dédalo** (code or `.venv`): a long-running
@@ -888,7 +888,7 @@ dedalo/
 
 | Symptom | What to do |
 |---|---|
-| “no agent CLI with a session” | Log in to at least one CLI (`opencode`, `codex`, `claude`) or pick another one in the Run panel. The probe is cached; refresh models to re-check. |
+| “no agent CLI with a session” | Log in to at least one CLI (`opencode` or `claude`) or pick another one in the Run panel. The probe is cached; refresh models to re-check. |
 | The gate is red | Open **Logs** and read the gate pane for the failing check; run `bash .dedalo/scripts/gate.sh` (or the portable gate) by hand and fix the project. The loop will not commit red work. |
 | “gate_checks sin consentimiento” / exit code `3` | Approve the gate once in the GUI, call `confiar_gate` from MCP, or set `DEDALO_GATE_CONSENT=1` for an unattended run. |
 | Manual review never finishes | Send `APPROVE`/`REJECT` from the Revision panel. An agent's approval is ignored unless `REVISION_APRUEBA_AGENTE=1`; on timeout the task is marked `[B]`. |

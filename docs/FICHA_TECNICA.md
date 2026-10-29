@@ -7,7 +7,7 @@ technical debt, [BUGS_CONOCIDOS.md](BUGS_CONOCIDOS.md).
 ## What it is
 
 A graphical control panel (PySide6) that orchestrates command-line AI agents
-(`opencode`, `codex`, `claude`) over a project: they iterate on tasks from a `plan.md`,
+(`opencode`, `claude`) over a project: they iterate on tasks from a `plan.md`,
 run the gate (`gate.sh`), request code review and commit. The engine does not
 depend on the GUI: it can be driven from the CLI or over MCP.
 
@@ -22,8 +22,8 @@ depend on the GUI: it can be driven from the CLI or over MCP.
 | Requirement | Value |
 |-----------|-------|
 | Python | ≥ 3.10 |
-| Operating system | Linux (reference, validated by hand), macOS (arm64) and native Windows (CI-tested only, not validated on real hardware) |
-| Graphical interface | Qt (X11/Wayland on Linux, native on macOS/Windows) |
+| Operating system | Linux (supported); native Windows is experimental (CI-tested only, not validated on real hardware) |
+| Graphical interface | Qt (X11/Wayland on Linux, native on Windows) |
 | Network | Outbound only (model API, remote `git`, webhooks); opens no ports |
 
 ## Dependencies
