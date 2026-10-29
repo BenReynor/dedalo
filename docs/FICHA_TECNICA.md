@@ -137,22 +137,22 @@ when `v*` is tagged; every Release includes `SHA256SUMS*`.
 | OS | Artifacts | Status |
 |----|------------|--------|
 | Linux | `dedalo-<v>-linux-x86_64.tar.gz`, `dedalo_<v>_amd64.deb`, `dedalo-<v>-x86_64.AppImage` | Reference |
-| macOS | `dedalo-<v>-macos-arm64.dmg` | Published (unsigned) |
-| Windows | `dedalo-<v>-win64.zip` (`dedalo.exe`, onedir) | Native (no Git Bash) |
+| Windows | `dedalo-<v>-win64.zip` (`dedalo.exe`, onedir) | Experimental, native (no Git Bash) |
 
-Builds are **not signed**: macOS requires `control + clic → Abrir`; Windows,
-SmartScreen (*More info → Run anyway*). Checksums live in the
-Release itself (`shasum -a 256 -c SHA256SUMS*`).
+Builds are **not signed**: on Windows, SmartScreen warns
+(*More info → Run anyway*). Checksums live in the
+Release itself (`sha256sum -c SHA256SUMS*`).
 
 ### Distribution decisions (closed)
 
 - **No code signing** or notarization: the signing secrets are optional
-  in CI; without them the `.dmg`/`.exe` ship unsigned and the OS warns.
+  in CI; without them the `.exe` ships unsigned and the OS warns.
 - **No `.rpm`/Snap/Flatpak**: "any distro" is covered by AppImage +
   `.deb` + portable tar.gz.
 - **Native Windows**: WSL2 is not packaged; the bash engine is replaced by
   Python in the bundle (`dedalo.exe`), without requiring Git Bash.
-- **macOS Intel**: pending (arm64 only for now).
+- **No macOS**: never run on real hardware, so it is neither tested in CI
+  nor published.
 - Integrity verification via `SHA256SUMS` on every Release, plus keyless
   **build provenance** (Sigstore/OIDC); no GPG signature.
 
@@ -213,10 +213,10 @@ Known risks (accepted, see [BUGS_CONOCIDOS.md](BUGS_CONOCIDOS.md)):
 
 | Aspect | Status |
 |---------|--------|
-| Tests | 435 passed, 4 skipped (`pytest`) |
+| Tests | 588 passed, 5 skipped (`pytest`) |
 | Lint | `ruff` (rules E, F, W, I, UP, B) — clean |
 | Portability | `test_portabilidad.py` as a guardrail (bash BSD/GNU) |
-| CI | 5 jobs: Linux, Windows, macOS, macOS portability, security |
+| CI | 3 jobs: Linux, Windows, security |
 
 ## Links
 

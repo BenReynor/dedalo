@@ -20,7 +20,7 @@ import pytest
 
 # This module analyzes .sh with `bash -n`, `locale`, +x permissions and symlinks:
 # on Windows it makes no sense (there it is skipped entirely). Template
-# portability is verified on Linux and in the CI macOS job.
+# portability is verified on Linux (the CI macOS job was dropped).
 pytestmark = pytest.mark.skipif(
     os.name == "nt", reason="lint de plantillas shell: sólo POSIX")
 
