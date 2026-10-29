@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 
 from . import (
     consentimiento,
@@ -168,6 +169,15 @@ def _ruta_de_fichero(nombre, fichero):
     if fichero in rutas.ESTADO_LEGACY:
         return rutas.estado(proyecto, fichero)
     return os.path.join(proyecto, fichero)
+
+
+def _recoger_al_terminar(proc):
+    """Waits for `proc` in a daemon thread so it is reaped as soon as it exits.
+
+    Reaping only in `_recoger_terminados` left a finished loop as a zombie
+    until some tool was called again, and a zombie still answers `kill -0`."""
+    threading.Thread(target=proc.wait, name=f"dedalo-wait-{proc.pid}",
+                     daemon=True).start()
 
 
 def _recoger_terminados():
@@ -468,6 +478,7 @@ def iniciar_loop(nombre: str) -> str:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=(os.name != "nt"))
     _LOOPS[nombre] = proc
+    _recoger_al_terminar(proc)
     # Register immediately so the GUI (which reads the same file) sees the loop
     # even before the engine has finished booting; the engine re-registers
     # itself with the same pid once it holds its lock.

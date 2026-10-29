@@ -190,6 +190,30 @@ def test_iniciar_loop_no_duplica_si_ya_corre(proyecto, monkeypatch):
     assert "corriendo" in datos["motivo"]
 
 
+def test_loop_terminado_no_queda_zombi(proyecto, monkeypatch):
+    """A finished loop is reaped without any later tool call (it stayed a
+    zombie, and `kill -0` still answered for it)."""
+    import sys
+    import time
+
+    monkeypatch.setattr(m.net, "hay_internet", lambda: True)
+    monkeypatch.setattr(m.consentimiento, "concedido", lambda *a: True)
+    monkeypatch.setattr(m.loop_launch, "config_de_proyecto",
+                        lambda nombre: ({}, {}))
+    monkeypatch.setattr(m.loop_launch, "preparar", lambda *a, **k: {
+        "detectados": ["claude"], "programa": sys.executable,
+        "argv": ["-c", "pass"], "env": dict(os.environ),
+        "agente_tarea": "claude", "agente_revisor": "claude"})
+    datos = json.loads(m.iniciar_loop("p1"))
+    proc = m._LOOPS["p1"]
+    assert datos["pid"] == proc.pid
+    limite = time.monotonic() + 10
+    while proc.returncode is None and time.monotonic() < limite:
+        time.sleep(0.05)  # only observe: the reaper thread must do the wait
+    assert proc.returncode == 0
+    m._LOOPS.pop("p1", None)
+
+
 def test_correr_gate_pasa_el_argv_completo(monkeypatch, tmp_path):
     """argv_gate returns a list; correr_gate must not try to unpack 2 values."""
     monkeypatch.setattr(m, "_ruta_de", lambda nombre: str(tmp_path))
