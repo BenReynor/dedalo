@@ -68,6 +68,37 @@ def _zombie(pid):
     except (OSError, IndexError):
         return False
 
+def _vivo_windows(pid):
+    """Windows: ask the kernel for the exit code; never use os.kill there.
+
+    On Windows `os.kill(pid, 0)` is not a probe: any signal other than
+    CTRL_C/CTRL_BREAK calls TerminateProcess, so checking a loop killed it.
+    And for an exited process whose handle is still open it raised
+    PermissionError, which read as "alive".
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    ERROR_ACCESS_DENIED = 5
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        # Access denied = it exists but belongs to someone else.
+        return ctypes.get_last_error() == ERROR_ACCESS_DENIED
+    try:
+        codigo = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(codigo)):
+            return True
+        return codigo.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
 def vivo(pid):
     """Whether `pid` is alive (signal 0). PermissionError counts as alive.
 
@@ -81,6 +112,8 @@ def vivo(pid):
         pid = int(pid)
     except (ValueError, TypeError):
         return False
+    if not _POSIX:
+        return _vivo_windows(pid)
     if _zombie(pid):
         return False
     try:

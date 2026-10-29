@@ -110,3 +110,18 @@ def test_vivo_considera_muerto_a_un_zombie():
         assert le.vivo(proc.pid) is False
     finally:
         proc.wait()
+
+
+def test_vivo_no_mata_al_proceso_que_comprueba():
+    """On Windows os.kill(pid, 0) terminates the process: checking a running
+    loop must leave it running, and an exited one must read as dead."""
+    import time
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert le.vivo(proc.pid) is True
+        time.sleep(0.3)
+        assert proc.poll() is None, "comprobar si vivía lo mató"
+    finally:
+        proc.kill()
+        proc.wait()
+    assert le.vivo(proc.pid) is False
