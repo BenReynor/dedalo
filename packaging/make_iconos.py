@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Generates packaging/icono.icns (macOS) and packaging/icono.ico (Windows)
-from dedalo/icono.svg.
+"""Generates packaging/icono.icns (macOS), packaging/icono.ico (Windows) and
+packaging/icono.png (256 px, the AppImage icon) from dedalo/icono.svg.
 
 Usage:
     python3 packaging/make_iconos.py
@@ -29,6 +29,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 SVG = RAIZ / "dedalo" / "icono.svg"
 ICNS = Path(__file__).resolve().parent / "icono.icns"
 ICO = Path(__file__).resolve().parent / "icono.ico"
+# appimagetool only accepts a PNG/XPM icon (and needs .DirIcon) since 2026.
+PNG = Path(__file__).resolve().parent / "icono.png"
 TAMANOS = [16, 32, 64, 128, 256, 512, 1024]
 
 
@@ -60,7 +62,9 @@ def generar() -> None:
     iconos[256].save(ICO, sizes=[(t, t) for t in chicos],
                      append_images=[iconos[t] for t in chicos])
 
-    for ruta in (ICNS, ICO):
+    iconos[256].save(PNG)
+
+    for ruta in (ICNS, ICO, PNG):
         try:
             nombre = ruta.relative_to(RAIZ)
         except ValueError:          # temporary destination (tests)

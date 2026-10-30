@@ -63,7 +63,10 @@ def test_make_iconos_regenera_desde_el_svg(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "ICNS", tmp_path / "icono.icns")
     monkeypatch.setattr(mod, "ICO", tmp_path / "icono.ico")
+    monkeypatch.setattr(mod, "PNG", tmp_path / "icono.png")
     mod.generar()
 
     assert Image.open(tmp_path / "icono.icns").format == "ICNS"
     assert Image.open(tmp_path / "icono.ico").format == "ICO"
+    png = Image.open(tmp_path / "icono.png")
+    assert png.format == "PNG" and png.size == (256, 256)   # icono del AppImage

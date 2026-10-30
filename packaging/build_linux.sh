@@ -160,7 +160,9 @@ cp -a "$APP/." "$APPDIR/"
 # root), so AppRun points to the exe, not to a subfolder. The .desktop and the
 # icon also go at the root (AppImage format requirement).
 ln -sf "$NOMBRE" "$APPDIR/AppRun"
-cp dedalo/icono.svg "$APPDIR/$NOMBRE.svg"
+# PNG, not SVG: current appimagetool only takes .png/.xpm and wants .DirIcon.
+cp packaging/icono.png "$APPDIR/$NOMBRE.png"
+ln -sf "$NOMBRE.png" "$APPDIR/.DirIcon"
 cat > "$APPDIR/$NOMBRE.desktop" <<EOF
 [Desktop Entry]
 Type=Application
