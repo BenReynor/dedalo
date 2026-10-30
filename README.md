@@ -948,6 +948,14 @@ reason and a code reference: [`docs/BUGS_CONOCIDOS.md`](docs/BUGS_CONOCIDOS.md).
 
 ---
 
+## 🤝 Contributing
+
+Contributions are welcome: open an [issue](https://github.com/BenReynor/dedalo/issues)
+for bugs or ideas, or send a pull request. Run the suite and lint from
+[Development](#-development) first (CI runs them on Linux and Windows). Reports
+from a real Windows PC are especially useful.
+
 ## 📝 License
 
-MIT — full text in [LICENSE](LICENSE).
+[MIT](LICENSE): you may use, copy, modify and distribute Dédalo freely, including
+in your own projects, as long as you keep the copyright notice.
