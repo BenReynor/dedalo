@@ -1,5 +1,7 @@
 <img src="dedalo/icono.svg" width="88" align="right" alt="Dédalo icon">
 
+**English** · [Español](README.es.md)
+
 # Dédalo
 
 [![CI](https://github.com/BenReynor/dedalo/actions/workflows/ci.yml/badge.svg)](https://github.com/BenReynor/dedalo/actions/workflows/ci.yml)
@@ -18,9 +20,12 @@ is done). Dédalo hands the tasks one by one to an AI agent CLI (`claude` or
 diff, judges the result against your condition, and only then commits. Failed
 tasks are retried or marked blocked with a lesson, so the plan keeps moving.
 
+The interface is in **English by default**; switch it to Spanish with the
+**Language** selector in the top bar.
+
 | Plan board and editor | Run cockpit |
 |---|---|
-| ![Plan view](docs/capturas/plan.png) | ![Run view](docs/capturas/run.png) |
+| ![Plan view](docs/capturas/en/plan.png) | ![Run view](docs/capturas/en/run.png) |
 
 **Prefer a ready-made build?** Download it from
 [Releases](https://github.com/BenReynor/dedalo/releases) (Linux `.deb`/`.AppImage`/`.tar.gz`,
@@ -495,7 +500,7 @@ stay where they are:
 rm -rf .venv
 rm -f ~/.local/bin/dedalo
 rm -f ~/Escritorio/dedalo.desktop ~/Desktop/dedalo.desktop
-rm -f ~/.local/share/icons/dedalo.svg
+rm -f ~/.local/share/icons/hicolor/scalable/apps/dedalo.svg
 ```
 
 Your settings live outside the checkout, in `~/.config/dedalo/`. Delete that
