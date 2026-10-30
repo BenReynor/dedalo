@@ -1,4 +1,4 @@
-# Manual test of a published binary (v2.2.0)
+# Manual test of a published binary (v2.2.1)
 
 A ~15-minute checklist per OS to validate a binary from the
 [GitHub Release](https://github.com/BenReynor/dedalo/releases) end to end.
@@ -64,10 +64,10 @@ internet, `7` = internal error.
 6. **Thermal sensor**: on machines with `/sys/class/thermal` the reading is shown;
    without it, "no data" (expected degradation).
 
-## 2. Windows (`dedalo-2.2.0-win64.zip`)
+## 2. Windows (`dedalo-2.2.1-win64.zip`)
 
 1. Verify the checksum from PowerShell:
-   `Get-FileHash dedalo-2.2.0-win64.zip -Algorithm SHA256`
+   `Get-FileHash dedalo-2.2.1-win64.zip -Algorithm SHA256`
    and compare it with `SHA256SUMS-windows`.
 2. Unzip → `dedalo\dedalo.exe`.
 3. **First launch**: SmartScreen → *More info* → *Run anyway*.
@@ -81,7 +81,7 @@ internet, `7` = internal error.
    `.\dedalo\dedalo.exe --dedalo-loop plan.md`
    → rc `0` with opencode on PATH; rc `2` without it.
 
-## 3. macOS (`dedalo-2.2.0-macos-arm64.dmg`)
+## 3. macOS (`dedalo-2.2.1-macos-arm64.dmg`)
 
 > **Apple Silicon (arm64)** only. Binary unsigned and unnotarized.
 

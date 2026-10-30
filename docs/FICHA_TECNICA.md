@@ -14,7 +14,7 @@ depend on the GUI: it can be driven from the CLI or over MCP.
 - **Package / CLI / binary**: `dedalo`
 - **Display name**: Dédalo
 - **Repository**: <https://github.com/BenReynor/dedalo>
-- **Version**: 2.2.0
+- **Version**: 2.2.1
 - **License**: MIT (first-party code)
 
 ## Requirements

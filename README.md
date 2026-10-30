@@ -547,7 +547,7 @@ opencode) is documented step by step, per OS, in
 
 #### 🏷️ Tags and Release Status
 
-The latest release is `v2.2.0`; the previous tags are `v2.1.0`, `v2.0.0`, `v2.0.1`
+The latest release is `v2.2.1`; the previous tags are `v2.2.0` (no release: its Linux build failed), `v2.1.0`, `v2.0.0`, `v2.0.1`
 (pre-rename) and `v2.0.2` (already as Dédalo). Every `v*` tag triggers
 `.github/workflows/release.yml`, which builds and publishes a Release with the
 binaries for all three OSes. Worth knowing:
