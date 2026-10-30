@@ -1,3 +1,5 @@
+<img src="dedalo/icono.svg" width="88" align="right" alt="Dédalo icon">
+
 # Dédalo
 
 [![CI](https://github.com/BenReynor/dedalo/actions/workflows/ci.yml/badge.svg)](https://github.com/BenReynor/dedalo/actions/workflows/ci.yml)
@@ -109,7 +111,7 @@ python -m dedalo
 | **Lessons** | Editor for `lecciones.md` (project memory): injected into the agent before each task, and an entry is added when a task gets blocked. |
 | **Progress** | Every completed task is committed together with its updated `plan.md` and `lecciones.md` — the branch tells the whole story, not just the code. |
 | **Incidents** | Table for `incidencias.jsonl` (time, iteration, task, type, reason): failures, aborts, and blocks with their actual cause. |
-| **Run** | Launches the loop: agent → gate → reviewer → commit. Parameters: deadline, iterations, base branch, max cost, dual/manual review. |
+| **Run** | Launches the loop: agent → gate → reviewer → commit. Parameters: deadline, iterations, base branch, max cost, dual/manual review. A **cockpit** at the top shows the run at a glance: status and clock, plan progress per `## FASE`, the current task and attempt, the phase pipeline (Plan → Agent → Gate → Reviewer → Commit; click a phase to see what it produced) and a timeline with an estimate of what is left. Loops started from MCP show up the same way. |
 | **Logs** | Live output of `progreso.log` (loop) and `gate.sh`. Collapsible (⛶) with a permanently visible header. Auto-scroll. |
 | **Map** | Viewer for `mapeo.txt`: modules, tests (with their test names), HTTP routes (Django, Flask, FastAPI, Express, actix/axum, Go) and CLI commands (argparse, click/typer). Generated in Python for any stack; **Regenerate** rebuilds it. A `mapear.sh` you customized still takes precedence. |
 | **Metrics** | Real-time dashboard: tasks completed per iteration, cumulative estimated cost (amber), gate OK/FAIL, reviewer PASS/FAIL. Exports CSV. |
@@ -400,6 +402,13 @@ Two different kinds of files live here:
 
 In short: the app repairs its own scaffolding, but it does **not** regenerate
 your gate checks or your project memory.
+
+**Project virtualenv.** If the project has a `.venv/` (or `venv/`), the loop
+puts its `bin/` (`Scripts\` on Windows) first in `PATH` and sets
+`VIRTUAL_ENV` for the agent, the gate and the judge. Gate templates and the
+agent's allowed commands call `pytest`, `ruff` or `python` by name, so they run
+with the project's dependencies instead of the system ones. Create it however
+you like (e.g. `uv venv` + `uv pip install -r requirements.txt`).
 
 The loop engine is `dedalo/loop.py` (a port of the script, born in `W2`,
 same log/observability). The GUI launches it with its own interpreter
@@ -852,6 +861,11 @@ project, so don't configure mypy expecting it to do anything.
 ```
 dedalo/
 ├── app.py              # Main window, orchestration, QProcess
+├── carga.py            # startup splash; probes agent sessions in parallel
+├── cabina.py           # Run cockpit (status, plan progress, phase pipeline, timeline)
+├── estado_loop.py      # live run state the cockpit reads (estado_loop.json)
+├── modelos.py          # agent CLIs: installed, session probe, model catalog
+├── selector_modelo.py  # provider/model picker widget
 ├── paneles.py          # 9 sidebar panels + review panel and shared widgets
 ├── paneles_webhooks.py # Security → Notifications tab
 ├── temas.py            # Design system: 9 themes, QSS, colores_tema()
@@ -903,8 +917,10 @@ dedalo/
 | The loop will not start | It is already running for that project, there is no internet, or no agent has a session. Check the loop status in the status bar and `progreso.log`. |
 | MCP server does not appear in the client | Use the absolute `.venv/bin/python` path, the `mcp` key (not `mcpServers`) for opencode, and restart the client. |
 | MCP tools still behave like the old version | Restart the MCP client; it caches imported modules. The engine itself is spawned fresh. |
-| The project map is empty | It needs `bash`; click **Map → Regenerate** or run `bash .dedalo/scripts/mapear.sh`. |
+| The project map is empty | Click **Map → Regenerate** (the map is generated in Python for any stack; a customized `mapear.sh` takes precedence and needs `bash`). |
 | Notifications are silent | Use each channel's **🧪 Test**, enable the channel, check the seven event switches, then read the reason in `progreso.log`. |
+| The loop stopped with exit code `5` | The provider's tokens/quota ran out (also logged as an incident and notified), or another loop is already running for that project. Wait for the quota to reset or stop the other loop, then relaunch: the task stays `[ ]`. |
+| Opening the panel takes a few seconds | The loading screen shows why: Dédalo checks in parallel which agent CLIs have a session (the slowest one, usually `claude`, sets the wait). |
 | `proyectos.json` is corrupt | The app refuses to start and offers to exit (fix by hand) or start fresh, keeping a `.corrupto` copy. |
 | I lost `plan.md` / lessons | Removing a project deletes its Dédalo files. Restore them from git if they were committed; otherwise use your backup. |
 

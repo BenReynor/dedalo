@@ -55,7 +55,8 @@ There is also `install.sh` (environment + desktop shortcut).
 
 | Module | Function |
 |--------|---------|
-| `dedalo/app.py` | Main PySide6 window (launched with `python -m dedalo`). |
+| `dedalo/app.py` | Main PySide6 window (launched with `python -m dedalo`), opened after a loading screen (`carga.py`). |
+| `dedalo/cabina.py` | Run cockpit: status, plan progress, phase pipeline and timeline, fed by `estado_loop.py`. |
 | `dedalo/loop.py` | Loop engine: agent → gate → reviewer → commit. |
 | `dedalo/gate.py` | Runs the checks (`gate_checks/`) and decides green/red. |
 | `dedalo/mcp_server.py` | MCP server over stdio (integration with agents/editors). |
