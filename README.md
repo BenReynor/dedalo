@@ -9,7 +9,22 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20experimental-informational)](#-compatibility)
 
-Orchestrates AI agents (opencode, claude) to iterate over tasks in `plan.md`, run tests, request code review, and commit automatically.
+**A desktop control panel that turns a Markdown task list into finished,
+tested, reviewed commits — done by AI coding agents while you watch.**
+
+You write `plan.md` (one task per line, each with the condition that proves it
+is done). Dédalo hands the tasks one by one to an AI agent CLI (`claude` or
+`opencode`), runs your project's tests and lint, has a second model review the
+diff, judges the result against your condition, and only then commits. Failed
+tasks are retried or marked blocked with a lesson, so the plan keeps moving.
+
+| Plan board and editor | Run cockpit |
+|---|---|
+| ![Plan view](docs/capturas/plan.png) | ![Run view](docs/capturas/run.png) |
+
+**Prefer a ready-made build?** Download it from
+[Releases](https://github.com/BenReynor/dedalo/releases) (Linux `.deb`/`.AppImage`/`.tar.gz`,
+Windows `.zip`), or follow the [Quick Start](#-quick-start) to run it from source.
 
 > [!WARNING]
 > **Windows is experimental and untested on a real PC.** Dédalo is developed and
