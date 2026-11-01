@@ -11,8 +11,16 @@ lo implementa Claude directamente, tarea por tarea, delegando en subagentes cuan
 convenga. Reglas: código y comentarios en inglés, textos de la interfaz con
 `dedalo/i18n.py`, commits convencionales, cada tarea con tests; verificación:
 `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/` (mirar el código de
-salida) y `.venv/bin/ruff check dedalo tests`. **Compatibilidad**: un plan.md
+salida) y `.venv/bin/ruff check dedalo tests`. **Manual**: toda tarea que cambie
+cómo se usa Dédalo actualiza también su sección de `docs/MANUAL.md` y
+`docs/MANUAL.es.md` en el mismo commit (a partir de que exista el manual).
+**Compatibilidad**: un plan.md
 actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
+
+## FASE 0 — Manual de usuario
+
+- [ ] Manual completo de Dédalo
+  criterio: `docs/MANUAL.md` (inglés) y `docs/MANUAL.es.md` (español), escritos para alguien que usa Dédalo a mano sin leer el código, con índice y estas partes: (1) qué es Dédalo y conceptos (proyecto, plan, tarea, criterio, gate, revisor, juez, iteración, run, rama de tarea, lecciones, mapeo, incidencias, métricas); (2) instalación y requisitos (agentes CLI soportados, cómo iniciar sesión en cada uno, Linux/macOS/Windows); (3) recorrido por la interfaz, panel por panel y botón por botón, con capturas; (4) **cómo escribir un buen plan.md**: estructura de fases y tareas, `criterio:` bien escrito (qué hace un criterio verificable, ejemplos buenos y malos), tamaño ideal de una tarea, «Verificación manual», y todas las claves admitidas con ejemplos (las nuevas de Dédalo 3 se añaden aquí según se implementan); (5) gates y plantillas: qué comprueba cada check, cómo correr el gate a mano, cómo añadir un check propio; (6) lanzar, seguir, detener y retomar un run; revisión manual APPROVE/REJECT; costes y presupuesto; (7) agentes y modelos: elegir, pesos, respaldo, cuotas; (8) MCP: qué ofrece y cómo conectarlo a Claude Code u otros clientes; (9) notificaciones y webhooks; (10) **problemas frecuentes** con causa y solución (baseline fallido y cómo ver qué check falló, tareas repetidas tras un corte, cuota agotada, gate que pasa a mano y falla en el loop, conflictos de git, agente no instalado o sin sesión, Wayland/atajos, Windows parcial); (11) glosario; README.md y README.es.md enlazan al manual en «Table of Contents» y al principio; la GUI tiene un botón «Manual» (menú de ayuda o F1) que abre el manual en el idioma de la interfaz; test de que el botón abre la ruta correcta y de que los dos manuales tienen las mismas secciones
 
 ## FASE 1 — Arreglos encontrados usando Dédalo en ARGUS y MultiVoice
 
@@ -93,7 +101,7 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 ## FASE 6 — Documentación y versión 3
 
 - [ ] Documentación del formato nuevo
-  criterio: README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
+  criterio: el manual (docs/MANUAL.md y .es.md) queda completo y revisado de punta a punta con todo Dédalo 3 (sección del plan con un ejemplo grande de 3 pisos y una tabla de todas las claves con su significado, valor por defecto y ejemplo; nuevas entradas en problemas frecuentes: conflictos entre tareas paralelas, tarea esperando a otra bloqueada, respaldo activado, ciclo en el plan); README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
 
 - [ ] Release v3.0.0
   criterio: versión 3.0.0 en pyproject; notas con lo nuevo y la garantía de compatibilidad con los planes actuales; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario**
