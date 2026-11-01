@@ -62,6 +62,12 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Cadena de respaldo por cuota
   criterio: el proyecto (y opcionalmente la tarea con `respaldo:`) define una cadena ordenada de agente/modelo; si el agente de una tarea falla por cuota, límite de tokens o de velocidad (los patrones de error ya detectados, por agente), la tarea continúa con el siguiente de la cadena **en la misma rama/copia**, con un prompt que le dice qué hizo el anterior (diff y resumen); cada cambio de agente queda en progreso.log y metrics.jsonl (qué agente/modelo hizo cada parte y su coste); si se agota la cadena, se aplica la espera de cuota (FASE 1); tests con agentes falsos
 
+- [ ] Escalado automático de modelo y pista humana
+  criterio: opción del proyecto (y `escalar: no` por tarea para desactivarla): si una tarea falla el gate o el revisor dos veces con su modelo, el siguiente intento sube un peso (ligero → normal → pesado) y queda anotado; antes de reintentar una tarea fallida o bloqueada, el usuario puede escribirle una **pista** al agente (GUI, MCP `pista_tarea(nombre, id, texto)`) que se añade al prompt del siguiente intento; tests del escalado (y de que no pasa del peso máximo) y de la pista en el prompt
+
+- [ ] Respuestas estructuradas del agente y del revisor
+  criterio: el veredicto del revisor/juez y el informe final del agente se piden en un bloque JSON con esquema (veredicto, motivos, archivos, riesgos) y se validan; si no es válido se pide una vez de nuevo y, si sigue mal, se interpreta el texto como hoy y se anota; tests con respuestas válidas, inválidas y en texto libre
+
 - [ ] Lista de tareas en Ejecutar y registros etiquetados
   criterio: Ejecutar muestra una **lista de tareas** (filtros por fase y estado) con columnas estado, tarea, agente/modelo (desplegable: «Auto (peso)» o uno concreto), peso y un menú ⋯ con «Revisor especial…» (el revisor por defecto no se muestra); se pueden seleccionar varias filas y asignarles el mismo agente/peso; cada cambio se escribe en plan.md bajo esa tarea (`agente:`, `modelo:`, `peso:`, `revisor:`), que sigue siendo la única fuente de verdad (editar plan.md a mano refresca la lista); durante un run solo se editan las tareas que no han empezado; las opciones de lanzamiento marcan agente/modelo de tarea y revisor como «por defecto» y añaden pesos, cadena de respaldo, revisor de otra empresa, iteraciones «auto» y esperar cuota; progreso.log, incidencias.jsonl y metrics.jsonl llevan en cada entrada la tarea y el agente/modelo (`[id · agente/modelo]`), lecciones.md anota en cada lección dónde se aprendió, CONTEXTO.md sigue siendo uno solo y Logs tiene filtro por tarea; tests del etiquetado, del filtro, de que editar la lista escribe las claves correctas en plan.md y de que una tarea en curso no se puede editar, y smoke de Ejecutar (QT offscreen)
 
@@ -71,7 +77,7 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 ## FASE 3 — Dependencias, pisos y gates por tarea (todavía un agente a la vez)
 
 - [ ] Separar el motor en coordinador y ejecutor de tarea
-  criterio: refactor sin cambios de comportamiento: `loop.py` se divide en un **coordinador** (elige tareas, escribe plan/lecciones/mapeo/logs/métricas, integra) y un **ejecutor de tarea** (prepara la rama, lanza agente, gate, revisor y devuelve un resultado estructurado: estado, coste, informe, motivo), con una interfaz que más adelante permita varios ejecutores a la vez; todos los tests actuales pasan sin cambiarlos y se añaden tests del ejecutor con agentes falsos
+  criterio: refactor sin cambios de comportamiento: `loop.py` se divide en un **coordinador** (elige tareas, escribe plan/lecciones/mapeo/logs/métricas, integra) y un **ejecutor de tarea** (prepara la rama, lanza agente, gate, revisor y devuelve un resultado estructurado: estado, coste, informe, motivo), con una interfaz que más adelante permita varios ejecutores a la vez; coordinador, ejecutor y adaptadores llevan anotaciones de tipos completas y `mypy` (modo estricto solo para esos módulos) corre en el CI; todos los tests actuales pasan sin cambiarlos y se añaden tests del ejecutor con agentes falsos
 
 - [ ] Ids y dependencias en el plan
   criterio: cada tarea tiene `id:` explícito o uno automático (slug del título, único); `depende: id1, id2` en una tarea y `| depende: FASE 1, FASE 3` en la cabecera de una fase (la fase entera espera; las tareas heredan la dependencia); sin ninguna clave `depende` en todo el plan, cada tarea depende de la anterior (comportamiento actual); tests del parser y de la herencia de fase
@@ -82,10 +88,16 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Planificador por grafo
   criterio: el loop elige la siguiente tarea entre las «listas» (todas sus dependencias hechas `[x]`), por piso y luego por orden del plan; si una tarea queda bloqueada `[B]`, todas las que dependen de ella (directa o indirectamente) se marcan «esperando a <id>» y el resto sigue; el run termina cuando no quedan tareas listas, informando de las que esperan y por qué; tests de orden, de propagación de bloqueos y de fin de run
 
+- [ ] Tareas descubiertas
+  criterio: si un agente detecta que falta algo fuera de su tarea (p. ej. «hace falta una migración antes»), lo devuelve en su informe estructurado como tarea propuesta (título, criterio, depende); el coordinador la añade al plan marcada `[?]` (propuesta) sin ejecutarla, y el usuario la aprueba o descarta desde la GUI/MCP (o se aprueban solas si el proyecto lo permite); una tarea aprobada entra en el grafo con sus dependencias; tests del flujo propuesta → aprobada/descartada y de que `[?]` no se ejecuta
+
 - [ ] Gate por tarea o por fase
-  criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; tests de selección de checks y de que un check inexistente se rechaza al validar
+  criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; nueva plantilla de check opcional **e2e** (Playwright para proyectos web, comando configurable para otros) para que los gates se parezcan más al uso real; tests de selección de checks y de que un check inexistente se rechaza al validar
 
 ## FASE 4 — Varios agentes a la vez
+
+- [ ] Investigar cómo lo resuelven otros
+  criterio: nota `docs/investigacion_paralelo.md` (corta) con cómo resuelven Composio Agent Orchestrator, DoorDash Agentic Orchestrator y uno más el aislamiento por worktree, los puertos/bases de datos compartidas, los conflictos y la fusión; qué adoptamos, qué no y por qué; ajustes concretos a los criterios de esta fase si hace falta (sin copiar código)
 
 - [ ] Copias aisladas por tarea
   criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar (también en Windows, con rutas largas y archivos bloqueados contemplados); tests con dos tareas simultáneas en un repo temporal, corridos en el CI de Linux, macOS y Windows
@@ -116,13 +128,51 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Sección Cabina: carriles y grafo en vivo
   criterio: sección propia «Cabina» en la barra lateral (también se abre desde Ejecutar) para ver el run gráficamente, actualizada en vivo: (1) **carriles**: uno por agente en curso con la tarea, el agente/modelo, el paso actual Plan → Agent → Gate → Reviewer → Commit, tiempo y coste de la tarea, y estados «esperando cuota» o «respaldo: X → Y»; una línea de tiempo con lo que hizo cada carril en el run; (2) **grafo por pisos**: una caja por tarea coloreada por estado (hecha, en curso con su carril, lista, esperando a <id>, bloqueada) con las flechas de dependencia, zoom y desplazamiento, resaltando el camino que frena a una tarea al pasar el ratón; (3) **detalle** al hacer clic en una tarea o carril: criterio, agente, gate y checks corridos, informe de cambios, avisos del revisor (p. ej. «tocó un archivo de la zona de X») y su log filtrado; con un plan simple muestra un solo carril y los pisos en fila; tests del modelo de la vista (pisos, colores, camino bloqueante) sin GUI y smoke de la Cabina con dos carriles y un grafo de 3 pisos (QT offscreen)
 
-- [ ] MCP del grafo
-  criterio: el MCP expone `grafo(nombre)` (pisos, estado y agente de cada tarea), `tareas_en_curso(nombre)` y `registro_cambios(nombre)`; `estado_loop` incluye las tareas en paralelo y la espera de cuota; docs/MCP.md actualizado; tests de las herramientas
+## FASE 6 — MCP al día
 
-## FASE 6 — Documentación y versión 3
+- [ ] Todas las funciones nuevas en el MCP
+  criterio: el MCP expone todo lo de Dédalo 3: `grafo(nombre)` (pisos, estado, agente y carril de cada tarea), `ensayo(nombre)`, `validar_plan(nombre)`, `tareas_en_curso(nombre)`, `registro_cambios(nombre)`, `continuar_fase(nombre)`, `pista_tarea(nombre, id, texto)`, `tareas_propuestas(nombre)` con aprobar/descartar, `configurar_lanzamiento` con todas las opciones nuevas y `estado_loop` con carriles, espera de cuota y pausa de fase; las instrucciones del servidor (manual del MCP) explican el flujo nuevo; docs/MCP.md actualizado; tests de cada herramienta
+
+- [ ] Prueba de punta a punta por MCP
+  criterio: un test (con agentes falsos) maneja un run completo solo por MCP: configurar, validar, ensayo, lanzar con 2 carriles, ver el grafo, dar una pista, aprobar una tarea descubierta, continuar tras la pausa de fase y terminar; sirve de ejemplo en docs/MCP.md
+
+## FASE 7 — Rendimiento (si hace falta, midiendo antes)
+
+- [ ] Medir antes de optimizar
+  criterio: el gate guarda la duración de cada check y del total por iteración en metrics.jsonl; la Cabina y el MCP muestran los checks más lentos; se mide también el tamaño de los prompts (tokens aproximados de plan, lecciones, mapeo y contexto) y el uso de la GUI con logs grandes; nota `docs/rendimiento.md` con los números y qué merece optimizarse (si nada lo merece, se dice y se cierra la fase)
+
+- [ ] Prompts que no crecen sin control
+  criterio: lecciones.md y CONTEXTO.md se compactan cuando pasan de un tamaño configurable (un agente ligero resume lo antiguo conservando lo vigente; el original se archiva en `.dedalo/estado/archivo/`); el prompt de cada tarea incluye solo las partes del mapeo relevantes (archivos de su zona y los que nombra el criterio) además de un resumen global; archivos enormes nunca se pegan enteros (tope por archivo con aviso); tests de compactación, de selección del mapeo y del tope
+
+- [ ] Optimizaciones medidas
+  criterio: se aplican solo las optimizaciones que la medición justificó (p. ej. límite de tiempo por check, cachear dependencias entre copias, GUI que no se congela con logs de miles de líneas), cada una con su antes/después en docs/rendimiento.md; tests de regresión de lo optimizado
+
+## FASE 8 — Seguridad
+
+- [ ] Modo aislado opcional
+  criterio: opción del proyecto «Aislar agentes y gate»: el agente y el gate corren en un contenedor (Podman o Docker si están instalados) o, en Linux, con bubblewrap, con solo la copia del repo montada, sin acceso al resto del home, y red **cerrada** salvo la necesaria para el proveedor del modelo y una lista configurable (registros de paquetes); si no hay ninguna herramienta disponible se avisa y se ofrece seguir sin aislar; la GUI muestra si un run está aislado; tests de la construcción del comando de aislamiento por plataforma y de la lista de red
+
+- [ ] Secretos y archivos protegidos
+  criterio: el entorno que reciben agentes y gate se limpia de variables con pinta de secreto (TOKEN, KEY, SECRET, PASSWORD… configurable, con lista blanca) salvo las que el CLI del agente necesita para su sesión; archivos protegidos por defecto (gate y gate_checks, `.github/workflows/`, plan.md, lecciones.md, `.dedalo/`) que un agente no puede cambiar: si su diff los toca, la tarea no se integra y se avisa; el proyecto puede añadir rutas protegidas; tests de limpieza del entorno y de diffs que tocan archivos protegidos
+
+- [ ] Defensa contra instrucciones escondidas en el repo
+  criterio: el prompt del agente y del revisor marca el contenido del repo (código, docs, issues) como datos no fiables cuyas instrucciones no se siguen; el revisor recibe una lista de señales a vigilar en el diff (nuevas llamadas de red, lectura de archivos fuera del repo, cambios en CI, scripts de instalación, ofuscación, secretos escritos) y las reporta como riesgo; un riesgo alto bloquea la integración hasta que el usuario lo aprueba; docs/MANUAL explica el modelo de amenazas; tests con un repo trampa que pide al agente leer ~/.ssh y con diffs sospechosos
+
+- [ ] Auditoría de seguridad del propio Dédalo
+  criterio: revisión de mcp_server (qué puede hacer un cliente MCP, validación de rutas y nombres), consentimiento del gate, permisos de archivos en ~/.config/dedalo, webhooks y notificaciones (que no filtren secretos), y dependencias (`pip-audit` en el CI); hallazgos corregidos o documentados en docs/SEGURIDAD.md; SECURITY.md con cómo reportar un problema
+
+## FASE 9 — Documentación y versión 3
 
 - [ ] Documentación del formato nuevo
   criterio: el manual (docs/MANUAL.md y .es.md) queda completo y revisado de punta a punta con todo Dédalo 3 (sección del plan con un ejemplo grande de 3 pisos y una tabla de todas las claves con su significado, valor por defecto y ejemplo; nuevas entradas en problemas frecuentes: conflictos entre tareas paralelas, tarea esperando a otra bloqueada, respaldo activado, ciclo en el plan); README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
 
 - [ ] Release v3.0.0
   criterio: versión 3.0.0 en pyproject; notas con lo nuevo y la garantía de compatibilidad con los planes actuales; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario**
+
+## Más adelante (ideas, sin criterios todavía)
+- Índice de símbolos del repo con tree-sitter (funciones, clases y quién las usa) para un mapeo más preciso y para calcular el impacto de una tarea.
+- Lecciones globales entre proyectos (opt-in): las lecciones generales de un proyecto disponibles para los demás.
+- Modo PR: al terminar un run, abrir un pull request y esperar al CI de GitHub antes de integrar.
+- Modo «test primero» para arreglos: el agente escribe un test que falla, el gate comprueba que falla y luego que pasa con el arreglo.
+- Modelos locales (Ollama u otros vía opencode) documentados como agente/respaldo para quien quiera privacidad total.
+- Windows al nivel de Linux (instalador sin bash, pruebas reales en un PC).
