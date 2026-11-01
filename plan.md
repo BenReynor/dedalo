@@ -14,7 +14,7 @@ convenga. Reglas: código y comentarios en inglés, textos de la interfaz con
 salida) y `.venv/bin/ruff check dedalo tests`. **Manual**: toda tarea que cambie
 cómo se usa Dédalo actualiza también su sección de `docs/MANUAL.md` y
 `docs/MANUAL.es.md` en el mismo commit (a partir de que exista el manual).
-**Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
+**Un solo motor**: el loop vive en Python (`dedalo/loop.py` y compañía); `plantillas_data/dedalo.sh` queda congelado como legado (se sigue copiando para compatibilidad, pero no recibe funciones nuevas y el manual lo dice). **Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
 actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 
 ## FASE 0 — Manual de usuario
@@ -42,6 +42,9 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Fallos conocidos pendientes
   criterio: resueltos los puntos 2 y 3 de docs/BUGS_CONOCIDOS.md: proyectos.json lleva `"version"` de esquema con migración automática de los archivos antiguos (copia de seguridad antes de migrar), y las ramas de tareas bloqueadas o integradas se limpian solas al terminar un run (las bloqueadas se conservan en una lista consultable hasta que el usuario las descarta); BUGS_CONOCIDOS.md actualizado; tests de migración y de limpieza
 
+- [ ] Pausa para probar al terminar cada fase
+  criterio: opción del proyecto «Parar al terminar cada fase» (y `| pausa` en la cabecera de una fase para pedirlo solo en esa): cuando se completan todas las tareas de la fase, el loop se detiene limpio, integra lo hecho y avisa (GUI, notificación, MCP) con la lista «Verificación manual» de esa fase sacada de plan.md; «Continuar» sigue con la fase siguiente; si el usuario encuentra un fallo puede añadir una tarea de arreglo antes de continuar; tests: el loop para tras la última tarea de la fase y continúa al reanudar
+
 ## FASE 2 — Agente y modelo por tarea, pesos y respaldo
 
 - [ ] Claves por tarea en el plan
@@ -56,13 +59,22 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Cadena de respaldo por cuota
   criterio: el proyecto (y opcionalmente la tarea con `respaldo:`) define una cadena ordenada de agente/modelo; si el agente de una tarea falla por cuota, límite de tokens o de velocidad (los patrones de error ya detectados, por agente), la tarea continúa con el siguiente de la cadena **en la misma rama/copia**, con un prompt que le dice qué hizo el anterior (diff y resumen); cada cambio de agente queda en progreso.log y metrics.jsonl (qué agente/modelo hizo cada parte y su coste); si se agota la cadena, se aplica la espera de cuota (FASE 1); tests con agentes falsos
 
+- [ ] Lista de tareas en Ejecutar y registros etiquetados
+  criterio: Ejecutar muestra una **lista de tareas** (filtros por fase y estado) con columnas estado, tarea, agente/modelo (desplegable: «Auto (peso)» o uno concreto), peso y un menú ⋯ con «Revisor especial…» (el revisor por defecto no se muestra); se pueden seleccionar varias filas y asignarles el mismo agente/peso; cada cambio se escribe en plan.md bajo esa tarea (`agente:`, `modelo:`, `peso:`, `revisor:`), que sigue siendo la única fuente de verdad (editar plan.md a mano refresca la lista); durante un run solo se editan las tareas que no han empezado; las opciones de lanzamiento marcan agente/modelo de tarea y revisor como «por defecto» y añaden pesos, cadena de respaldo, revisor de otra empresa, iteraciones «auto» y esperar cuota; progreso.log, incidencias.jsonl y metrics.jsonl llevan en cada entrada la tarea y el agente/modelo (`[id · agente/modelo]`), lecciones.md anota en cada lección dónde se aprendió, CONTEXTO.md sigue siendo uno solo y Logs tiene filtro por tarea; tests del etiquetado, del filtro, de que editar la lista escribe las claves correctas en plan.md y de que una tarea en curso no se puede editar, y smoke de Ejecutar (QT offscreen)
+
+- [ ] Versión intermedia 2.3.0
+  criterio: manual al día con lo de las FASES 0–2; versión 2.3.0 en pyproject con notas; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario** (así ARGUS y MultiVoice pueden usar ya el modelo por tarea, el respaldo y los arreglos)
+
 ## FASE 3 — Dependencias, pisos y gates por tarea (todavía un agente a la vez)
+
+- [ ] Separar el motor en coordinador y ejecutor de tarea
+  criterio: refactor sin cambios de comportamiento: `loop.py` se divide en un **coordinador** (elige tareas, escribe plan/lecciones/mapeo/logs/métricas, integra) y un **ejecutor de tarea** (prepara la rama, lanza agente, gate, revisor y devuelve un resultado estructurado: estado, coste, informe, motivo), con una interfaz que más adelante permita varios ejecutores a la vez; todos los tests actuales pasan sin cambiarlos y se añaden tests del ejecutor con agentes falsos
 
 - [ ] Ids y dependencias en el plan
   criterio: cada tarea tiene `id:` explícito o uno automático (slug del título, único); `depende: id1, id2` en una tarea y `| depende: FASE 1, FASE 3` en la cabecera de una fase (la fase entera espera; las tareas heredan la dependencia); sin ninguna clave `depende` en todo el plan, cada tarea depende de la anterior (comportamiento actual); tests del parser y de la herencia de fase
 
 - [ ] Validar el grafo
-  criterio: `python -m dedalo.plan check <ruta>` y el MCP `validar_plan(nombre)` detectan ids duplicados, dependencias a ids o fases inexistentes y ciclos (indicando el ciclo completo), y calculan los pisos; el loop valida antes de empezar y no arranca con un plan inválido (motivo visible); tests con ciclos, ids inexistentes y un grafo correcto de 3 pisos
+  criterio: `python -m dedalo.plan check <ruta>` y el MCP `validar_plan(nombre)` detectan ids duplicados, dependencias a ids o fases inexistentes y ciclos (indicando el ciclo completo), y calculan los pisos; además muestran un **ensayo** del run (orden por pisos, agente/modelo y gate de cada tarea y una estimación de coste y tiempo a partir del historial de metrics.jsonl de ese agente/modelo, o «sin datos») visible también en la GUI antes de pulsar Iniciar; el loop valida antes de empezar y no arranca con un plan inválido (motivo visible); tests con ciclos, ids inexistentes y un grafo correcto de 3 pisos
 
 - [ ] Planificador por grafo
   criterio: el loop elige la siguiente tarea entre las «listas» (todas sus dependencias hechas `[x]`), por piso y luego por orden del plan; si una tarea queda bloqueada `[B]`, todas las que dependen de ella (directa o indirectamente) se marcan «esperando a <id>» y el resto sigue; el run termina cuando no quedan tareas listas, informando de las que esperan y por qué; tests de orden, de propagación de bloqueos y de fin de run
@@ -73,7 +85,7 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 ## FASE 4 — Varios agentes a la vez
 
 - [ ] Copias aisladas por tarea
-  criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar; tests con dos tareas simultáneas en un repo temporal
+  criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar (también en Windows, con rutas largas y archivos bloqueados contemplados); tests con dos tareas simultáneas en un repo temporal, corridos en el CI de Linux, macOS y Windows
 
 - [ ] Ejecución en paralelo con límite
   criterio: hasta `max_agentes` tareas listas a la vez (por defecto 2, ajustable en GUI y MCP, 1 = comportamiento en fila); presupuesto y cuota globales del run, no por tarea; solo el coordinador escribe plan.md, lecciones.md, mapeo.txt, progreso.log y metrics.jsonl (los agentes reciben lo que necesitan en el prompt y devuelven su informe); Detener para todas las tareas en curso dejando su trabajo en sus ramas; tests: dos tareas independientes avanzan a la vez y una dependiente espera a ambas
@@ -84,8 +96,8 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 - [ ] Revisor que vigila a las demás tareas
   criterio: antes de integrar una tarea, el revisor recibe su informe, la lista de archivos que están cambiando las tareas en curso y los de los pilares de pisos superiores pendientes que declaran esas zonas; si la tarea tocó archivos que otra está trabajando o que pertenecen a otra zona, no se integra: el revisor pide al agente que lo justifique o lo deshaga, lo reporta en progreso.log/GUI/MCP y, si persiste, la tarea se rehace después de la otra; tests con dos tareas que tocan el mismo archivo
 
-- [ ] Ejecutar más simple y registros etiquetados
-  criterio: Ejecutar se queda con lo de lanzar: estado resumido en una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con un botón «Abrir Cabina» e Iniciar / Detener todo / Ejecutar gate; debajo, una **lista de tareas** (filtros por fase y estado) con columnas estado, tarea, piso, depende de, agente/modelo (desplegable: «Auto (peso)» o uno concreto), peso y un menú ⋯ con «Revisor especial…» (el revisor por defecto no se muestra); se pueden seleccionar varias filas y asignarles el mismo agente/peso; cada cambio se escribe en plan.md bajo esa tarea (`agente:`, `modelo:`, `peso:`, `revisor:`), que sigue siendo la única fuente de verdad (editar plan.md a mano refresca la lista); durante un run solo se editan las tareas que no han empezado; y las opciones generales de lanzamiento, que marcan agente/modelo de tarea y revisor como «por defecto» y añaden pesos, cadena de respaldo, revisor de otra empresa, iteraciones «auto», agentes a la vez, esperar cuota y carpeta de compilación compartida/por carril; progreso.log, incidencias.jsonl y metrics.jsonl llevan en cada entrada la tarea y el agente/modelo (`[id · agente/modelo]`), lecciones.md anota en cada lección dónde se aprendió y CONTEXTO.md sigue siendo uno solo; Logs tiene filtro por tarea y un color por carril; tests del etiquetado y del filtro, de que editar la lista escribe las claves correctas en plan.md (y de que una tarea en curso no se puede editar), y smoke de Ejecutar (QT offscreen)
+- [ ] Ejecutar con varios carriles
+  criterio: arriba de Ejecutar, el estado resumido pasa a una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con un botón «Abrir Cabina» e Iniciar / Detener todo / Ejecutar gate; la lista de tareas añade las columnas piso y depende de, y marca el carril de las tareas en curso; las opciones de lanzamiento añaden agentes a la vez y carpeta de compilación compartida/por carril; Logs da un color por carril; smoke de Ejecutar con dos carriles (QT offscreen)
 
 - [ ] Mapeo con varios agentes
   criterio: mapeo.txt lo escribe solo el coordinador, después de cada integración (en el orden de la cola) y a partir de la rama del run, nunca de las copias de las tareas; la actualización es incremental (solo los archivos que tocó la tarea integrada) y al final del run se hace un mapeo completo; cada agente recibe el mapa más reciente al empezar o al rehacer su tarea; el mapa que recibe marca como «en obras por [id]» los archivos que están cambiando otras tareas en curso y las zonas declaradas, y el prompt le pide no tocarlos (el revisor lo comprueba después); tests: mapeo incremental igual al completo, marcas «en obras» con dos tareas simultáneas
