@@ -14,7 +14,7 @@ convenga. Reglas: código y comentarios en inglés, textos de la interfaz con
 salida) y `.venv/bin/ruff check dedalo tests`. **Manual**: toda tarea que cambie
 cómo se usa Dédalo actualiza también su sección de `docs/MANUAL.md` y
 `docs/MANUAL.es.md` en el mismo commit (a partir de que exista el manual).
-**Un solo motor**: el loop vive en Python (`dedalo/loop.py` y compañía); `plantillas_data/dedalo.sh` queda congelado como legado (se sigue copiando para compatibilidad, pero no recibe funciones nuevas y el manual lo dice). **Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
+**Copia estable para los demás proyectos**: mientras se construye Dédalo 3, los loops de otros proyectos (ARGUS, MultiVoice…) se lanzan desde una instalación estable aparte (la última versión publicada, p. ej. un `git worktree` o checkout del tag en `~/.local/share/dedalo-estable` con su propio venv), nunca desde el código en obras; se actualiza solo al publicar 2.3.0 y 3.0.0. **Un solo motor**: el loop vive en Python (`dedalo/loop.py` y compañía); `plantillas_data/dedalo.sh` queda congelado como legado (se sigue copiando para compatibilidad, pero no recibe funciones nuevas y el manual lo dice). **Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
 actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 
 ## FASE 0 — Manual de usuario
@@ -46,6 +46,9 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
   criterio: opción del proyecto «Parar al terminar cada fase» (y `| pausa` en la cabecera de una fase para pedirlo solo en esa): cuando se completan todas las tareas de la fase, el loop se detiene limpio, integra lo hecho y avisa (GUI, notificación, MCP) con la lista «Verificación manual» de esa fase sacada de plan.md; «Continuar» sigue con la fase siguiente; si el usuario encuentra un fallo puede añadir una tarea de arreglo antes de continuar; tests: el loop para tras la última tarea de la fase y continúa al reanudar
 
 ## FASE 2 — Agente y modelo por tarea, pesos y respaldo
+
+- [ ] Adaptadores por agente
+  criterio: cada agente CLI (claude, codex, opencode y los que ya soporta Dédalo) tiene un adaptador propio en un módulo (cómo se lanza, aislamiento/permisos, cómo se pasa el modelo, cómo se lee la salida y el coste, y los patrones de error de cuota, límite de tokens, límite de velocidad, sesión caducada y agente no instalado); el resto del motor solo habla con la interfaz del adaptador; tests de contrato por adaptador con salidas reales grabadas (fixtures) de cada CLI, que fallan si cambia el formato; el manual explica cómo actualizar un adaptador cuando un CLI cambia; `instalar_proyecto`/GUI muestran la versión detectada de cada CLI
 
 - [ ] Claves por tarea en el plan
   criterio: el parser del plan acepta, bajo cada tarea (como `criterio:`), `agente:`, `modelo:`, `peso: ligero|normal|pesado`, `revisor:` y `modelo_revisor:`; si faltan se usan los valores del proyecto; un valor desconocido se rechaza al validar el plan con un mensaje que dice la línea; el MCP `leer_plan` devuelve estas claves por tarea; tests del parser (con y sin claves, valores inválidos, plan antiguo)
