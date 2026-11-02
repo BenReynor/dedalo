@@ -271,6 +271,24 @@ _JUEZ_SIN_OPINION = re.compile(
     r"|sin CRITERIO)")
 
 
+def _tolerar(cfg, rc_gate, salida):
+    """Gate rc once the checks red since a new project's baseline are discounted.
+
+    Applied right after every gate run, so the judge guards that follow (judge
+    gave no opinion, judge out of quota) still see the tolerated result.
+    Ratchet: a tolerated check that passes once is required from then on.
+    """
+    if not cfg.tolerados:
+        return rc_gate
+    fallan = set(checks_fallidos(salida))
+    cfg.tolerados &= fallan
+    if rc_gate != 0 and fallan and fallan <= cfg.tolerados:
+        logx(cfg.log, "GATE: solo fallan checks ya rojos en el baseline "
+                      f"({', '.join(sorted(fallan))}); se toleran")
+        return 0
+    return rc_gate
+
+
 def _guardar_gate_ultimo(cfg, salida):
     """Keeps the last failed gate output in gate_ultimo.log (state dir)."""
     try:
@@ -660,7 +678,14 @@ def _parar_limpio(cfg, motivo):
         stash = loop_git.guardar_parcial(cfg.proyecto, etiqueta)
         revertir(cfg.proyecto)
         checkout(cfg.proyecto, rama_run)
-        borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
+        _, n, _ = run_git(cfg.proyecto, "rev-list", "--count",
+                          f"{rama_run}..{rama_tarea}")
+        if n.strip() not in ("", "0"):
+            # Stopped between the task commit and its merge: keep that commit.
+            logx(cfg.log, f"Rama {rama_tarea} conservada: tiene un commit sin "
+                          f"integrar en {rama_run}")
+        else:
+            borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
         if stash:
             logx(cfg.log, f"Trabajo a medias de '{cfg.tarea_actual}' guardado en "
                           f"{stash.split(':', 1)[0]} ({etiqueta}); recupéralo con "
@@ -782,8 +807,7 @@ def _run(cfg):
     cfg.revisor = elegir_revisor(cfg)
     usa_codex = "codex" in (cfg.agente_tarea, cfg.revisor,
                             cfg.environ.get("AGENTE_JUEZ", ""))
-    if usa_codex and "--dangerously-bypass-approvals-and-sandbox" not in \
-            cfg.environ.get("CODEX_FLAGS", ""):
+    if usa_codex and cfg.environ.get("CODEX_SIN_SANDBOX", "") != "1":
         ok_sb, detalle_sb = codex_cli.sandbox_funciona(
             cli_agente("codex", cfg), cfg.environ, cfg.proyecto)
         if not ok_sb:
@@ -865,6 +889,7 @@ def _run(cfg):
 
     # Continue an interrupted run: its branch is ahead of the base and its
     # tasks are [x] there. Starting again from the base redid all of them.
+    desde = cfg.rama_base  # branch the new run starts from
     if cfg.retomar:
         previa = loop_git.ultima_rama_run(cfg.proyecto, cfg.rama_base)
         if previa:
@@ -875,7 +900,7 @@ def _run(cfg):
                               f"aún no integrados en {cfg.rama_base}); "
                               "RETOMAR=0 para empezar desde la base")
                 print(f"[dedalo] ↻ Retomando la ejecución anterior: {previa}")
-                cfg.rama_base = previa
+                desde = previa
 
     cfg.lanzador_gate = _lanzador_gate(cfg)
     dir_gate = backup_gate(cfg)
@@ -923,7 +948,7 @@ def _run(cfg):
         print("[dedalo] ⚠ no se pudo generar mapeo.txt")
 
     rama_run = rama_run_nombre()
-    rama_trabajo, msgs = preparar_ramas(cfg.proyecto, cfg.rama_base,
+    rama_trabajo, msgs = preparar_ramas(cfg.proyecto, desde,
                                         rama_run, cfg.rama_trabajo)
     for m in msgs:
         print(m)
@@ -1224,6 +1249,14 @@ def _run(cfg):
             cfg.vivo.fase("Gate")
             rc_gate, gate_out = _run_gate(cfg, criterio)
             gate_salida = _leer(gate_out)
+            rc_gate = _tolerar(cfg, rc_gate, gate_salida)
+            if usa_codex and codex_cli.sandbox_roto(gate_salida):
+                mensaje(cfg, f"[dedalo] ✗✗ juez: {codex_cli.MENSAJE_SANDBOX_ROTO}")
+                logx(cfg.log, "ABORTADO: sandbox de Codex bloqueado (bwrap, juez)")
+                _notificar(cfg, "error", detalle="sandbox de Codex bloqueado (bwrap)")
+                _incidencia(cfg, "aborto_sandbox", codex_cli.MENSAJE_SANDBOX_ROTO,
+                            tarea=tarea, iteracion=iteracion, rama=rama_tarea)
+                return 10
             # A green gate whose judge could not give an opinion has not
             # verified the criterio: rerun only the gate (not the agent).
             for reintento in range(1, REINTENTOS_JUEZ + 1):
@@ -1235,6 +1268,7 @@ def _run(cfg):
                 time.sleep(cfg.espera_juez)
                 rc_gate, gate_out = _run_gate(cfg, criterio)
                 gate_salida = _leer(gate_out)
+                rc_gate = _tolerar(cfg, rc_gate, gate_salida)
             if rc_gate == 0 and criterio and _juez_no_opino(gate_salida):
                 motivo = _juez_no_opino(gate_salida)
                 if loop_agentes._PATRON_TOKENS.search(motivo):
@@ -1253,15 +1287,6 @@ def _run(cfg):
                             tarea=tarea, iteracion=iteracion, rama=rama_tarea)
                 alerta(cfg.voz, "El juez no responde, se detiene el dedalo")
                 return 8
-            if cfg.tolerados:
-                fallan = set(checks_fallidos(gate_salida))
-                # Ratchet: a tolerated check that passes is required from now on.
-                cfg.tolerados &= fallan
-                if rc_gate != 0 and fallan and fallan <= cfg.tolerados:
-                    logx(cfg.log, "GATE: solo fallan checks ya rojos en el "
-                                  f"baseline ({', '.join(sorted(fallan))}); "
-                                  "se toleran")
-                    rc_gate = 0
             gate_rc = rc_gate
             cfg.vivo.resultado("Gate", rc_gate == 0, "\n".join(
                 li for li in gate_salida.splitlines()

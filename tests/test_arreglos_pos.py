@@ -100,6 +100,9 @@ def test_checks_fallidos_del_resumen():
 
 # --- errors 13, 14, 17: Codex ------------------------------------------------
 
+posix = pytest.mark.skipif(os.name == "nt", reason="fake CLI is a shebang script")
+
+
 @pytest.fixture
 def codex_falso(tmp_path):
     binario = tmp_path / "codex"
@@ -110,6 +113,7 @@ def codex_falso(tmp_path):
     return str(binario)
 
 
+@posix
 def test_codex_tarea_con_red_y_razonamiento_por_rol(codex_falso, tmp_path):
     env = {"CODEX_RAZONAMIENTO_TAREA": "medium", "CODEX_RAZONAMIENTO_JUEZ": "low",
            "PATH": os.environ.get("PATH", "")}
@@ -134,6 +138,16 @@ def test_detecta_sandbox_bwrap_bloqueado():
     assert not codex_cli.sandbox_roto("cargo test: 12 passed")
 
 
+@posix
+def test_codex_sin_sandbox_explicito_aplica_a_todos_los_roles(codex_falso, tmp_path):
+    env = {"CODEX_SIN_SANDBOX": "1", "PATH": os.environ.get("PATH", "")}
+    for rol in ("tarea", "revisor", "juez"):
+        flags = codex_cli.flags_codex(codex_falso, env, str(tmp_path), rol)
+        assert "--dangerously-bypass-approvals-and-sandbox" in flags
+        assert "--sandbox" not in flags
+
+
+@posix
 def test_preflight_del_sandbox_avisa_si_bwrap_falla(tmp_path):
     binario = tmp_path / "codex"
     binario.write_text("#!/bin/sh\necho 'bwrap: setting up uid map: "
@@ -265,3 +279,21 @@ def test_parar_en_el_plan_detiene_antes_de_la_siguiente_tarea(tmp_path):
     assert "- [PARADO] fin de la fase 1" in texto
     assert "PAUSA DEL PLAN: fin de la fase 1" in (
         proyecto / "progreso.log").read_text(encoding="utf-8")
+
+
+@e2e
+def test_check_tolerado_no_salta_la_proteccion_del_juez(tmp_path):
+    """A tolerated red check must not let a judge without verdict pass the task."""
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\necho '[GATE] ✗ rojo'\nexit 1\n")
+    juez = proyecto / "gate_checks" / "98_criterio.sh"
+    juez.write_text("#!/usr/bin/env bash\necho '[GATE] ⚠ juez sin veredicto legible'\n"
+                    "exit 0\n", encoding="utf-8")
+    juez.chmod(0o755)
+    _git("add", "-A", cwd=proyecto)
+    _git("commit", "-qm", "juez", cwd=proyecto)
+    env = {**_entorno(_agente_falso(tmp_path / "bin")), "ESPERA_JUEZ": "0"}
+    rc, _ = _correr(proyecto, env)
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert "se toleran (01_x.sh)" in log
+    assert rc == 8, log[-1500:]
+    assert "- [ ] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")

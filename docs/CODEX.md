@@ -36,8 +36,9 @@ No modifica la configuración global de Codex ni lee sus archivos de credenciale
   (Ubuntu 24.04 con `kernel.apparmor_restrict_unprivileged_userns=1` sin perfil
   para `/usr/bin/bwrap`) o el agente lo muestra durante una tarea, el loop se
   detiene con código 10 y un mensaje con las dos salidas: un perfil AppArmor
-  para bwrap con `userns,` (recomendado) o
-  `CODEX_FLAGS="--dangerously-bypass-approvals-and-sandbox"` (sin sandbox).
+  para bwrap con `userns,` (recomendado) o `"sin_sandbox_codex": true` en
+  `lanzamiento` (`CODEX_SIN_SANDBOX=1`), que quita el sandbox a **todos** los
+  roles de Codex (tarea, revisor y juez).
 
 La interfaz conserva estas claves al guardar el lanzamiento.
 

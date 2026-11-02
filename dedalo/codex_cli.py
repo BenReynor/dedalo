@@ -18,8 +18,9 @@ MENSAJE_SANDBOX_ROTO = (
     "el sandbox de Codex (bubblewrap) no puede arrancar en este sistema "
     "(AppArmor bloquea los user namespaces). Opciones: (1) crear un perfil "
     "AppArmor para /usr/bin/bwrap con 'userns,' (recomendado), o (2) poner "
-    "CODEX_FLAGS=\"--dangerously-bypass-approvals-and-sandbox\" en el proyecto "
-    "(sin sandbox; el loop ya trabaja en ramas aisladas)")
+    "\"sin_sandbox_codex\": true en el lanzamiento del proyecto o "
+    "CODEX_SIN_SANDBOX=1 (Codex corre SIN sandbox en todos sus roles: tarea, "
+    "revisor y juez; el loop sigue trabajando en ramas aisladas)")
 
 
 def sandbox_roto(texto):
@@ -86,6 +87,11 @@ def flags_codex(binario, env, proyecto, rol="tarea", modelo="", extra=""):
         raise ValueError("No se pudo consultar la configuración MCP de Codex") from e
     # Extra flags belong to the task agent, never to read-only roles.
     flags = shlex.split(extra) if rol == "tarea" else []
+    if str((env or {}).get("CODEX_SIN_SANDBOX", "")) == "1":
+        # Explicit user choice when bubblewrap cannot start: every role, or the
+        # read-only judge/reviewer would keep failing inside the sandbox.
+        flags = [f for f in flags if f != "--dangerously-bypass-approvals-and-sandbox"]
+        flags.append("--dangerously-bypass-approvals-and-sandbox")
     if not any(x in ("-s", "--sandbox", "--approve-for-me",
                      "--dangerously-bypass-approvals-and-sandbox")
                or x.startswith("--sandbox=") for x in flags):

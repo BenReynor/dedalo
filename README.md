@@ -15,8 +15,8 @@
 tested, reviewed commits — done by AI coding agents while you watch.**
 
 You write `plan.md` (one task per line, each with the condition that proves it
-is done). Dédalo hands the tasks one by one to an AI agent CLI (`claude` or
-`opencode`), runs your project's tests and lint, has a second model review the
+is done). Dédalo hands the tasks one by one to an AI agent CLI (`claude`,
+`codex` or `opencode`), runs your project's tests and lint, has a second model review the
 diff, judges the result against your condition, and only then commits. Failed
 tasks are retried or marked blocked with a lesson, so the plan keeps moving.
 
@@ -76,7 +76,7 @@ Windows `.zip`), or follow the [Quick Start](#-quick-start) to run it from sourc
 ## 🚀 Quick Start
 
 **Before you start:** Python 3.10+, `git`, and at least one agent CLI
-(`opencode` or `claude`) installed and logged in. Nothing else is
+(`opencode`, `codex` or `claude`) installed and logged in. Nothing else is
 required for the GUI or the loop; `bash` is only needed for a customized
 `mapear.sh` and the optional legacy engine.
 
@@ -156,7 +156,7 @@ project and it works through `plan.md` in order, one task at a time:
 
 1. **Pick** the first pending task (`- [ ]`) and inject `CONTEXTO.md` plus
    `lecciones.md` into the agent's prompt.
-2. **Implement** it with the selected agent (`opencode`, `claude` or
+2. **Implement** it with the selected agent (`opencode`, `codex`, `claude` or
    `auto`), in its own task branch created from the run branch.
 3. **Gate** the result: the project's own checks (`gate_checks/`) must pass.
 4. **Review** the diff with a second agent and model (dual review, on by
@@ -541,7 +541,7 @@ tokens and window settings.
 | OS | Status |
 |----|--------|
 | **Linux** | ✅ **Supported.** Reference environment: daily use plus the CI suite. |
-| **Windows** | 🧪 **Experimental.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). **Not tested on a real PC:** installer and shortcut, tray, and a real loop with opencode or claude. Bash (Git Bash or WSL) is only needed for the optional bash engine (`dedalo.sh`) or a customized `mapear.sh`; the default project map is generated in Python. |
+| **Windows** | 🧪 **Experimental.** CI runs the full suite on `windows-latest` with real Git Bash. The GUI, the loop (`dedalo/loop.py`) and the gate (`dedalo/gate.py`) are native Python engines launched with the app's own interpreter, so **Git Bash is not required** (`os.pathsep`, `.exe`/`.cmd` suffixes). **Not tested on a real PC:** installer and shortcut, tray, and a real loop with opencode, codex or claude. Bash (Git Bash or WSL) is only needed for the optional bash engine (`dedalo.sh`) or a customized `mapear.sh`; the default project map is generated in Python. |
 
 What's already OS-independent: the line endings of `.sh` files
 (`.gitattributes` forces `eol=lf`, so a `clone` on Windows with `autocrlf`
@@ -600,7 +600,7 @@ GUI fills them in from the Run form). The most useful ones:
 
 | Variable | Description |
 |----------|-------------|
-| `AGENTE_TAREA` | Agent that implements: `opencode`\|`claude`\|`auto` (default). |
+| `AGENTE_TAREA` | Agent that implements: `opencode`\|`codex`\|`claude`\|`auto` (default). |
 | `AGENTES_PREFERIDOS` | Preference order for `auto` and the reviewer. |
 | `MODELO_TAREA` | Task model `provider/model` (opencode only). |
 | `AGENTE_REVISOR` / `MODELO_REVISOR` | Agent and model for the dual gate (diff reviewer). |
@@ -674,7 +674,8 @@ doesn't exist.
     branches and commits. `CLAUDE_FLAGS` adds extra flags to this role only.
   - **reviewer, judge (`98_criterio`), navigator and ficha:** read-only
     (`Edit`, `Write`, `Bash`… disallowed).
-- `opencode` accepts any `provider/model`; `claude` accepts Anthropic models
+- `opencode` accepts any `provider/model`; `codex` accepts OpenAI models
+  (`openai/<model>`); `claude` accepts Anthropic models
   (`anthropic/haiku`, `anthropic/sonnet`, `anthropic/opus` or a full
   `claude-*` id). Picking `claude` in the GUI switches a non-Claude model to
   `anthropic/haiku`, the cheapest.
@@ -965,7 +966,7 @@ dedalo/
 
 | Symptom | What to do |
 |---|---|
-| “no agent CLI with a session” | Log in to at least one CLI (`opencode` or `claude`) or pick another one in the Run panel. The probe is cached; refresh models to re-check. |
+| “no agent CLI with a session” | Log in to at least one CLI (`opencode`, `codex` or `claude`) or pick another one in the Run panel. The probe is cached; refresh models to re-check. |
 | The gate is red | Open **Logs** and read the gate pane for the failing check; run `bash .dedalo/scripts/gate.sh` (or the portable gate) by hand and fix the project. The loop will not commit red work. |
 | “gate_checks sin consentimiento” / exit code `3` | Approve the gate once in the GUI, call `confiar_gate` from MCP, or set `DEDALO_GATE_CONSENT=1` for an unattended run. |
 | Manual review never finishes | Send `APPROVE`/`REJECT` from the Revision panel. An agent's approval is ignored unless `REVISION_APRUEBA_AGENTE=1`; on timeout the task is marked `[B]`. |

@@ -263,6 +263,8 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
         nivel = str(conf.get("razonamiento_" + rol, "") or "").strip().lower()
         if nivel:
             env["CODEX_RAZONAMIENTO_" + rol.upper()] = nivel
+    if conf.get("sin_sandbox_codex"):
+        env["CODEX_SIN_SANDBOX"] = "1"
     if "red_agente" in conf:
         env["CODEX_RED_TAREA"] = "1" if conf.get("red_agente") else "0"
     return env

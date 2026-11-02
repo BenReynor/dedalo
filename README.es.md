@@ -16,7 +16,7 @@ terminados, probados y revisados, hechos por agentes de IA mientras tú miras.**
 
 Escribes `plan.md` (una tarea por línea, cada una con la condición que demuestra
 que está hecha). Dédalo le pasa las tareas una a una a un agente de IA por línea
-de comandos (`claude` u `opencode`), ejecuta los tests y el lint de tu proyecto,
+de comandos (`claude`, `codex` u `opencode`), ejecuta los tests y el lint de tu proyecto,
 hace que un segundo modelo revise el diff, juzga el resultado contra tu
 condición y solo entonces hace el commit. Las tareas que fallan se reintentan o
 se marcan como bloqueadas con una lección, así el plan sigue avanzando.
@@ -78,7 +78,7 @@ Windows `.zip`), o sigue el [Inicio rápido](#-inicio-rápido) para ejecutarlo d
 ## 🚀 Inicio rápido
 
 **Antes de empezar:** Python 3.10+, `git` y al menos un agente por línea de
-comandos (`opencode` o `claude`) instalado y con la sesión iniciada. No hace
+comandos (`opencode`, `codex` o `claude`) instalado y con la sesión iniciada. No hace
 falta nada más para el panel ni para el loop; `bash` solo se necesita para un
 `mapear.sh` personalizado y el motor antiguo opcional.
 
@@ -158,7 +158,7 @@ Apúntalo a un proyecto y recorre `plan.md` en orden, una tarea cada vez:
 
 1. **Elige** la primera tarea pendiente (`- [ ]`) e inyecta `CONTEXTO.md` y
    `lecciones.md` en el prompt del agente.
-2. **La implementa** con el agente elegido (`opencode`, `claude` o `auto`), en
+2. **La implementa** con el agente elegido (`opencode`, `codex`, `claude` o `auto`), en
    su propia rama de tarea creada desde la rama de la ejecución.
 3. **Pasa el gate**: los checks propios del proyecto (`gate_checks/`) deben pasar.
 4. **Revisa** el diff con un segundo agente y modelo (revisión dual, activada por
@@ -551,7 +551,7 @@ los tokens de los webhooks y los ajustes de la ventana.
 | Sistema | Estado |
 |----|--------|
 | **Linux** | ✅ **Soportado.** Entorno de referencia: uso diario más los tests del CI. |
-| **Windows** | 🧪 **Experimental.** El CI ejecuta todos los tests en `windows-latest` con Git Bash real. La interfaz, el loop (`dedalo/loop.py`) y el gate (`dedalo/gate.py`) son motores nativos en Python lanzados con el intérprete de la propia app, así que **no hace falta Git Bash** (`os.pathsep`, sufijos `.exe`/`.cmd`). **Sin probar en un PC real:** instalador y acceso directo, bandeja y un loop real con opencode o claude. Bash (Git Bash o WSL) solo hace falta para el motor bash opcional (`dedalo.sh`) o un `mapear.sh` personalizado; el mapa del proyecto se genera en Python. |
+| **Windows** | 🧪 **Experimental.** El CI ejecuta todos los tests en `windows-latest` con Git Bash real. La interfaz, el loop (`dedalo/loop.py`) y el gate (`dedalo/gate.py`) son motores nativos en Python lanzados con el intérprete de la propia app, así que **no hace falta Git Bash** (`os.pathsep`, sufijos `.exe`/`.cmd`). **Sin probar en un PC real:** instalador y acceso directo, bandeja y un loop real con opencode, codex o claude. Bash (Git Bash o WSL) solo hace falta para el motor bash opcional (`dedalo.sh`) o un `mapear.sh` personalizado; el mapa del proyecto se genera en Python. |
 
 Lo que ya es independiente del sistema: los finales de línea de los `.sh`
 (`.gitattributes` fuerza `eol=lf`, así un `clone` en Windows con `autocrlf` ya
@@ -610,7 +610,7 @@ interfaz las rellena desde el formulario Ejecutar). Las más útiles:
 
 | Variable | Descripción |
 |----------|-------------|
-| `AGENTE_TAREA` | Agente que implementa: `opencode`\|`claude`\|`auto` (por defecto). |
+| `AGENTE_TAREA` | Agente que implementa: `opencode`\|`codex`\|`claude`\|`auto` (por defecto). |
 | `AGENTES_PREFERIDOS` | Orden de preferencia para `auto` y el revisor. |
 | `MODELO_TAREA` | Modelo de la tarea `proveedor/modelo` (solo opencode). |
 | `AGENTE_REVISOR` / `MODELO_REVISOR` | Agente y modelo de la revisión dual (revisor del diff). |
@@ -685,7 +685,8 @@ no existe.
     opciones extra solo a este rol.
   - **revisor, juez (`98_criterio`), navegador y ficha:** solo lectura (`Edit`,
     `Write`, `Bash`… no permitidos).
-- `opencode` acepta cualquier `proveedor/modelo`; `claude` acepta modelos de
+- `opencode` acepta cualquier `proveedor/modelo`; `codex` acepta modelos de
+  OpenAI (`openai/<modelo>`); `claude` acepta modelos de
   Anthropic (`anthropic/haiku`, `anthropic/sonnet`, `anthropic/opus` o un id
   completo `claude-*`). Elegir `claude` en la interfaz cambia un modelo que no es
   de Claude a `anthropic/haiku`, el más barato.
@@ -985,7 +986,7 @@ dedalo/
 
 | Síntoma | Qué hacer |
 |---|---|
-| «no agent CLI with a session» | Inicia sesión en al menos una CLI (`opencode` o `claude`) o elige otra en el panel Ejecutar. La comprobación se guarda en caché; refresca los modelos para repetirla. |
+| «no agent CLI with a session» | Inicia sesión en al menos una CLI (`opencode`, `codex` o `claude`) o elige otra en el panel Ejecutar. La comprobación se guarda en caché; refresca los modelos para repetirla. |
 | El gate está en rojo | Abre **Logs** y lee el panel del gate para ver qué check falla; ejecuta `bash .dedalo/scripts/gate.sh` (o el gate portable) a mano y arregla el proyecto. El loop no hace commit de trabajo en rojo. |
 | «gate_checks sin consentimiento» / código de salida `3` | Aprueba el gate una vez en la interfaz, llama a `confiar_gate` por MCP o define `DEDALO_GATE_CONSENT=1` para una ejecución sin supervisión. |
 | La revisión manual no termina nunca | Envía `APPROVE`/`REJECT` desde el panel de revisión. La aprobación de un agente se ignora salvo con `REVISION_APRUEBA_AGENTE=1`; si vence el tiempo, la tarea se marca `[B]`. |
