@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from . import configuracion as cfg
 from . import mapeo, modelos, plan, plantillas
 from .cabina import CabinaLoop, PipelineLoop  # noqa: F401 (re-exported)
+from .codex_cli import modelo_codex
 from .i18n import t
 from .loop_agentes import modelo_claude
 from .modelos import PROVEEDORES_CATALOGO
@@ -179,18 +180,18 @@ PIPELINE_FASES = ["Plan", "Agente", "Gate", "Revisor", "Commit"]
 def _sincronizar_modelo(selector, cmb_cli):
     """Enables the model selector only for agents that accept a model.
 
-    opencode takes any provider/model and claude its own (anthropic/...); codex
-    uses the model configured in its account, so the selector is disabled with
-    a note instead of offering a model the engine would silently ignore.
+    opencode takes any provider/model; Claude and Codex use their own providers.
     """
     if selector is None or cmb_cli is None:
         return
     actual = cmb_cli.currentData() or "auto"
-    selector.setEnabled(actual != "codex")
+    selector.setEnabled(True)
     if actual == "codex":
         selector.setToolTip(
-            t("{actual} does not accept --model here: the model configured "
-              "in its own account is used", actual=actual))
+            t("Codex uses OpenAI models available to your account; an empty "
+              "selection uses your Codex configuration"))
+        if not modelo_codex(selector.currentText()):
+            selector.setCurrentText("openai")
     elif actual == "claude":
         selector.setToolTip(
             t("claude only runs Anthropic models: anthropic/haiku is the "
@@ -1229,7 +1230,7 @@ class PanelEjecucion(QWidget):
                 cmb_cli.addItem(t("auto (no agents with session)"), "auto")
             cmb_cli.setToolTip(t(
                 "Installed: {inst}\nWith session: {ses}\n"
-                "Models: only for opencode",
+                "Models: choose a model supported by the selected CLI",
                 inst=((", ".join(detectados)) or t("none")),
                 ses=((", ".join(operativo)) or t("none"))))
             cmb_cli.blockSignals(False)
@@ -1245,7 +1246,7 @@ class PanelEjecucion(QWidget):
 
             The combo only offers INSTALLED agents (plus "auto"), so it never
             lets you pick one that doesn't exist. The model selector is enabled
-            only with opencode: codex and claude don't accept --model here.
+            for every CLI; the engine translates provider/model identifiers.
             """
             h = QHBoxLayout()
             h.setSpacing(8)

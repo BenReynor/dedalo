@@ -1351,7 +1351,11 @@ class Ventana(QMainWindow):
         panel.appendPlainText("> " + " ".join([programa, *args]))
         env = loop_launch.filtrar_entorno(os.environ)
         loop_launch.entorno_python(env, getattr(sys, "frozen", False))
-        loop_launch.entorno_juez(env, self.pan_ejec.modelos_seleccion()["tarea"])
+        try:
+            loop_launch.juez_del_proyecto(env, self.pan_ejec.config(), ruta)
+        except ValueError as e:
+            panel.appendPlainText(t("Error: {msg}", msg=str(e)))
+            return
         self.gate = Proceso(panel)
         self.gate.setWorkingDirectory(ruta)
         self.gate.setEnvironment([f"{k}={v}" for k, v in env.items()])

@@ -80,6 +80,23 @@ Add this to your `opencode.json` (global or project-level):
 }
 ```
 
+### Codex
+
+Install Dédalo in its virtual environment (`pip install -e ".[mcp]"`), then:
+
+```bash
+codex mcp add dedalo -- /absolute/path/to/dedalo/.venv/bin/python -m dedalo.mcp_server
+codex mcp list
+```
+
+The MCP pilot and the agent executing tasks are separate: registering this
+server lets Codex supervise Dédalo. Select `codex` as the task/reviewer CLI in
+Dédalo to execute work with `codex exec`. All 19 tools and the project/manual
+resources use the same MCP interface as other clients. Manual review rules
+still apply: an MCP `APPROVE` is ignored unless explicitly enabled.
+
+See [Codex compatibility](CODEX.md) for role permissions and verification.
+
 ### After an upgrade
 
 **Restart the MCP client.** A long-running server keeps the modules it imported

@@ -159,6 +159,10 @@ _ES: dict[str, str] = {
         "Se inyecta en el agente antes de cada tarea; añade una entrada automáticamente cuando una tarea se bloquea.",
     "Installed: {inst}\nWith session: {ses}\nModels: only for opencode":
         "Instalados: {inst}\nCon sesión: {ses}\nModelos: solo para opencode",
+    "Installed: {inst}\nWith session: {ses}\nModels: choose a model supported by the selected CLI":
+        "Instalados: {inst}\nCon sesión: {ses}\nModelos: elige uno compatible con el CLI seleccionado",
+    "Codex uses OpenAI models available to your account; an empty selection uses your Codex configuration":
+        "Codex usa modelos OpenAI disponibles en tu cuenta; sin selección usa tu configuración de Codex",
     "Internet: ?": "Internet: ?",
     "It already had all the Dédalo files.": "Ya tenía todos los ficheros de Dédalo.",
     "It may be truncated or hand-edited. A full copy has been saved to:\n{copia}\n\nIf you quit now, the file stays where it is and you can repair it or restore it by hand. If you prefer to continue, the project list will start empty (your data is still in the copy).":

@@ -262,11 +262,11 @@ PATRONES_SIN_SESION = (
 )
 
 # Session probe per agent. opencode is queried without inference (listing
-# credentials); codex and claude do not expose a reliable session state, so
-# they are sent a minimal prompt: if there is no session they fail before inferring.
+# credentials); Codex exposes login status without inference. Claude still
+# needs a minimal prompt to establish session availability.
 SONDA_SESION = {
     "opencode": (["auth", "list"], 8),
-    "codex": (["exec", "--skip-git-repo-check", "ping"], 20),
+    "codex": (["login", "status"], 8),
     "claude": (["-p", "--output-format", "text", "ping"], 20),
 }
 
@@ -319,6 +319,11 @@ def sesion_agente(nombre):
     salida = f"{r.stdout}\n{r.stderr}"
     if nombre == "opencode":
         _sesiones[nombre] = _sesion_opencode(salida)
+    elif nombre == "codex":
+        if r.returncode == 0:
+            _sesiones[nombre] = True
+        elif re.search(r"not logged in|not authenticated|codex login", salida, re.I):
+            _sesiones[nombre] = False
     elif re.search("|".join(PATRONES_SIN_SESION), salida, re.I):
         _sesiones[nombre] = False
     elif r.returncode == 0 or salida.strip():

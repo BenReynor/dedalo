@@ -20,6 +20,7 @@ import unicodedata
 import uuid
 
 from . import rutas
+from .codex_cli import modelo_codex
 from .loop_agentes import agente_ok, detectar_agente, run_agente
 from .loop_git import run_git
 from .loop_util import incidencia, logx
@@ -250,7 +251,9 @@ def _resolver_agente(cfg):
     modelo = (getattr(cfg, "modelo_ficha", "") or "").strip()
     if not modelo and agente == cfg.agente_tarea:
         modelo = (cfg.modelo_tarea or "").strip()
-    if agente != "opencode":
+    if agente == "codex":
+        modelo = modelo_codex(modelo)
+    elif agente != "opencode":
         modelo = ""
     return agente, modelo
 

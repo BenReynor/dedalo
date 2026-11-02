@@ -20,6 +20,7 @@ import sys
 
 from . import configuracion as cfg
 from . import modelos
+from .codex_cli import flags_codex, modelo_codex
 from .loop_agentes import flags_claude, modelo_claude
 
 # Environment variable for each agent CLI (dedalo.sh supports them).
@@ -94,17 +95,19 @@ def _modelo_para(agente, seleccion):
     """MODELO_* value for an agent, or "" when the CLI cannot use it.
 
     opencode takes any full provider/model; claude only its own models
-    (aliases, `anthropic/...`, `claude-*`); codex picks its model itself.
+    (aliases, `anthropic/...`, `claude-*`); Codex accepts OpenAI identifiers.
     """
     seleccion = (seleccion or "").strip()
     if agente == "opencode":
         return seleccion if "/" in seleccion else ""
     if agente == "claude":
         return seleccion if modelo_claude(seleccion) else ""
+    if agente == "codex":
+        return modelo_codex(seleccion)
     return ""
 
 
-def entorno_juez(env, modelo=""):
+def entorno_juez(env, modelo="", proyecto=""):
     """Makes a claude judge read-only in the gate's environment.
 
     `98_criterio.py` passes CLAUDE_FLAGS to `claude -p`; the user's value is
@@ -113,7 +116,32 @@ def entorno_juez(env, modelo=""):
     installed checks, and therefore the user's gate consent, stay unchanged.
     """
     env["CLAUDE_FLAGS"] = " ".join(flags_claude("juez", modelo=modelo))
+    juez = env.get("AGENTE_JUEZ") or "auto"
+    if juez == "auto":
+        juez = env.get("AGENTE_TAREA")
+    if juez == "codex":
+        # Installed checks split CODEX_FLAGS on whitespace. These generated
+        # flags have no paths, prompts or arbitrary user options containing spaces.
+        flags = flags_codex(env.get("CLI_CODEX", "codex"), env, proyecto,
+                            "juez", modelo)
+        if any(any(c.isspace() for c in flag) for flag in flags):
+            raise ValueError("El juez instalado no admite nombres MCP con espacios")
+        env["CODEX_FLAGS"] = " ".join(flags)
     return env
+
+
+def juez_del_proyecto(env, conf, proyecto):
+    """Use the project's CLI/model for gates launched from the GUI or MCP."""
+    agente = conf.get("agente_cli", "auto")
+    if agente in MAPA_CLI:
+        env.setdefault("AGENTE_JUEZ", agente)
+        ruta = modelos.ruta_binario(agente)
+        if ruta:
+            env[MAPA_CLI[agente]] = ruta
+    elegido = env.get("AGENTE_JUEZ", agente)
+    modelo = (_modelo_para(elegido, env.get("MODELO_JUEZ", ""))
+              or conf.get("agente", ""))
+    return entorno_juez(env, modelo, proyecto)
 
 
 def entorno_python(env, frozen=False):

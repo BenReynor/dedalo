@@ -112,7 +112,7 @@ def test_modelo_para_claude_y_opencode():
     assert _modelo_para("claude", "anthropic/haiku") == "anthropic/haiku"
     assert _modelo_para("claude", "opencode/big-pickle") == ""
     assert _modelo_para("opencode", "opencode/big-pickle") == "opencode/big-pickle"
-    assert _modelo_para("codex", "openai/gpt-5") == ""
+    assert _modelo_para("codex", "openai/gpt-5") == "gpt-5"
 
 
 def test_entorno_juez_sustituye_claude_flags_por_lectura():

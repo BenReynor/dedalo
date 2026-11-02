@@ -51,7 +51,6 @@ from .loop_agentes import (
     detectar_agente,
     elegir_revisor,
     entorno_opencode,
-    modelo_claude,
     revisar_diff,
     run_agente,
     run_navegador,
@@ -421,7 +420,14 @@ def _run_gate(cfg, criterio):
         # read-only agent defined and the user's MCP servers off.
         env = entorno_opencode(cli_agente("opencode", cfg), env, cfg.proyecto)
     # A claude judge follows the task model unless MODELO_JUEZ names a Claude one.
-    loop_launch.entorno_juez(env, modelo_claude(cfg.modelo_juez) or cfg.modelo_tarea)
+    modelo_juez = (loop_launch._modelo_para(env.get("AGENTE_JUEZ", cfg.agente_tarea),
+                                          cfg.modelo_juez) or cfg.modelo_tarea)
+    try:
+        loop_launch.entorno_juez(env, modelo_juez, cfg.proyecto)
+    except ValueError as e:
+        with open(gate_out, "w", encoding="utf-8") as f:
+            f.write(f"[GATE] {e}\n")
+        return 1, gate_out
     if not getattr(sys, "frozen", False):
         # `python -m dedalo.gate` starts with cwd=project: without this,
         # an interpreter without the installed package (development) won't find it.
@@ -493,8 +499,19 @@ def _instalar_senales(cfg):
     def _manejar(sig, _frame):
         try:
             _matar_hijos()
-            limpiar_sesiones(cli_agente("opencode", cfg), cfg.proyecto,
-                             cfg.inicio_ms, cfg.log)
+            # os._exit skips run()/main() finally blocks. Close visible state
+            # before any CLI cleanup that could outlast the caller's stop timeout.
+            for nombre in ("waiting", "decision"):
+                try:
+                    os.unlink(os.path.join(rutas.dir_review(cfg.proyecto), nombre))
+                except OSError:
+                    pass
+            cfg.vivo.terminar(128 + sig, f"Detenido por señal {sig}")
+            logx(cfg.log, f"DETENIDO: señal {sig}")
+            if "opencode" in (cfg.agente_tarea, cfg.revisor, cfg.agente_ficha,
+                               cfg.environ.get("AGENTE_JUEZ")):
+                limpiar_sesiones(cli_agente("opencode", cfg), cfg.proyecto,
+                                 cfg.inicio_ms, cfg.log)
         finally:
             os._exit(128 + sig)
 
@@ -802,11 +819,11 @@ def _run(cfg):
                 contexto_ctx = _leer(cfg.contexto)
             nav_ctx = ""
             if (cfg.navegador == "1" and agente_ok(cfg.agente_tarea, cfg)
-                    and cfg.modelo_navegador):
+                    and (cfg.modelo_navegador or cfg.agente_tarea == "codex")):
                 nav = cfg.tmp("nav")
                 run_navegador(cfg, nav, cfg.modelo_navegador, tarea,
                               cfg.agente_tarea)
-                if os.path.getsize(nav) > 0:
+                if os.path.isfile(nav) and os.path.getsize(nav) > 0:
                     nav_ctx = _leer(nav)
                 try:
                     os.unlink(nav)

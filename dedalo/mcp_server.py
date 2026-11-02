@@ -416,13 +416,16 @@ def correr_gate(nombre: str, timeout_s: int = 1800) -> str:
     argv = argv_gate(getattr(sys, "frozen", False))
     env = loop_launch.filtrar_entorno(os.environ)
     loop_launch.entorno_python(env, getattr(sys, "frozen", False))
-    loop_launch.entorno_juez(
-        env, loop_launch.config_de_proyecto(nombre)[0].get("agente", ""))
     if not consentimiento.concedido(ruta, env):
         return json.dumps({
             "rc": 3, "timeout": False, "stdout": "",
             "stderr": "gate sin consentimiento; ejecuta confiar_gate primero",
         }, ensure_ascii=False, indent=2)
+    try:
+        loop_launch.juez_del_proyecto(
+            env, loop_launch.config_de_proyecto(nombre)[0], ruta)
+    except ValueError as e:
+        return json.dumps({"rc": 2, "stdout": "", "stderr": str(e)})
     try:
         proc = subprocess.Popen(
             argv, cwd=ruta, env=env, stdin=subprocess.DEVNULL,

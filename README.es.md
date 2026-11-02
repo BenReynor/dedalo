@@ -616,7 +616,7 @@ interfaz las rellena desde el formulario Ejecutar). Las más útiles:
 >
 > Las fichas usan el formato de
 > `dedalo/plantillas_data/skills/ficha-dedalo/SKILL.md`; el motor lo inyecta en
-> el prompt del observador, así que funciona con opencode y con claude.
+> el prompt del observador, así que funciona con opencode, Codex y Claude.
 >
 > Estas variables (y todas las que empiezan por `DEDALO_`, `CLI_`, `LC_`,
 > `OPENCODE_` y `CLAUDE_`) se pasan siempre. Cualquier **otra** variable que
@@ -626,10 +626,20 @@ interfaz las rellena desde el formulario Ejecutar). Las más útiles:
 ### Agentes por línea de comandos
 
 `auto` (por defecto) elige la primera CLI instalada según `AGENTES_PREFERIDOS`
-(`opencode claude`). La interfaz solo muestra los agentes que encuentra en la
+(`opencode codex claude`). La interfaz solo muestra los agentes que encuentra en la
 máquina e indica el detectado en la opción `auto`, así que nunca ofrece uno que
 no existe.
 
+- `codex` se invoca con `codex exec --json`, recibe el prompt por stdin y fija
+  el directorio del proyecto con `-C`. La tarea usa `workspace-write`; revisor,
+  navegador, juez y ficha usan `read-only`. Los MCP del usuario se desactivan
+  para esas ejecuciones, conservando la configuración y autenticación de Codex.
+  El selector acepta `openai/<modelo>` y pasa el identificador sin el prefijo.
+  La sesión se comprueba con `codex login status`, sin inferencia. Las métricas
+  leen `turn.completed.usage`; el coste sigue siendo una estimación de Dédalo.
+  `CODEX_FLAGS` solo añade opciones al agente de tarea. Estas mejoras corresponden
+  al motor Python actual; el antiguo `dedalo.sh` sigue siendo una referencia.
+  Detalles y verificación: [compatibilidad con Codex](docs/CODEX.md).
 - `opencode` se invoca con `opencode run --agent <agente> --dir <proyecto>`.
   Dédalo define sus propios agentes con `OPENCODE_CONFIG_CONTENT` (combinado con
   tu configuración) y desactiva todos tus servidores MCP en esas ejecuciones, el

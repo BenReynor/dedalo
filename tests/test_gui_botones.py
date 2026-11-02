@@ -494,7 +494,7 @@ def test_ejecucion_auto_usa_current_data(app, proyecto_git, monkeypatch):
     idx_codex = p.cmb_agente_cli.findData("codex")
     if idx_codex > 0:
         p.cmb_agente_cli.setCurrentIndex(idx_codex)
-        assert not p.cmb_agente.isEnabled()
+        assert p.cmb_agente.isEnabled()
 
     p.cmb_agente_cli.setCurrentIndex(0)
     assert p.modelos_seleccion()["agente_cli"] == "auto"

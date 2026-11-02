@@ -607,7 +607,7 @@ GUI fills them in from the Run form). The most useful ones:
 >
 > Fichas use the canonical format in
 > `dedalo/plantillas_data/skills/ficha-dedalo/SKILL.md`; the engine injects it
-> into the observer prompt, so it works with opencode and claude.
+> into the observer prompt, so it works with opencode, Codex and Claude.
 >
 > These variables (plus everything prefixed `DEDALO_`, `CLI_`, `LC_`,
 > `OPENCODE_` and `CLAUDE_`) are always passed through. Any **other**
@@ -617,10 +617,19 @@ GUI fills them in from the Run form). The most useful ones:
 ### CLI Agents
 
 `auto` (default) picks the first installed CLI according to `AGENTES_PREFERIDOS`
-(`opencode claude`). The GUI only shows the agents it finds on the machine
+(`opencode codex claude`). The GUI only shows the agents it finds on the machine
 and labels the detected one in the `auto` option, so it never offers one that
 doesn't exist.
 
+- `codex` runs through `codex exec --json`, receives the prompt on stdin and
+  pins the working directory with `-C`. Tasks use `workspace-write`; reviewers,
+  navigators, judges and ficha observers use `read-only`. Nested MCP servers
+  are disabled while preserving Codex configuration and authentication.
+  The model selector translates `openai/<model>` to the bare identifier.
+  Session detection uses `codex login status`, without inference. Metrics read
+  `turn.completed.usage`; costs remain Dédalo estimates. `CODEX_FLAGS` only
+  adds options to the task agent. These changes target the native Python engine;
+  the deprecated shell engine remains a reference. See [Codex compatibility](docs/CODEX.md).
 - `opencode` is invoked with `opencode run --agent <agent> --dir <project>`.
   Dédalo defines its own agents through `OPENCODE_CONFIG_CONTENT` (merged over
   your config) and disables every MCP server of yours in those runs, the same

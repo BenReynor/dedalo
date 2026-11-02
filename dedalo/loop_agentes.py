@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 
+from .codex_cli import flags_codex, resultado_codex
 from .loop_proceso import run_con_timeout
 from .loop_util import ahora_ms, logx
 from .modelos import ALIAS_CLAUDE
@@ -358,6 +359,9 @@ def extraer_tokens(texto, agente):
     """(tokens_in, tokens_out) from the output, like the script's grep does."""
     tin = tout = 0
     if agente == "codex":
+        _final, uso = resultado_codex(texto)
+        if isinstance(uso, dict):
+            return int(uso.get("input_tokens", 0)), int(uso.get("output_tokens", 0))
         m = list(re.finditer(r"tokens_used:\s*(\d+)", texto))
         if m:
             tout = int(m[-1].group(1))
@@ -413,8 +417,6 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     if not binario or not agente_ok(agente, cfg):
         logx(cfg.log, f"ABORTADO: agente no disponible ({agente})")
         return 2, None
-    flags = (cfg.environ.get("CODEX_FLAGS") or "").split() \
-        if agente == "codex" else []
     entrada = None
     entorno = env if env is not None else cfg.environ
     if agente == "opencode":
@@ -423,8 +425,15 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
             dir_trabajo=dir_trabajo)
         entorno = entorno_opencode(binario, entorno, dir_trabajo or cfg.proyecto)
     elif agente == "codex":
-        cmd = [binario, "exec", "--skip-git-repo-check",
-               *flags, prompt]
+        try:
+            flags = flags_codex(binario, entorno, cwd or cfg.proyecto, rol,
+                                modelo, cfg.environ.get("CODEX_FLAGS", ""))
+        except ValueError as e:
+            logx(cfg.log, f"ABORTADO: {e}")
+            return 2, None
+        cmd = [binario, "exec", "--skip-git-repo-check", *flags,
+               "--json", "-C", dir_trabajo or cwd or cfg.proyecto, "-"]
+        entrada = prompt.encode("utf-8")
     elif agente == "claude":
         cmd = argv_claude(binario, cfg, rol, modelo)
         entrada = prompt.encode("utf-8")
@@ -435,13 +444,18 @@ def run_agente(cfg, agente, salida, modelo, prompt, tarea, iteracion, *,
     salida_err = salida + ".err"
     vivo = EN_CURSO
     t0 = ahora_ms()
-    with open(salida, "wb") as fout, open(salida_err, "wb") as ferr:
+    salida_eventos = salida + ".events.jsonl" if agente == "codex" else salida
+    with open(salida_eventos, "wb") as fout, open(salida_err, "wb") as ferr:
         rc, _salida, _t = run_con_timeout(
             cmd, timeout or cfg.timeout_por_tarea, env=entorno,
             cwd=cwd or cfg.proyecto, stdout=fout, stderr=ferr, vivo=vivo,
             entrada=entrada)
     dur = ahora_ms() - t0
-    registrar_metrica(cfg, agente, modelo, dur, rc, salida, tarea, iteracion,
+    if agente == "codex":
+        final, _uso = resultado_codex(_leer_fichero(salida_eventos))
+        with open(salida, "w", encoding="utf-8") as f:
+            f.write(final)
+    registrar_metrica(cfg, agente, modelo, dur, rc, salida_eventos, tarea, iteracion,
                       fase=fase)
     return rc, dict(vivo)
 
@@ -460,6 +474,9 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
               "TESTS: ruta/test.py::test_x\n"
               "ENDPOINTS: GET /api/...\n"
               "MODELOS: Modulo.servicio")
+    if agente == "codex":
+        return run_agente(cfg, agente, salida, modelo, prompt, tarea, 0,
+                          timeout=cfg.timeout_navegador, rol="lectura")
     entrada = None
     entorno = cfg.environ
     if agente == "opencode":
@@ -468,8 +485,6 @@ def run_navegador(cfg, salida, modelo, tarea, agente):
             cfg.environ.get("OPENCODE_AGENT_NAV") or OPENCODE_AGENTE_LECTURA,
             modelo, prompt)
         entorno = entorno_opencode(binario, entorno, cfg.proyecto)
-    elif agente == "codex":
-        cmd = [binario, "exec", "--skip-git-repo-check", prompt]
     elif agente == "claude":
         cmd = argv_claude(binario, cfg, "lectura", modelo)
         entrada = prompt.encode("utf-8")
@@ -528,7 +543,7 @@ def revisar_diff(cfg, rev, tarea, vdiff, gate_ok=""):
     rc, _vivo = run_agente(cfg, rev, rev_out, cfg.modelo_revisor,
                            prompt, tarea, 0, rol="revisor")
     texto = _leer_fichero(rev_out)
-    sin_veredicto = "VERDICT:" not in texto
+    sin_veredicto = rc != 0 or "VERDICT:" not in texto
     if sin_autenticacion(rev_out + ".err", rev_out, int(sin_veredicto)):
         logx(cfg.log, f"ABORTADO: revisor sin autenticacion ({rev})")
         return "sin_auth", None
@@ -536,14 +551,16 @@ def revisar_diff(cfg, rev, tarea, vdiff, gate_ok=""):
             or (sin_veredicto and tokens_agotados(rev_out))):
         logx(cfg.log, "ABORTADO: tokens/cuota agotados (revisor)")
         return "sin_tokens", None
-    if re.search(r"VERDICT:\s*PASS", texto):
-        return "pass", None
     veredicto = ""
     for linea in reversed(texto.splitlines()):
         if re.search(r"VERDICT:", linea):
             veredicto = linea
             break
+    if rc == 0 and re.fullmatch(r"VERDICT:\s*PASS", veredicto.strip()):
+        return "pass", None
     razones = [li for li in texto.splitlines()
                if re.search(r"VERDICT:", li) is None]
     feedback = " ".join(li for li in razones if li.strip()).strip()
+    if rc != 0:
+        feedback = f"revisor salió con rc={rc}: {feedback or 'sin respuesta válida'}"
     return "fail", feedback or (veredicto or "sin veredicto claro")
