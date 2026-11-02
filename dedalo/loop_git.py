@@ -30,6 +30,7 @@ _CACHES = re.compile(
 CONTROL = (
     r"plan\.md|lecciones\.md|CONTEXTO\.md|progreso\.log|gate\.sh|dedalo\.sh"
     r"|mapear\.sh|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl"
+    r"|estado_loop\.json|gate_ultimo\.log"
     r"|gate_checks(/.*)?|\.dedalo(/.*)?|\.dedalo_review(/.*)?")
 
 
@@ -248,3 +249,62 @@ def registrar_leccion(lecciones, titulo, sintoma, causa, prevencion):
                 f"- Síntoma: {sintoma}\n"
                 f"- Causa: {causa}\n"
                 f"- Prevención: {prevencion}\n")
+
+
+def cambios_pendientes(proyecto, control=CONTROL):
+    """Uncommitted paths outside the framework's CONTROL files and caches."""
+    rx = re.compile(r"^(?:" + control + r")$")
+    _, out, _ = run_git(proyecto, "-c", "core.quotepath=false",
+                        "status", "--porcelain", "--untracked-files=all")
+    rutas = []
+    for linea in out.splitlines():
+        if len(linea) < 4:
+            continue
+        ruta = linea[3:].strip('"')
+        if " -> " in ruta:  # rename: keep the new path
+            ruta = ruta.split(" -> ", 1)[1].strip('"')
+        if ruta and not rx.match(ruta) and not _CACHES.search(ruta):
+            rutas.append(ruta)
+    return rutas
+
+
+def guardar_parcial(proyecto, mensaje, control=CONTROL):
+    """Stashes a half-done task's work (tracked and new files) with a name.
+
+    Returns the stash description ("stash@{0}: …") or "" if there was
+    nothing to keep or the stash failed. CONTROL files are left alone.
+    """
+    rutas = cambios_pendientes(proyecto, control)
+    if not rutas:
+        return ""
+    rc, _, _ = run_git(proyecto, "stash", "push", "-u", "-q", "-m", mensaje,
+                       "--", *rutas)
+    if rc != 0:
+        return ""
+    _, out, _ = run_git(proyecto, "stash", "list", "-n", "1")
+    return out.strip()
+
+
+_RAMA_RUN = re.compile(r"^dedalo/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
+
+
+def ultima_rama_run(proyecto, rama_base):
+    """Most recent run branch that continues `rama_base` with unmerged work.
+
+    Run branches are named dedalo/<date>, so name order is time order. A run
+    qualifies when `rama_base` is its ancestor and it has commits that the base
+    lacks: that is the work of an interrupted run, which a new run must
+    continue instead of redoing it from the stale base.
+    """
+    _, out, _ = run_git(proyecto, "for-each-ref", "--format=%(refname:short)",
+                        "refs/heads/dedalo/")
+    ramas = sorted((r.strip() for r in out.splitlines()
+                    if _RAMA_RUN.match(r.strip())), reverse=True)
+    for rama in ramas:
+        if not _ok(proyecto, "merge-base", "--is-ancestor", rama_base, rama):
+            continue
+        _, n, _ = run_git(proyecto, "rev-list", "--count", f"{rama_base}..{rama}")
+        if n.strip().isdigit() and int(n.strip()) > 0:
+            return rama
+        return None  # newest descendant is already merged: nothing pending
+    return None

@@ -178,6 +178,28 @@ Two guardrails keep this predictable: the loop stops if there is no internet,
 and it stops before starting a new iteration once the **estimated** budget
 (`MAX_COSTO`) is exhausted.
 
+**Stops and resume.** Any stop mid-task (quota, Stop, judge not answering…)
+leaves the repo clean on the run branch: the half-done work goes to a named
+`git stash` (the log says how to get it back) and the task branch is deleted. On
+the next launch, if the latest `dedalo/<date>` branch is ahead of the base, the
+loop **continues from it** instead of redoing its tasks (`RETOMAR=0` starts from
+the base). With uncommitted changes in the project the loop does not start and
+names the files.
+
+**Plan pauses.** A `- [PARAR] text` line (e.g. at the end of a phase) stops the
+loop before the next task starts; the line becomes `- [PARADO] text` and the next
+launch goes on.
+
+**New projects.** If the baseline fails in a project with no task done yet (e.g.
+task #1 creates the skeleton), the checks already failing are tolerated until
+they pass; a task only fails if it breaks another check or the judge rejects it.
+`BASELINE=estricto` always aborts. The last failed gate output is kept in
+`.dedalo/estado/gate_ultimo.log`.
+
+**Run one check.** `python -m dedalo.gate --solo 07` (number or part of the
+name). Inside the loop the agent gets `.dedalo/estado/gate --solo <check>` and the
+prompt asks it to use it before finishing.
+
 ### Plan format
 
 ```markdown
@@ -599,6 +621,10 @@ GUI fills them in from the Run form). The most useful ones:
 | `FICHA_MAX_DIFF` | Max diff characters stored in the ficha (default `12000`). |
 | `FICHA_MAX_SALIDA` | Max characters of gate/agent output (default `20000`). |
 | `FICHA_DIFF_COMPLETO` | `1` stores the full diff (default `0`). |
+| `RETOMAR` | `1` (default) continues the last interrupted run; `0` starts from the base branch. |
+| `BASELINE` | `auto` (default) tolerates, in a new project, the checks already failing; `estricto` always aborts. |
+| `CODEX_RED_TAREA` | `1` (default) gives Codex's task agent network access (crates/packages); `0` cuts it. |
+| `CODEX_RAZONAMIENTO_TAREA` / `_REVISOR` / `_JUEZ` | Codex reasoning effort per role: `minimal`, `low`, `medium`, `high`, `xhigh`. |
 | `DEDALO_GATE_CONSENT` | `1` trusts the project's gate without prompting (for CI/scripts). Unset = ask once per project (interactive) or abort. |
 
 > While waiting on `REVISION_MANUAL`, if the network goes down the loop aborts

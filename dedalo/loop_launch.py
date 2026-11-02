@@ -55,6 +55,7 @@ VARS_ENTORNO = frozenset({
     "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
     # Engine overrides that are not secrets.
     "MODELO_JUEZ", "TIMEOUT_JUEZ", "ESPERA_JUEZ", "CRITERIO", "SKIP_RUFF",
+    "RETOMAR", "BASELINE",
     "AGENTE_FICHA", "MODELO_FICHA", "TIMEOUT_FICHA", "FICHAS_DIR",
     "FICHA_MAX_DIFF", "FICHA_MAX_SALIDA", "FICHA_DIFF_COMPLETO",
     # Opt-in agent API keys (the agents normally keep their own session).
@@ -253,6 +254,17 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
         conf.get("costo_iter", cfg.LAUNCH_DEFECTO["costo_iter"]))
     env["REVISION_MANUAL"] = "1" if conf.get("revision_manual", False) else "0"
     env["FICHA_ACTIVA"] = "1" if conf.get("fichas", False) else "0"
+    # Judge model chosen apart from the task model (only if it suits the judge CLI).
+    modelo_juez = _modelo_para(agente_tarea, conf.get("modelo_juez", ""))
+    if modelo_juez:
+        env["MODELO_JUEZ"] = modelo_juez
+    # Codex: reasoning effort per role and network for the task agent.
+    for rol in ("tarea", "revisor", "juez"):
+        nivel = str(conf.get("razonamiento_" + rol, "") or "").strip().lower()
+        if nivel:
+            env["CODEX_RAZONAMIENTO_" + rol.upper()] = nivel
+    if "red_agente" in conf:
+        env["CODEX_RED_TAREA"] = "1" if conf.get("red_agente") else "0"
     return env
 
 

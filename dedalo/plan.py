@@ -62,6 +62,18 @@ class Plan:
                 bloq += 1
         return pend, hecho, bloq
 
+    def marcar_tarea(self, texto, estado):
+        """Marks the pending task whose line is exactly `- [ ] <texto>`.
+
+        The loop remembers which task it started; marking "the first pending"
+        marked the wrong one when plan.md changed during the iteration (a task
+        unblocked or inserted above). Returns False, touching nothing, when
+        that task is no longer pending.
+        """
+        objetivo = "- [ ] " + (texto or "")
+        return self._marcar_linea(
+            lambda linea: linea.rstrip("\r\n") == objetivo, estado)
+
     def marcar_primera(self, estado):
         """Marks the FIRST pending task with `estado` (`x`/`B`).
 
@@ -71,11 +83,16 @@ class Plan:
         half-written if the process dies mid-write. Returns True if it
         touched some task.
         """
+        return self._marcar_linea(lambda linea: linea.startswith("- [ ]"),
+                                  estado)
+
+    def _marcar_linea(self, coincide, estado):
+        """Marks the first line matching `coincide` (atomic write)."""
         marca = "B" if str(estado).upper() == "B" else "x"
         hecha = False
         lineas = []
         for linea in self.texto.splitlines(keepends=True):
-            if not hecha and linea.startswith("- [ ]"):
+            if not hecha and coincide(linea):
                 lineas.append(linea.replace("- [ ]", f"- [{marca}]", 1))
                 hecha = True
             else:

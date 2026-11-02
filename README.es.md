@@ -179,6 +179,28 @@ Dos salvaguardas lo hacen predecible: el loop se detiene si no hay internet, y s
 detiene antes de empezar una iteración nueva cuando se agota el presupuesto
 **estimado** (`MAX_COSTO`).
 
+**Paradas y reanudación.** Cualquier parada a mitad de tarea (cuota agotada,
+Detener, juez sin respuesta…) deja el repo limpio en la rama de la ejecución: el
+trabajo a medias va a un `git stash` con nombre (el log dice cómo recuperarlo) y
+la rama de la tarea se borra. Al relanzar, si la última rama `dedalo/<fecha>` va
+por delante de la rama base, el loop **continúa desde ella** en vez de rehacer
+sus tareas (`RETOMAR=0` para empezar desde la base). Con cambios sin commitear en
+el proyecto, el loop no arranca y dice qué archivos son.
+
+**Pausas en el plan.** Una línea `- [PARAR] texto` (p. ej. al final de una fase)
+detiene el loop antes de empezar la tarea siguiente; la línea pasa a
+`- [PARADO] texto` y el siguiente lanzamiento sigue.
+
+**Proyecto nuevo.** Si el baseline falla en un proyecto sin ninguna tarea hecha
+(p. ej. el esqueleto lo crea la tarea #1), los checks que ya fallaban se toleran
+hasta que pasen; una tarea solo falla si rompe otro check o el juez la rechaza.
+`BASELINE=estricto` vuelve a abortar siempre. La salida del último gate fallido
+queda en `.dedalo/estado/gate_ultimo.log`.
+
+**Correr un check suelto.** `python -m dedalo.gate --solo 07` (número o parte del
+nombre). Dentro del loop el agente tiene `.dedalo/estado/gate --solo <check>` y
+el prompt le pide usarlo antes de terminar.
+
 ### Formato del plan
 
 ```markdown
@@ -609,6 +631,10 @@ interfaz las rellena desde el formulario Ejecutar). Las más útiles:
 | `FICHA_MAX_DIFF` | Caracteres máximos del diff guardados en la ficha (por defecto `12000`). |
 | `FICHA_MAX_SALIDA` | Caracteres máximos de la salida del gate/agente (por defecto `20000`). |
 | `FICHA_DIFF_COMPLETO` | `1` guarda el diff completo (por defecto `0`). |
+| `RETOMAR` | `1` (por defecto) continúa la última ejecución interrumpida; `0` empieza desde la rama base. |
+| `BASELINE` | `auto` (por defecto) tolera en un proyecto nuevo los checks que ya fallaban; `estricto` aborta siempre. |
+| `CODEX_RED_TAREA` | `1` (por defecto) da red al agente de tareas de Codex (descargar crates/paquetes); `0` la corta. |
+| `CODEX_RAZONAMIENTO_TAREA` / `_REVISOR` / `_JUEZ` | Razonamiento de Codex por rol: `minimal`, `low`, `medium`, `high`, `xhigh`. |
 | `DEDALO_GATE_CONSENT` | `1` confía en el gate del proyecto sin preguntar (para CI/scripts). Sin definir = pregunta una vez por proyecto (interactivo) o aborta. |
 
 > Mientras espera la `REVISION_MANUAL`, si se cae la red el loop aborta (en vez de

@@ -18,6 +18,29 @@ La implementación se contrastó con la ayuda de Codex CLI 0.166.0 y la
 Requiere las opciones `exec --json --ephemeral`, `-C`, `--sandbox` y `mcp list --json`.
 No modifica la configuración global de Codex ni lee sus archivos de credenciales.
 
+## Red, razonamiento, juez y sandbox
+
+- **Red del agente de tareas**: `workspace-write` corta la red por defecto, así
+  que el agente no podía añadir crates ni paquetes npm y programaba a ciegas.
+  Dédalo pasa `-c sandbox_workspace_write.network_access=true` a la tarea
+  (desactívalo con `"red_agente": false` en el lanzamiento del proyecto o
+  `CODEX_RED_TAREA=0`). Revisor, juez y navegador siguen en `read-only`.
+- **Razonamiento por rol**: `"razonamiento_tarea"`, `"razonamiento_revisor"` y
+  `"razonamiento_juez"` en `lanzamiento` de `~/.config/dedalo/proyectos.json`
+  (o `CODEX_RAZONAMIENTO_TAREA|REVISOR|JUEZ`), valores `minimal`, `low`,
+  `medium`, `high`, `xhigh`; se pasan como `-c model_reasoning_effort=…`.
+- **Modelo del juez aparte**: `"modelo_juez": "openai/<modelo>"` en `lanzamiento`
+  (o `MODELO_JUEZ`); sin él, el juez usa el modelo de la tarea.
+- **Sandbox bloqueado (bubblewrap/AppArmor)**: al arrancar, Dédalo ejecuta
+  `codex sandbox -- true` (gratis, sin modelo). Si falla con el error de bwrap
+  (Ubuntu 24.04 con `kernel.apparmor_restrict_unprivileged_userns=1` sin perfil
+  para `/usr/bin/bwrap`) o el agente lo muestra durante una tarea, el loop se
+  detiene con código 10 y un mensaje con las dos salidas: un perfil AppArmor
+  para bwrap con `userns,` (recomendado) o
+  `CODEX_FLAGS="--dangerously-bypass-approvals-and-sandbox"` (sin sandbox).
+
+La interfaz conserva estas claves al guardar el lanzamiento.
+
 ## Roles y opciones
 
 | Función | Comportamiento |

@@ -362,7 +362,7 @@ def test_commit_memoria_incluye_plan_y_lecciones(tmp_path):
     cfg = SimpleNamespace(proyecto=str(tmp_path), plan_md=str(plan),
                           lecciones=str(lecciones),
                           log=str(tmp_path / "progreso.log"))
-    assert _marcar(cfg, "x") is True
+    assert _marcar(cfg, "x", "una") is True
     lecciones.write_text("# Lecciones\n\n- nueva\n", encoding="utf-8")
     _commit_memoria(cfg, "una", 1)
 

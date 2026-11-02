@@ -123,7 +123,7 @@ are the names registered in Dédalo, not paths.
 | `leer_contexto` | `nombre` | Content of `CONTEXTO.md`. |
 | `leer_incidencias` | `nombre`, `limite=50` | Last `limite` structured incidents from `incidencias.jsonl` as a JSON array. |
 | `resumen_metricas` | `nombre` | `{resumen, iteraciones}` parsed from `progreso.log`; the last 25 iterations. |
-| `cola_log` | `nombre`, `lineas=60` | Last `lineas` lines of `progreso.log`; empty string if missing. |
+| `cola_log` | `nombre`, `lineas=60`, `solo_ultimo_run=true` | Last `lineas` lines of `progreso.log`, by default only from the latest run's `== DEDALO INICIADO` header (an old run's `ABORTADO` is not shown as current); empty string if missing. |
 | `estado_agentes` | — | Per-CLI state: installed, path, and whether it has a session. |
 | `listar_modelos` | — | `{sugerido, modelos}` from the opencode catalog. |
 

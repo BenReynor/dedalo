@@ -295,12 +295,21 @@ def resumen_metricas(nombre: str) -> str:
     }, ensure_ascii=False, indent=2)
 
 
-def cola_log(nombre: str, lineas: int = 60) -> str:
-    """Last `lineas` lines of progreso.log."""
+def cola_log(nombre: str, lineas: int = 60, solo_ultimo_run: bool = True) -> str:
+    """Last `lineas` lines of progreso.log.
+
+    By default only lines of the latest run (from its `== DEDALO INICIADO`
+    header), so an old run's ABORTADO is not read as the current state.
+    """
     ruta = _ruta_de_fichero(nombre, "progreso.log")
     if not os.path.isfile(ruta):
         return ""
-    return _cola(_leer_fichero(nombre, "progreso.log"), lineas)
+    texto = _leer_fichero(nombre, "progreso.log")
+    if solo_ultimo_run:
+        corte = texto.rfind("== DEDALO INICIADO")
+        if corte >= 0:
+            texto = texto[texto.rfind("\n", 0, corte) + 1:]
+    return _cola(texto, lineas)
 
 
 def estado_agentes() -> str:

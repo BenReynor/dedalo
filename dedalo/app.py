@@ -617,8 +617,14 @@ class Ventana(QMainWindow):
         guardar_config_proyecto(self.proyectos, self._nombre_activo, conf)
 
     def _capturar_lanzamiento(self):
-        """Saves the current state of the launch widgets."""
-        self._lanzamiento = self.pan_ejec.config()
+        """Saves the current state of the launch widgets.
+
+        Keys without a widget (modelo_juez, razonamiento_*, red_agente, set in
+        proyectos.json) are kept instead of being wiped on every save.
+        """
+        lanz = dict(self._lanzamiento or {})
+        lanz.update(self.pan_ejec.config())
+        self._lanzamiento = lanz
 
     def _cambiar_tema(self, nombre):
         self.tema = nombre

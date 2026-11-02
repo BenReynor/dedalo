@@ -32,8 +32,14 @@ def ficheros(proyecto):
     if not os.path.isdir(base):
         return []
     salida = []
-    for raiz, _dirs, nombres in os.walk(base):
+    for raiz, dirs, nombres in os.walk(base):
+        # Python's bytecode cache is not code the gate runs (gate.py compiles
+        # the .py sources itself), but anything importing a check writes it:
+        # counting it made trust vanish after an ordinary gate run.
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
         for nombre in nombres:
+            if nombre.endswith((".pyc", ".pyo")):
+                continue
             salida.append(os.path.relpath(os.path.join(raiz, nombre), base))
     return sorted(salida)
 

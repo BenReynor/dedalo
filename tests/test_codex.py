@@ -29,6 +29,8 @@ if args[:2] == ['mcp', 'list']:
 if args == ['login', 'status']:
     print('Logged in using ChatGPT')
     sys.exit(0)
+if args[:1] == ['sandbox']:
+    sys.exit(0)
 prompt = sys.stdin.read() if args[-1] == '-' else args[-1]
 pathlib.Path(__file__).with_name('invocation.json').write_text(json.dumps({'args':args, 'prompt':prompt}))
 if prompt.startswith('Eres el JUEZ'):

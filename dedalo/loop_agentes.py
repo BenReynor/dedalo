@@ -266,6 +266,10 @@ def flags_claude(rol, proyecto="", modelo="", extra=""):
     flags = ["--strict-mcp-config"]
     if rol == "tarea":
         cmds = bash_permitidos(proyecto) if proyecto else []
+        # The gate launcher the loop writes, so the agent can run a check.
+        if proyecto and os.path.isfile(os.path.join(
+                proyecto, ".dedalo", "estado", "gate")):
+            cmds = [*cmds, ".dedalo/estado/gate"]
         if cmds:
             flags += ["--allowedTools", *[f"Bash({c}:*)" for c in cmds]]
         flags += (extra or "").split()

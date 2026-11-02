@@ -13,6 +13,7 @@ Prefix selection rule:
 The loop (loop.py) invokes this with the same project directory as before:
 
     python -m dedalo.gate      # installed / editable
+    python -m dedalo.gate --solo 07     # a single check (number or name)
     <exe> --dedalo-gate            # frozen binary (PyInstaller)
 """
 
@@ -155,7 +156,20 @@ def _lenguaje_de(nombre):
     return "custom"
 
 
-def correr(proyecto, bash=None):
+def _filtrar(grupos, solo):
+    """Checks whose number or name matches `solo` (e.g. "07", "7", "reglas")."""
+    solo = (solo or "").strip()
+    if not solo:
+        return grupos
+    elegidos = {}
+    for (num, base), grupo in grupos.items():
+        if (solo.isdigit() and int(solo) == num) or solo == base or (
+                not solo.isdigit() and solo in base):
+            elegidos[(num, base)] = grupo
+    return elegidos
+
+
+def correr(proyecto, bash=None, solo=""):
     """Runs the project gate. Returns 0=OK, 1=FAIL.
 
     Every check runs even if an earlier one fails: with several stacks enabled
@@ -173,6 +187,13 @@ def correr(proyecto, bash=None):
     if not grupos:
         print("[GATE] ⚠ Sin checks — se asume OK")
         return 0
+    if solo:
+        disponibles = ", ".join(b for _n, b in sorted(grupos))
+        grupos = _filtrar(grupos, solo)
+        if not grupos:
+            print(f"[GATE] ✗ ningún check coincide con '{solo}'. "
+                  f"Disponibles: {disponibles}")
+            return 2
     entorno = None
     fallos = []
     pasados = []
@@ -218,17 +239,21 @@ def main(argv=None):
     except Exception:
         pass
     proyecto = os.getcwd()
+    solo = ""
     i = 0
     while i < len(argv):
         if argv[i] in ("--proyecto", "-p") and i + 1 < len(argv):
             proyecto = argv[i + 1]
+            i += 2
+        elif argv[i] == "--solo" and i + 1 < len(argv):
+            solo = argv[i + 1]
             i += 2
         elif not argv[i].startswith("-"):
             proyecto = argv[i]
             i += 1
         else:
             i += 1
-    return correr(proyecto)
+    return correr(proyecto, solo=solo)
 
 
 if __name__ == "__main__":
