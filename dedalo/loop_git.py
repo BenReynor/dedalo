@@ -198,7 +198,20 @@ def revertir(proyecto, control=CONTROL):
     are not touched. Paths quoted by git (spaces) are normalized.
     """
     rx = re.compile(r"^(?:" + control + r")$")
-    _, out, _ = run_git(proyecto, "status", "--porcelain")
+
+    def _borrar(ruta):
+        ruta_abs = os.path.join(proyecto, ruta)
+        if os.path.isdir(ruta_abs) and not os.path.islink(ruta_abs):
+            shutil.rmtree(ruta_abs, ignore_errors=True)
+        else:
+            try:
+                os.unlink(ruta_abs)
+            except OSError:
+                pass
+
+    # --no-renames: an intent-to-add file (git add -N, used for the reviewer's
+    # diff) next to a deleted one can be reported as a rename "R old -> new".
+    _, out, _ = run_git(proyecto, "status", "--porcelain", "--no-renames")
     for linea in out.splitlines():
         if len(linea) < 4:
             continue
@@ -207,15 +220,15 @@ def revertir(proyecto, control=CONTROL):
         if not ruta or rx.match(ruta):
             continue
         if estado == "??":
-            ruta_abs = os.path.join(proyecto, ruta)
-            if os.path.isdir(ruta_abs) and not os.path.islink(ruta_abs):
-                shutil.rmtree(ruta_abs, ignore_errors=True)
-            else:
-                try:
-                    os.unlink(ruta_abs)
-                except OSError:
-                    pass
+            _borrar(ruta)
+        elif "A" in estado:
+            # New file present in the index, including intent-to-add (" A")
+            # entries: `git checkout --` does not remove those, which used to
+            # leave a discarded task's files behind for the next task.
+            run_git(proyecto, "rm", "-q", "--cached", "-r", "--force", "--", ruta)
+            _borrar(ruta)
         else:
+            run_git(proyecto, "reset", "-q", "--", ruta)
             run_git(proyecto, "checkout", "--", ruta)
 
 

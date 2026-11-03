@@ -329,3 +329,35 @@ if __name__ == "__main__":
                test_preparar_ramas_origin_tracking):
         fn(_T())
     print("\n🎉 Todos los tests de loop_git.py PASARON")
+
+
+def test_revertir_quita_archivos_intent_to_add(tmp_path):
+    """Regression (POS-Minimarket #45c/#45d): files marked with `git add -N`
+    for the reviewer's diff survived a blocked task's revert and broke the
+    next task (empty test suite) and its commit."""
+    proy = _repo(tmp_path)
+    (proy / "Promociones.test.tsx").write_text("", encoding="utf-8")
+    (proy / "servicio.rs").write_text("fn x() {}\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-N", "Promociones.test.tsx", "servicio.rs"],
+                   cwd=proy, check=True)
+    os.unlink(proy / "base.txt")  # can make git report a rename
+    revertir(proy)
+    assert not (proy / "Promociones.test.tsx").exists()
+    assert not (proy / "servicio.rs").exists()
+    assert (proy / "base.txt").read_text(encoding="utf-8") == "base\n"
+    st = subprocess.run(["git", "status", "--porcelain"], cwd=proy,
+                        capture_output=True, text=True, check=True).stdout
+    assert st.strip() == ""
+
+
+def test_revertir_quita_archivos_nuevos_en_el_indice(tmp_path):
+    proy = _repo(tmp_path)
+    (proy / "nuevo.py").write_text("x = 1\n", encoding="utf-8")
+    (proy / "base.txt").write_text("editado\n", encoding="utf-8")
+    subprocess.run(["git", "add", "nuevo.py", "base.txt"], cwd=proy, check=True)
+    revertir(proy)
+    assert not (proy / "nuevo.py").exists()
+    assert (proy / "base.txt").read_text(encoding="utf-8") == "base\n"
+    st = subprocess.run(["git", "status", "--porcelain"], cwd=proy,
+                        capture_output=True, text=True, check=True).stdout
+    assert st.strip() == ""
