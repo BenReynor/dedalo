@@ -63,6 +63,8 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 
 Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `main` (commits 86beaeb, 821eaaf, d73e91d).
 
+Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados), después el control de calidad y por último las mejoras (cada una en su rama).
+
 - [x] La tarea que se marca es la que se hizo
   criterio: al empezar una iteración se guarda la identidad de la tarea elegida (línea, título y criterio); al terminar se marca `[x]`/`[B]` exactamente esa tarea aunque plan.md haya cambiado entretanto (tareas insertadas encima, otra desbloqueada, criterio editado); si ya no existe o cambió de estado no se marca nada y se avisa en progreso.log e incidencias.jsonl; `Plan.marcar_primera` deja de usarse en el loop; tests: editar el plan durante la iteración (insertar arriba, desbloquear una `[B]` anterior) y comprobar que se marca la correcta (error 16) — **hecha en 821eaaf**
 
@@ -75,11 +77,11 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
 - [x] Retomar sin repetir tareas tras un corte
   criterio: si un run se aborta (cuota, red, Ctrl+C, apagado, Detener) las tareas ya terminadas no se pierden: al relanzar, Dédalo encuentra la última rama de run (guardada en `estado_loop.json`) y, si va por delante de la rama base y la base es su ancestro, sigue desde ella (o integra en la base por fast-forward si el proyecto lo pide; si no es posible, lo informa sin tocar nada) y continúa por la primera tarea pendiente; GUI y MCP avisan cuando hay trabajo de un run sin integrar en la rama principal y ofrecen «Continuar la última ejecución» e «Integrar en <rama>»; con el árbol sucio al arrancar no se cambia de rama: se aborta con el motivo; se registra en progreso.log; tests con un repo temporal: abortar tras 2 tareas, relanzar, no se repite ninguna (error 2) — **hecha en 821eaaf; la integración sigue en la tarea siguiente**
 
-- [ ] Integrar el run en la rama padre al terminar
-  criterio: opción del proyecto «integrar en la rama padre» que al terminar o parar el run hace fast-forward (si no es posible, avisa sin tocar nada); comando en GUI y tool MCP `integrar_run(nombre)`; GUI y MCP avisan cuando hay trabajo de un run sin integrar; tests con repo temporal: integración limpia y base divergente (4)
-
 - [x] Codex: red, razonamiento y sandbox
   criterio: (las bases de Codex — modelo por rol, `--sandbox` por rol, MCP aislados — ya están en `dedalo/codex_cli.py`); opción del proyecto «red para el agente de tareas» (activada por defecto) que pasa a Codex el permiso de red del modo `workspace-write` (opción comprobada contra `codex exec --help`/docs de la versión instalada); nivel de razonamiento por rol (tarea, revisor, juez) en GUI y `configurar_lanzamiento`; modelo del juez elegible aparte (no solo por `MODELO_JUEZ`); prueba previa al lanzar (`codex exec` mínimo) que detecta el fallo de bubblewrap/AppArmor («bwrap … Operation not permitted», solo lectura) y aborta con un mensaje que propone las dos salidas (perfil AppArmor para bwrap o `CODEX_FLAGS` sin sandbox, decisión del usuario); los mensajes «could not resolve / failed to download / ENOTFOUND» del agente se detectan como «sin red» y bloquean la tarea con ese motivo en vez de gastar reintentos; el prompt dice al agente que pida la dependencia si no tiene red en vez de inventar versiones; tests con CLI simulado (errores 12–14 y 17) — **hecha en 821eaaf y d73e91d**
+
+- [x] Lecciones útiles tras un fallo
+  criterio: la lección automática tras un fallo del gate o del revisor incluye las líneas concretas del fallo (qué check, qué regla, archivo y mensaje; recortadas a un máximo) y una prevención concreta; si el agente arregla el fallo en el reintento, se le pide una lección de una línea escrita por él a partir del feedback, que sustituye a la genérica; no se repite una lección igual; tests con la salida de un check de reglas que falla (error 4) — **hecha en 821eaaf; queda la lección escrita por el agente como mejora opcional**
 
 - [ ] Codex: sin red detectado y cachés reutilizadas
   criterio: los mensajes «could not resolve / failed to download / ENOTFOUND» del agente con la red desactivada se detectan y bloquean la tarea con ese motivo sin gastar reintentos; la tarea de Codex puede escribir en las cachés de cargo y npm (`sandbox_workspace_write.writable_roots`, comprobado contra el CLI instalado) o usa un `CARGO_HOME` persistente en `.dedalo/`, para no volver a descargar en cada iteración; tests con CLI simulado (10)
@@ -99,8 +101,17 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
 - [ ] Un solo gate para el usuario y para el loop
   criterio: (ya hecho en 821eaaf: `--solo` y el lanzador del agente) `gate.sh` ejecutado a mano corre exactamente los mismos checks que el loop (incluidos los `gate_checks/*.py`), o delega en `python -m dedalo.gate`; README explica cómo correr el gate a mano; test que compara la lista de checks de las dos vías
 
-- [x] Lecciones útiles tras un fallo
-  criterio: la lección automática tras un fallo del gate o del revisor incluye las líneas concretas del fallo (qué check, qué regla, archivo y mensaje; recortadas a un máximo) y una prevención concreta; si el agente arregla el fallo en el reintento, se le pide una lección de una línea escrita por él a partir del feedback, que sustituye a la genérica; no se repite una lección igual; tests con la salida de un check de reglas que falla (error 4) — **hecha en 821eaaf; queda la lección escrita por el agente como mejora opcional**
+- [ ] Sin procesos huérfanos al acabar la iteración
+  criterio: al cerrar cada iteración se listan y terminan los procesos que quedan en el cgroup o scope del motor (salvo el motor), incluidos los que abrieron su propia sesión; sin cgroup se hace lo posible por grupo; tests con un proceso que se desliga (21)
+
+- [ ] Revisor medido y modo estricto
+  criterio: metrics.jsonl guarda por iteración el veredicto del revisor y del juez, qué encontraron y si el gate falló después de un PASS del revisor; la GUI/`resumen_metricas` muestran la tasa de hallazgos del revisor; opción «revisor estricto» con lista de comprobación (criterio punto por punto, tests nuevos que fallan sin el cambio, textos de UI e i18n); tests del registro y del prompt estricto (mejora 8)
+
+- [ ] Capturas de la interfaz para el revisor
+  criterio: check opcional que, en las tareas cuyo título empieza por «UI:», hace capturas de las pantallas clave (Xvfb o Playwright) y se las pasa al revisor, para que vea fallos visibles que hoy pasan el gate y el revisor (textos duplicados, etiquetas cortadas, barras que se desplazan, textos sin traducir); configurable por proyecto y sin efecto si no se activa; tests con un proyecto de ejemplo (1)
+
+- [ ] Integrar el run en la rama padre al terminar
+  criterio: opción del proyecto «integrar en la rama padre» que al terminar o parar el run hace fast-forward (si no es posible, avisa sin tocar nada); comando en GUI y tool MCP `integrar_run(nombre)`; GUI y MCP avisan cuando hay trabajo de un run sin integrar; tests con repo temporal: integración limpia y base divergente (4)
 
 - [ ] Log por ejecución y texto del agente aparte
   criterio: cada run empieza con una línea de cabecera fija (`== RUN <id> INICIADO ==`) y `cola_log`/estado solo muestran líneas del run actual; progreso.log solo tiene eventos de una línea con formato fijo (hora, run, tarea, tipo, mensaje) y el texto completo del agente, del revisor y la salida del gate van a `.dedalo/estado/iter_<run>_<n>.md`, enlazado desde el evento; la GUI de Logs puede abrir ese detalle; tests del formato y de que un texto del agente con «limit» o «fin» no aparece como evento (error 6, mejora 5)
@@ -119,12 +130,6 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
 
 - [ ] Esperar eventos y avisos para pilotos externos
   criterio: MCP `esperar_evento(nombre, tipos=[commit, fallo, bloqueo, pausa, cuota, fin], timeout)` que devuelve el primer evento nuevo (sin tener que leer el log); los mismos eventos pueden ir a notificaciones de escritorio y a un webhook/ntfy configurable; tests del MCP con un loop falso que emite eventos (mejora 4)
-
-- [ ] Sin procesos huérfanos al acabar la iteración
-  criterio: al cerrar cada iteración se listan y terminan los procesos que quedan en el cgroup o scope del motor (salvo el motor), incluidos los que abrieron su propia sesión; sin cgroup se hace lo posible por grupo; tests con un proceso que se desliga (21)
-
-- [ ] Revisor medido y modo estricto
-  criterio: metrics.jsonl guarda por iteración el veredicto del revisor y del juez, qué encontraron y si el gate falló después de un PASS del revisor; la GUI/`resumen_metricas` muestran la tasa de hallazgos del revisor; opción «revisor estricto» con lista de comprobación (criterio punto por punto, tests nuevos que fallan sin el cambio, textos de UI e i18n); tests del registro y del prompt estricto (mejora 8)
 
 - [ ] Coste acumulado por proyecto y por fase
   criterio: además del coste del run, Dédalo guarda el acumulado por proyecto y por fase (sumando metrics.jsonl de todos los runs) y lo muestra en GUI y MCP; con CLIs de suscripción se marca como estimado y, si el CLI la informa, se muestra la hora de reseteo de la cuota; con tokens reales disponibles se calcula con ellos y, si no los hay, se muestra «no disponible» en vez de un número fijo; tests de la suma entre runs y del caso sin tokens (8, 24)
@@ -176,7 +181,7 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
   criterio: si un agente detecta que falta algo fuera de su tarea (p. ej. «hace falta una migración antes»), lo devuelve en su informe estructurado como tarea propuesta (título, criterio, depende); el coordinador la añade al plan marcada `[?]` (propuesta) sin ejecutarla, y el usuario la aprueba o descarta desde la GUI/MCP (o se aprueban solas si el proyecto lo permite); una tarea aprobada entra en el grafo con sus dependencias; tests del flujo propuesta → aprobada/descartada y de que `[?]` no se ejecuta
 
 - [ ] Gate por tarea o por fase
-  criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; nueva plantilla de check opcional **e2e** (Playwright para proyectos web, comando configurable para otros) para que los gates se parezcan más al uso real, y en las tareas cuyo título empieza por «UI:» el check opcional hace capturas de las pantallas clave (Xvfb/Playwright) que se pasan al revisor (1: fallos visibles que el gate y el revisor no vieron); tests de selección de checks y de que un check inexistente se rechaza al validar
+  criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; nueva plantilla de check opcional **e2e** (Playwright para proyectos web, comando configurable para otros) para que los gates se parezcan más al uso real; tests de selección de checks y de que un check inexistente se rechaza al validar
 
 ## FASE 4 — Varios agentes a la vez
 
@@ -211,6 +216,22 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
 
 - [ ] Sección Cabina: carriles y grafo en vivo
   criterio: sección propia «Cabina» en la barra lateral (también se abre desde Ejecutar) para ver el run gráficamente, actualizada en vivo: (1) **carriles**: uno por agente en curso con la tarea, el agente/modelo, el paso actual Plan → Agent → Gate → Reviewer → Commit, tiempo y coste de la tarea, y estados «esperando cuota» o «respaldo: X → Y»; una línea de tiempo con lo que hizo cada carril en el run; (2) **grafo por pisos**: una caja por tarea coloreada por estado (hecha, en curso con su carril, lista, esperando a <id>, bloqueada) con las flechas de dependencia, zoom y desplazamiento, resaltando el camino que frena a una tarea al pasar el ratón; (3) **detalle** al hacer clic en una tarea o carril: criterio, agente, gate y checks corridos, informe de cambios, avisos del revisor (p. ej. «tocó un archivo de la zona de X») y su log filtrado; con un plan simple muestra un solo carril y los pisos en fila; tests del modelo de la vista (pisos, colores, camino bloqueante) sin GUI y smoke de la Cabina con dos carriles y un grafo de 3 pisos (QT offscreen)
+
+## FASE 5B — Control desde el móvil y grupos pequeños
+
+Público: personas que trabajan solas con agentes y grupos pequeños, no empresas. Sin servidor central: git sigue siendo la fuente de verdad.
+
+- [ ] Control remoto por Telegram y Discord
+  criterio: desactivado por defecto; con él activo, el usuario puede pedir estado, pausar, continuar, detener y aprobar o rechazar una revisión manual desde el chat; solo se aceptan órdenes de identificadores de usuario de una lista permitida y del chat configurado (cualquier otro se ignora y se registra), y un mensaje del chat nunca llega al agente como instrucción: es una lista cerrada de órdenes, sin comandos libres; detener y aprobar piden confirmación; funciona sin abrir puertos (Telegram por consulta periódica, Discord por gateway); los tokens no aparecen en logs; tests con clientes falsos: usuario no autorizado, orden desconocida, confirmación y aprobación
+
+- [ ] Control remoto por WhatsApp
+  criterio: mismas órdenes y mismas reglas que Telegram y Discord; como la API de WhatsApp entrega los mensajes por un webhook público, el manual explica qué hace falta (URL accesible o túnel), se valida la firma de cada petición y sigue desactivado por defecto; tests con peticiones firmadas y sin firmar
+
+- [ ] Varias personas en un mismo proyecto
+  criterio: dos personas con su propio Dédalo sobre el mismo repo no toman la misma tarea: al empezar, la tarea se reserva con una marca compartida por git (quién, cuándo, caducidad) y un intento concurrente pasa a la siguiente; los commits y el historial dicen quién lanzó cada tarea; `responsable:` opcional asigna una tarea a una persona y los demás la saltan; sin estas claves y con una sola persona todo funciona como antes; tests con dos clones de un repo temporal
+
+- [ ] Revisión entre personas y avisos del grupo
+  criterio: opción para que una tarea la apruebe una persona distinta de quien lanzó el loop, desde la GUI o el control remoto, con roles sencillos por proyecto (quién puede aprobar y quién detener); las notificaciones pueden ir a un canal del grupo e indican de quién es cada run; tests de permisos por rol
 
 ## FASE 6 — MCP al día
 
