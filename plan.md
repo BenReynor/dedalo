@@ -27,7 +27,7 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [ ] Un bloqueo o una cuota no tiran trabajo terminado
   criterio: al bloquear una tarea su trabajo se conserva en `dedalo/bloqueadas/<run>/<n>` (con commit) y el log dice cómo recuperarlo, en vez de descartar la rama; si la cuota se agota en el revisor o en el juez, el trabajo que ya pasó por el agente se guarda y la iteración queda registrada en `estado`, de modo que al reanudar se restaura y se repite solo la verificación, sin volver a llamar al agente; si la tarea cambió en plan.md se empieza de cero y se avisa; tests con agentes falsos: bloqueo → rama conservada; cuota en revisor → al relanzar, el agente no se invoca y la tarea termina (16)
 
-- [ ] La tarea sale del plan de la rama del run
+- [x] La tarea sale del plan de la rama del run
   criterio: con `trabajo: master`, `preparar_ramas` no deja el árbol en la rama de trabajo hasta la integración final, así que plan.md, código y baseline son los de la rama del run; test: con master atrasado, RETOMAR y `--trabajo master`, la primera tarea es la pendiente de la rama del run (12)
 
 - [ ] El loop sobrevive a quien lo lanzó y se recupera si muere

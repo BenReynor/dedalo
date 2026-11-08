@@ -968,6 +968,9 @@ def _run(cfg):
         return 1
     logx(cfg.log, f"Rama base: {rama_run}")
     cfg.rama_run = rama_run
+    # The working branch only receives the final integration. Staying on it
+    # made the first task come from its stale plan.md (a finished task redone).
+    checkout(cfg.proyecto, rama_run)
     if cfg.rama_trabajo and cfg.rama_trabajo != rama_run:
         logx(cfg.log, f"Rama de trabajo: {rama_trabajo}")
     else:

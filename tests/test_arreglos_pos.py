@@ -342,3 +342,23 @@ def test_si_el_stash_falla_no_se_borra_nada(tmp_path, monkeypatch):
     assert (tmp_path / "b.txt").exists()
     assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "nuevo\n"
     assert "no se pudo guardar" in (tmp_path / "progreso.log").read_text(encoding="utf-8")
+
+
+# --- point 12: the task comes from the run branch's plan ----------------------
+
+@e2e
+def test_con_rama_de_trabajo_la_tarea_sale_del_plan_del_run(tmp_path):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    plan = proyecto / "plan.md"
+    plan.write_text("# PLAN\n\n- [ ] t1: crear modulo nuevo\n- [ ] t2: otra\n",
+                    encoding="utf-8")
+    _git("commit", "-qam", "plan", cwd=proyecto)
+    bin_ = _agente_falso(tmp_path / "bin")
+    assert _correr(proyecto, _entorno(bin_))[0] == 0  # MAX_ITER=1: only t1
+    _git("checkout", "-q", "master", cwd=proyecto)
+    time.sleep(1.1)  # run branches are named by the second
+    rc, _ = _correr(proyecto, _entorno(bin_), ["--trabajo", "master"])
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert rc == 0, log[-2000:]
+    assert log.count(": t1: crear modulo nuevo (rama") == 1, "t1 was redone"
+    assert "== Iteración 1: t2" in log
