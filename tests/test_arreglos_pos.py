@@ -428,3 +428,69 @@ def test_si_la_tarea_cambio_tras_la_cuota_se_empieza_de_cero(tmp_path):
     time.sleep(1.1)
     assert _correr(proyecto, env)[0] == 0
     assert cuenta.read_text().count("x") == 2
+
+
+# --- point 13: the loop outlives its launcher and recovers if it dies ----------
+
+@pytest.mark.parametrize("hay_systemd", [True, False])
+def test_scope_propio_solo_si_hay_systemd(monkeypatch, hay_systemd):
+    from types import SimpleNamespace
+
+    from dedalo import loop_launch
+    monkeypatch.setattr(loop_launch.sys, "platform", "linux")
+    monkeypatch.setattr(loop_launch.shutil, "which",
+                        lambda _n: "/usr/bin/systemd-run" if hay_systemd else None)
+    monkeypatch.setattr(loop_launch.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(returncode=0))
+    programa, argv = loop_launch.en_scope_propio("py", ["-m", "x"], "mi proyecto")
+    if hay_systemd:
+        assert programa == "/usr/bin/systemd-run"
+        assert argv[:2] == ["--user", "--scope"] and argv[-3:] == ["py", "-m", "x"]
+        assert any(a.startswith("--unit=dedalo-mi-proyecto-") for a in argv)
+    else:
+        assert (programa, argv) == ("py", ["-m", "x"])
+
+
+def test_sin_gestor_de_usuario_no_se_envuelve(monkeypatch):
+    from types import SimpleNamespace
+
+    from dedalo import loop_launch
+    monkeypatch.setattr(loop_launch.sys, "platform", "linux")
+    monkeypatch.setattr(loop_launch.shutil, "which", lambda _n: "/usr/bin/systemd-run")
+    monkeypatch.setattr(loop_launch.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(returncode=1))
+    assert loop_launch.en_scope_propio("py", ["-m"], "n") == ("py", ["-m"])
+
+
+def _rama_tarea_abandonada(proyecto):
+    """Repo as a killed engine leaves it: on a task branch with loose work."""
+    _git("branch", "dedalo/2026-01-01_00-00-00", cwd=proyecto)
+    _git("checkout", "-qb", "dedalo/tareas/2026-01-01_00-00-00/t5", cwd=proyecto)
+    (proyecto / "a_medias.txt").write_text("trabajo\n", encoding="utf-8")
+
+
+@e2e
+def test_al_arrancar_recupera_el_trabajo_de_un_loop_muerto(tmp_path):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    _rama_tarea_abandonada(proyecto)
+    rc, _ = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert rc == 0, log[-2000:]
+    assert "RECUPERADO tras muerte del loop" in log
+    assert not (proyecto / "a_medias.txt").exists()
+    stash = subprocess.check_output(["git", "-C", str(proyecto), "stash", "list"],
+                                    text=True)
+    assert "recuperado tras muerte del loop" in stash
+    assert "dedalo/tareas/2026-01-01_00-00-00/t5" not in _ramas(proyecto)
+
+
+@e2e
+def test_si_no_puede_guardar_lo_de_un_loop_muerto_no_toca_nada(tmp_path, monkeypatch):
+    from dedalo import loop_git
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    _rama_tarea_abandonada(proyecto)
+    monkeypatch.setattr(loop_git, "guardar_parcial", lambda *a, **k: None)
+    rc, _ = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    assert rc == 1
+    assert (proyecto / "a_medias.txt").exists()
+    assert _rama_actual(proyecto) == "dedalo/tareas/2026-01-01_00-00-00/t5"

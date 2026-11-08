@@ -484,8 +484,10 @@ def iniciar_loop(nombre: str) -> str:
         return json.dumps({"iniciado": False, "detectados": [],
                            "motivo": "ningún agente CLI con sesión"},
                           ensure_ascii=False, indent=2)
+    programa, argv = loop_launch.en_scope_propio(
+        plan["programa"], plan["argv"], nombre, plan["env"])
     proc = subprocess.Popen(
-        [plan["programa"]] + plan["argv"], cwd=ruta,
+        [programa] + argv, cwd=ruta,
         env=plan["env"], stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=(os.name != "nt"))

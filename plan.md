@@ -30,8 +30,8 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [x] La tarea sale del plan de la rama del run
   criterio: con `trabajo: master`, `preparar_ramas` no deja el árbol en la rama de trabajo hasta la integración final, así que plan.md, código y baseline son los de la rama del run; test: con master atrasado, RETOMAR y `--trabajo master`, la primera tarea es la pendiente de la rama del run (12)
 
-- [ ] El loop sobrevive a quien lo lanzó y se recupera si muere
-  criterio: en Linux, `iniciar_loop` y la GUI lanzan el motor con `systemd-run --user --scope` cuando esté disponible (si no, como hoy), para que cerrar la sesión cliente no lo mate; al arrancar, si el árbol está sucio en una rama `dedalo/tareas/*` y no hay motor vivo, el trabajo se guarda en un stash con nombre «recuperado tras muerte del loop», se vuelve a la rama del run y se continúa, en vez de negarse; tests del argv con y sin systemd y de la recuperación con repo temporal (13)
+- [x] El loop sobrevive a quien lo lanzó y se recupera si muere
+  criterio: en Linux, `iniciar_loop` del MCP lanza el motor con `systemd-run --user --scope` cuando esté disponible (si no, como hoy), para que cerrar la sesión cliente no lo mate (la GUI queda igual: su salida va por una tubería al panel); al arrancar, si el árbol está sucio en una rama `dedalo/tareas/*` y no hay motor vivo, el trabajo se guarda en un stash con nombre «recuperado tras muerte del loop», se vuelve a la rama del run y se continúa, en vez de negarse; tests del argv con y sin systemd y de la recuperación con repo temporal (13)
 
 - [ ] Criterios que el agente sí puede cumplir
   criterio: al arrancar, los comandos citados entre comillas invertidas en cada criterio se comparan con los que el agente puede ejecutar (`bash_permitidos` en claude) y se avisa de los que no; agente y juez reciben la lista de comandos permitidos; `comandos_extra` por proyecto y `comandos:` por tarea amplían la lista; si el agente informa de un bloqueo por permiso, la tarea se pausa con el motivo sin gastar reintentos; tests de la validación, del prompt y de la pausa (15)

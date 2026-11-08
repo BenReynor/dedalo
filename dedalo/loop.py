@@ -710,6 +710,42 @@ def _parar_limpio(cfg, motivo):
         logx(cfg.log, f"AVISO: no se pudo dejar limpio el repo: {e}")
 
 
+def _recuperar_tras_muerte(cfg):
+    """Cleans up after an engine that died without its own cleanup (SIGKILL, OOM).
+
+    main() already holds the project's lock, so being on a task branch here
+    means nobody is working on it. Its files go to a named stash and the repo
+    returns to that run's branch, instead of refusing to start on a dirty tree.
+    Returns False if the work could not be saved (nothing is touched).
+    """
+    _, actual, _ = run_git(cfg.proyecto, "branch", "--show-current")
+    m = re.fullmatch(r"dedalo/tareas/([^/]+)/t\d+", actual.strip())
+    if not m:
+        return True
+    rama_tarea = actual.strip()
+    stash = loop_git.guardar_parcial(
+        cfg.proyecto, f"dedalo {rama_tarea}: recuperado tras muerte del loop")
+    if stash is None:
+        detalle = loop_git.ULTIMO_ERROR["git"] or "sin detalle"
+        logx(cfg.log, f"ABORTADO: no se pudo guardar el trabajo de {rama_tarea} "
+                      f"tras la muerte del loop ({detalle})")
+        _incidencia(cfg, "aborto_sin_guardar", detalle, rama=rama_tarea)
+        return False
+    rama_run = f"dedalo/{m.group(1)}"
+    destino = rama_run if rama_existe(cfg.proyecto, rama_run) else cfg.rama_base
+    if checkout(cfg.proyecto, destino) != 0:
+        logx(cfg.log, f"ABORTADO: no se pudo volver a {destino} desde {rama_tarea}")
+        return False
+    _, n, _ = run_git(cfg.proyecto, "rev-list", "--count", f"{destino}..{rama_tarea}")
+    if n.strip() in ("", "0"):
+        borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
+    logx(cfg.log, f"RECUPERADO tras muerte del loop: {rama_tarea} -> {destino}"
+                  + (f"; trabajo en {stash.split(':', 1)[0]}" if stash else ""))
+    _incidencia(cfg, "recuperado_tras_muerte", stash or "sin trabajo a medias",
+                rama=rama_tarea)
+    return True
+
+
 def _ruta_verificacion(cfg):
     return rutas.estado(cfg.proyecto, "verificacion_pendiente.json")
 
@@ -958,6 +994,9 @@ def _run(cfg):
             _incidencia(cfg, "aborto_consentimiento",
                         "gate_checks sin consentimiento (no interactivo)")
             return 3
+
+    if not _recuperar_tras_muerte(cfg):
+        return 1
 
     sucios = loop_git.cambios_pendientes(cfg.proyecto)
     if sucios:

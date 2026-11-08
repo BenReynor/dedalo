@@ -16,7 +16,11 @@ exported in the user's shell never reach the engine, the gate or the agents.
 """
 
 import os
+import re
+import shutil
+import subprocess
 import sys
+import time
 
 from . import configuracion as cfg
 from . import modelos
@@ -313,6 +317,35 @@ def preparar(conf, nav=None, environ=None, frozen=None, nombre="", origen=""):
         "programa": programa,
         "argv": argv,
     }
+
+
+def en_scope_propio(programa, argv, nombre, env=None):
+    """Wraps the engine command in its own systemd user scope, when possible.
+
+    `start_new_session` protects from SIGHUP but not from the client's cgroup
+    being killed: closing the Claude Code session that launched a loop took it
+    down with no chance to save its work. `systemd-run --scope` execs the
+    command in the same process, so the pid the caller keeps stays valid.
+    Without systemd (or without a user manager) the command is left as is.
+    """
+    systemd_run = shutil.which("systemd-run") if sys.platform.startswith("linux") else None
+    if not systemd_run:
+        return programa, list(argv)
+    # systemd >= 254 expands `$` in the command unless told not to.
+    for extra in (["--expand-environment=no"], []):
+        base = [systemd_run, "--user", "--scope", "--quiet", "--collect", *extra]
+        try:
+            prueba = subprocess.run(base + ["true"], env=env, capture_output=True,
+                                    timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return programa, list(argv)
+        if prueba.returncode == 0:
+            break
+    else:
+        return programa, list(argv)
+    unidad = re.sub(r"[^A-Za-z0-9_-]", "-", str(nombre or "loop"))
+    return systemd_run, [*base[1:], f"--unit=dedalo-{unidad}-{os.getpid()}-{int(time.time())}",
+                         programa, *argv]
 
 
 def config_de_proyecto(nombre):
