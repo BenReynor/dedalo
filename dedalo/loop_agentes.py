@@ -242,7 +242,21 @@ def modelo_claude(seleccion):
     return ""
 
 
-def bash_permitidos(proyecto):
+# Last provider message reporting exhausted quota in this process.
+ULTIMA_CUOTA = {"texto": ""}
+
+
+def comandos_validos(valor):
+    """Command names from a list or a comma/space separated string.
+
+    Only plain names: each one becomes a `Bash(<name>:*)` allow rule, so a
+    wildcard or a parenthesis here would widen what the agent may run.
+    """
+    partes = valor if isinstance(valor, (list, tuple)) else re.split(r"[,\s]+", str(valor or ""))
+    return [p for p in partes if re.fullmatch(r"[A-Za-z0-9_./-]+", str(p))]
+
+
+def bash_permitidos(proyecto, extra=()):
     """Bash commands for the task agent, from the project's gate templates."""
     from . import plantillas
 
@@ -252,10 +266,10 @@ def bash_permitidos(proyecto):
         for c in CLAUDE_BASH_POR_PLANTILLA.get(stack, ()):
             if c not in cmds:
                 cmds.append(c)
-    return cmds
+    return cmds + [c for c in extra if c not in cmds]
 
 
-def flags_claude(rol, proyecto="", modelo="", extra=""):
+def flags_claude(rol, proyecto="", modelo="", extra="", comandos=()):
     """claude -p flags for a role: "tarea" may edit, any other is read-only.
 
     Every role runs with `--strict-mcp-config` so the nested agent never loads
@@ -265,7 +279,7 @@ def flags_claude(rol, proyecto="", modelo="", extra=""):
     """
     flags = ["--strict-mcp-config"]
     if rol == "tarea":
-        cmds = bash_permitidos(proyecto) if proyecto else []
+        cmds = bash_permitidos(proyecto, comandos) if proyecto else []
         # The gate launcher the loop writes, so the agent can run a check.
         if proyecto and os.path.isfile(os.path.join(
                 proyecto, ".dedalo", "estado", "gate")):
@@ -283,11 +297,17 @@ def flags_claude(rol, proyecto="", modelo="", extra=""):
     return flags
 
 
+def _comandos_extra(cfg):
+    """Commands the project and the current task add to the agent's allowlist."""
+    return [*getattr(cfg, "comandos_extra", ()), *getattr(cfg, "comandos_tarea", ())]
+
+
 def argv_claude(binario, cfg, rol, modelo=""):
     """argv for `claude -p`; the prompt goes through stdin (see run_agente)."""
     return [binario, "-p", "--output-format", "text",
             *flags_claude(rol, cfg.proyecto, modelo,
-                          cfg.environ.get("CLAUDE_FLAGS", ""))]
+                          cfg.environ.get("CLAUDE_FLAGS", ""),
+                          comandos=_comandos_extra(cfg))]
 
 
 def elegir_revisor(cfg):
@@ -336,7 +356,10 @@ def tokens_agotados(archivo):
             texto = f.read()
     except OSError:
         return False
-    return bool(_PATRON_TOKENS.search(texto))
+    if _PATRON_TOKENS.search(texto):
+        ULTIMA_CUOTA["texto"] = texto[-2000:]  # may carry the reset time
+        return True
+    return False
 
 
 def costo_por_modelo(modelo, tokens_in, tokens_out):

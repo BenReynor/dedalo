@@ -59,7 +59,8 @@ VARS_ENTORNO = frozenset({
     "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
     # Engine overrides that are not secrets.
     "MODELO_JUEZ", "TIMEOUT_JUEZ", "ESPERA_JUEZ", "CRITERIO", "SKIP_RUFF",
-    "RETOMAR", "BASELINE", "PAUSAR_SI_CRECE",
+    "RETOMAR", "BASELINE", "PAUSAR_SI_CRECE", "COMANDOS_EXTRA",
+    "REANUDAR_TRAS_CUOTA",
     "AGENTE_FICHA", "MODELO_FICHA", "TIMEOUT_FICHA", "FICHAS_DIR",
     "FICHA_MAX_DIFF", "FICHA_MAX_SALIDA", "FICHA_DIFF_COMPLETO",
     # Opt-in agent API keys (the agents normally keep their own session).
@@ -267,6 +268,11 @@ def construir_entorno(conf, nav, detectados, environ, frozen=None):
         nivel = str(conf.get("razonamiento_" + rol, "") or "").strip().lower()
         if nivel:
             env["CODEX_RAZONAMIENTO_" + rol.upper()] = nivel
+    if conf.get("reanudar_tras_cuota"):
+        env["REANUDAR_TRAS_CUOTA"] = "1"
+    extra = conf.get("comandos_extra")
+    if extra:
+        env["COMANDOS_EXTRA"] = " ".join(extra) if isinstance(extra, list) else str(extra)
     if conf.get("pausar_si_crece"):
         env["PAUSAR_SI_CRECE"] = "1"
     if conf.get("sin_sandbox_codex"):

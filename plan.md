@@ -33,8 +33,8 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [x] El loop sobrevive a quien lo lanzó y se recupera si muere
   criterio: en Linux, `iniciar_loop` del MCP lanza el motor con `systemd-run --user --scope` cuando esté disponible (si no, como hoy), para que cerrar la sesión cliente no lo mate (la GUI queda igual: su salida va por una tubería al panel); al arrancar, si el árbol está sucio en una rama `dedalo/tareas/*` y no hay motor vivo, el trabajo se guarda en un stash con nombre «recuperado tras muerte del loop», se vuelve a la rama del run y se continúa, en vez de negarse; tests del argv con y sin systemd y de la recuperación con repo temporal (13)
 
-- [ ] Criterios que el agente sí puede cumplir
-  criterio: al arrancar, los comandos citados entre comillas invertidas en cada criterio se comparan con los que el agente puede ejecutar (`bash_permitidos` en claude) y se avisa de los que no; agente y juez reciben la lista de comandos permitidos; `comandos_extra` por proyecto y `comandos:` por tarea amplían la lista; si el agente informa de un bloqueo por permiso, la tarea se pausa con el motivo sin gastar reintentos; tests de la validación, del prompt y de la pausa (15)
+- [x] Criterios que el agente sí puede cumplir
+  criterio: al arrancar, los comandos citados entre comillas invertidas en cada criterio se comparan con los que el agente puede ejecutar (`bash_permitidos` en claude) y se avisa de los que no; agente y juez reciben la lista de comandos permitidos; `comandos_extra` por proyecto y `comandos:` por tarea amplían la lista; si el agente informa de un bloqueo por permiso (línea `DEDALO_BLOQUEO_PERMISO:`), la tarea se pausa con el motivo sin gastar reintentos; tests de la validación, del prompt y de la pausa (15)
 
 - [ ] Las funciones que se commitean se pueden usar
   criterio: check opcional «alcanzable» por stack, empezando por Tauri: compara `generate_handler![...]` con las invocaciones en `src/` y los nombres de sus argumentos, e informa de los comandos que nadie llama; se puede instalar desde las plantillas y admite lista de excepciones; tests con un proyecto de ejemplo (17)
@@ -51,8 +51,8 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [x] Avisar cuando el plan crece
   criterio: si un agente añade tareas a plan.md durante un run, se notifica «el agente añadió N tareas» con sus títulos y el total del aviso final ya las cuenta; opción del proyecto `pausar_si_crece` para parar y revisarlas; tests con un agente falso que añade una tarea (19)
 
-- [ ] Reanudar solo tras la cuota
-  criterio: si todos los agentes disponibles (incluidos los de respaldo, FASE 2) están sin cuota, tras dejar el árbol limpio el loop integra lo hecho si el proyecto lo pide (ver la tarea de integración de FASE 1), queda «esperando cuota» (visible en GUI, MCP y notificaciones) y, con `reanudar_tras_cuota` activo, duerme hasta la hora del mensaje del proveedor («resets 3:40am (America/Lima)») más un margen; sin hora, reintenta con espera creciente (5, 10, 20… hasta 60 min); sin la opción, se detiene como hoy; tests con un agente falso sin cuota N veces y con un mensaje con hora de reseteo (7, 20)
+- [x] Reanudar solo tras la cuota
+  criterio: si todos los agentes disponibles (incluidos los de respaldo, FASE 2) están sin cuota, tras dejar el árbol limpio y con `reanudar_tras_cuota` activo, el loop avisa («se reanuda a las HH:MM» en el log, visible por GUI y MCP, y notificación), duerme hasta la hora del mensaje del proveedor («resets 3:40am (America/Lima)») más un margen; sin hora, reintenta con espera creciente (5, 10, 20… hasta 60 min); sin la opción, se detiene como hoy; tests con un agente falso sin cuota N veces y con un mensaje con hora de reseteo (7, 20)
 
 ## FASE 0 — Manual de usuario
 

@@ -16,6 +16,7 @@ No PySide dependencies (no loop_* imports Qt): the engine runs even on Windows
 with the same Python that packages the GUI, without Git Bash.
 """
 
+import datetime
 import filecmp
 import json
 import os
@@ -28,6 +29,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+import zoneinfo
 
 from . import (
     codex_cli,
@@ -183,6 +185,9 @@ class Config:
         self.tarea_actual = ""
         self.criterio_actual = ""
         self.pausar_si_crece = env.get("PAUSAR_SI_CRECE", "0") == "1"
+        self.comandos_extra = loop_agentes.comandos_validos(env.get("COMANDOS_EXTRA", ""))
+        self.comandos_tarea = []
+        self.reanudar_tras_cuota = env.get("REANUDAR_TRAS_CUOTA", "0") == "1"
         # The agent finished and only its verification was interrupted (quota
         # in the reviewer or judge): the next launch repeats just that part.
         self.verificar_al_reanudar = False
@@ -445,7 +450,7 @@ def _comandos_permitidos(cfg):
     """
     if cfg.agente_tarea != "claude":
         return ""
-    cmds = bash_permitidos(cfg.proyecto)
+    cmds = bash_permitidos(cfg.proyecto, loop_agentes._comandos_extra(cfg))
     if not cmds:
         return ""
     return ("Comandos Bash permitidos (ya están en el PATH): "
@@ -453,7 +458,87 @@ def _comandos_permitidos(cfg):
             "source, export, PATH=, rutas absolutas, cd, && ni pipes, o se "
             "rechazarán. Para una subcarpeta usa la opción del propio comando "
             "(p. ej. cargo --manifest-path src-tauri/Cargo.toml, npm --prefix "
-            "web).\n")
+            "web). Si para cumplir el criterio necesitas un comando que no está "
+            "en esa lista, no intentes sortearlo: termina con una línea que "
+            "empiece por `DEDALO_BLOQUEO_PERMISO:` seguida del comando.\n")
+
+
+_BLOQUEO_PERMISO = re.compile(r"^\s*`?DEDALO_BLOQUEO_PERMISO:\s*(.+?)`?\s*$", re.M)
+
+
+def _criterio_para_juez(cfg, criterio):
+    """Criterion the judge reads: says what the claude agent could not run.
+
+    Sent through CRITERIO so installed checks, and the user's gate consent,
+    stay unchanged. It used to reject tasks over a command the agent had no
+    permission to run.
+    """
+    if not criterio or cfg.agente_tarea != "claude":
+        return criterio or ""
+    cmds = bash_permitidos(cfg.proyecto, loop_agentes._comandos_extra(cfg))
+    if not cmds:
+        return criterio
+    return (f"{criterio} (Nota para el juez: el agente solo podía ejecutar estos "
+            f"comandos: {', '.join(cmds)}. No rechaces por no haber ejecutado "
+            "otros; verifica el resultado con los medios que tengas.)")
+
+
+_COMANDO_CITADO = re.compile(r"`([a-z][a-z0-9._-]*) [^`]*`")
+
+
+def _comandos_no_permitidos(plan_md, permitidos):
+    """(task, command) pairs where a pending criterion quotes a command the
+    agent cannot run. Only commands installed here count: a quoted phrase
+    that merely looks like one is not worth a warning."""
+    salida = []
+    tarea = None
+    propios = []
+    for linea in _leer(plan_md).splitlines():
+        if linea.startswith("- ["):
+            tarea = linea[6:] if linea.startswith("- [ ] ") else None
+            propios = []
+            continue
+        if tarea is None or not re.match(r"\s+\S", linea):
+            continue
+        m = re.match(r"\s+comandos:\s*(.*)$", linea)
+        if m:
+            propios = loop_agentes.comandos_validos(m.group(1))
+        if not re.match(r"\s+criterio:", linea):
+            continue
+        for cmd in dict.fromkeys(_COMANDO_CITADO.findall(linea)):
+            if cmd not in permitidos and cmd not in propios and shutil.which(cmd):
+                salida.append((tarea, cmd))
+    return salida
+
+
+def _clave_tarea(plan_md, clave):
+    """Value of an indented `clave:` line under the first pending task."""
+    en_tarea = False
+    for linea in _leer(plan_md).splitlines():
+        if linea.startswith("- [ ] "):
+            if en_tarea:
+                return ""
+            en_tarea = True
+        elif linea.startswith("- ["):
+            if en_tarea:
+                return ""
+        elif en_tarea:
+            m = re.match(rf"\s+{re.escape(clave)}:\s*(.*)$", linea)
+            if m:
+                return m.group(1).strip()
+    return ""
+
+
+def _avisar_comandos_no_permitidos(cfg):
+    if cfg.agente_tarea != "claude":
+        return
+    permitidos = bash_permitidos(cfg.proyecto, cfg.comandos_extra)
+    if cfg.lanzador_gate:
+        permitidos = [*permitidos, cfg.lanzador_gate]
+    for tarea, cmd in _comandos_no_permitidos(cfg.plan_md, permitidos):
+        logx(cfg.log, f"AVISO: '{tarea[:60]}' cita `{cmd}` en su criterio y el "
+                      "agente no puede ejecutarlo; añádelo con `comandos:` en la "
+                      "tarea o `comandos_extra` en el proyecto")
 
 def _mapear(cfg):
     """Regenerates mapeo.txt (silent: a map failure never stops the loop)."""
@@ -546,7 +631,7 @@ def _run_gate(cfg, criterio):
     """
     gate_out = cfg.tmp("gate")
     env = dict(cfg.environ)
-    env["CRITERIO"] = criterio or ""
+    env["CRITERIO"] = _criterio_para_juez(cfg, criterio)
     env["MODELO_JUEZ"] = cfg.modelo_juez
     env["OPENCODE_AGENT_JUEZ"] = cfg.opencode_agente_juez
     if agente_ok("opencode", cfg):
@@ -1038,6 +1123,7 @@ def _run(cfg):
                 desde = previa
 
     cfg.lanzador_gate = _lanzador_gate(cfg)
+    _avisar_comandos_no_permitidos(cfg)
     dir_gate = backup_gate(cfg)
     print("[dedalo] Baseline: gate.sh...")
     rc_base, base_out = _run_gate(cfg, "")
@@ -1167,6 +1253,8 @@ def _run(cfg):
         checkout(cfg.proyecto, rama_tarea, crear=True, desde=rama_run)
         cfg.rama_tarea = rama_tarea
         cfg.tarea_actual = tarea
+        cfg.comandos_tarea = loop_agentes.comandos_validos(
+            _clave_tarea(cfg.plan_md, "comandos"))
         pendientes_antes = _tareas_pendientes(cfg.plan_md)
         cfg.criterio_actual = criterio
         cfg.verificar_al_reanudar = False
@@ -1291,6 +1379,18 @@ def _run(cfg):
 
             contenido = _leer(out)
             salida_tarea = contenido
+            bloqueo = _BLOQUEO_PERMISO.search(contenido)
+            if bloqueo:
+                comando = bloqueo.group(1)
+                mensaje(cfg, f"[dedalo] ⏸ '{tarea}' necesita un comando sin permiso "
+                             f"({comando}). Añádelo con `comandos:` o `comandos_extra` "
+                             "y relanza.")
+                logx(cfg.log, f"ABORTADO: la tarea necesita un comando sin permiso: "
+                              f"{comando}")
+                _notificar(cfg, "error", detalle=f"comando sin permiso: {comando}")
+                _incidencia(cfg, "pausa_permiso", comando, tarea=tarea,
+                            iteracion=iteracion, rama=rama_tarea)
+                return 11
             if rc == 0 or contenido:
                 print(contenido, end="")
             _append_log(cfg, contenido)
@@ -1424,6 +1524,7 @@ def _run(cfg):
             if rc_gate == 0 and criterio and _juez_no_opino(gate_salida):
                 motivo = _juez_no_opino(gate_salida)
                 if loop_agentes._PATRON_TOKENS.search(motivo):
+                    loop_agentes.ULTIMA_CUOTA["texto"] = motivo
                     mensaje(cfg, f"[dedalo] ✗✗ el juez se quedó sin cuota ({motivo})"
                                  " — deteniendo loop sin marcar la tarea")
                     cfg.verificar_al_reanudar = True
@@ -2009,6 +2110,63 @@ def _esperar_revision_manual(cfg, tarea):
 _LOCK = {"handle": None}
 
 
+_RESETEO = re.compile(
+    r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)]+)\))?", re.I)
+ESPERAS_CUOTA = (300, 600, 1200, 2400, 3600)  # without a reset time
+MARGEN_CUOTA = 120
+
+
+def segundos_hasta_reseteo(texto, ahora=None):
+    """Seconds until the time in "resets 3:40am (America/Lima)"; None if absent."""
+    m = _RESETEO.search(texto or "")
+    if not m or not (m.group(2) or m.group(3)):
+        return None
+    hora, minuto = int(m.group(1)), int(m.group(2) or 0)
+    sufijo = (m.group(3) or "").lower()
+    if sufijo:
+        if not 1 <= hora <= 12:
+            return None
+        hora = hora % 12 + (12 if sufijo == "pm" else 0)
+    if hora > 23 or minuto > 59:
+        return None
+    try:
+        zona = zoneinfo.ZoneInfo(m.group(4)) if m.group(4) else None
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+        zona = None
+    actual = (ahora or datetime.datetime.now(datetime.timezone.utc)).astimezone(zona)
+    objetivo = actual.replace(hour=hora, minute=minuto, second=0, microsecond=0)
+    if objetivo <= actual:
+        objetivo += datetime.timedelta(days=1)
+    return (objetivo - actual).total_seconds()
+
+
+def _correr_reanudando(cfg, nueva_cfg):
+    """run(), and with `reanudar_tras_cuota` sleeps through quota stops.
+
+    Each stop already left the repo clean and the next run continues from it,
+    so waiting for the provider's reset is all that was missing. Without the
+    option, a quota stop ends the process as before.
+    """
+    intento = 0
+    while True:
+        loop_agentes.ULTIMA_CUOTA["texto"] = ""
+        rc = run(cfg)
+        if rc != 5 or not cfg.reanudar_tras_cuota or hora_limite(cfg.hasta):
+            return rc
+        espera = segundos_hasta_reseteo(loop_agentes.ULTIMA_CUOTA["texto"])
+        if espera is None:
+            espera = ESPERAS_CUOTA[min(intento, len(ESPERAS_CUOTA) - 1)]
+        else:
+            espera += MARGEN_CUOTA
+        cuando = time.strftime("%H:%M", time.localtime(time.time() + espera))
+        logx(cfg.log, f"ESPERANDO CUOTA: se reanuda a las {cuando}")
+        print(f"[dedalo] ⏳ Sin cuota: se reanuda a las {cuando}")
+        _notificar(cfg, "tokens", reanuda=f"\nSe reanuda a las {cuando}.")
+        time.sleep(espera)
+        intento += 1
+        cfg = nueva_cfg()
+
+
 def main(argv=None):
     args = parse_args(argv)
     cfg = Config(args)
@@ -2025,7 +2183,7 @@ def main(argv=None):
         _LOCK["handle"] = handle
         loops_estado.registrar(cfg.nombre, os.getpid(), origen=cfg.origen)
     try:
-        return run(cfg)
+        return _correr_reanudando(cfg, lambda: Config(args))
     finally:
         if cfg.nombre:
             loops_estado.olvidar(cfg.nombre)

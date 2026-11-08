@@ -651,3 +651,107 @@ def test_check_rust_repite_y_marca_inestable(monkeypatch, tmp_path, capsys, segu
         assert "inestables" in avisos[0] and "ventas::resta" in avisos[0]
     else:
         assert "ventas::resta" in fallos[0]
+
+
+# --- point 15: criteria the agent is allowed to fulfil ---------------------------
+
+def test_comandos_extra_solo_nombres_simples():
+    from dedalo.loop_agentes import comandos_validos
+    assert comandos_validos("gitleaks, make  ./x.sh") == ["gitleaks", "make", "./x.sh"]
+    assert comandos_validos(["ok", "*", "rm(-rf)"]) == ["ok"]
+
+
+def test_comandos_extra_entran_en_la_lista_de_claude(tmp_path):
+    from dedalo.loop_agentes import flags_claude
+    flags = flags_claude("tarea", str(tmp_path), comandos=["gitleaks"])
+    assert "Bash(gitleaks:*)" in flags
+
+
+def test_avisa_de_comandos_del_criterio_sin_permiso(tmp_path, monkeypatch):
+    monkeypatch.setattr(loop.shutil, "which", lambda c: f"/bin/{c}" if c != "noinstalado" else None)
+    plan = tmp_path / "plan.md"
+    plan.write_text(
+        "- [ ] a\n  criterio: pasa `gitleaks detect` y `cargo test` y `noinstalado x`\n"
+        "- [ ] b\n  comandos: gitleaks\n  criterio: pasa `gitleaks detect`\n"
+        "- [x] c\n  criterio: `rm -rf x`\n", encoding="utf-8")
+    assert loop._comandos_no_permitidos(str(plan), ["cargo"]) == [("a", "gitleaks")]
+
+
+def test_comandos_de_la_primera_tarea_pendiente(tmp_path):
+    plan = tmp_path / "plan.md"
+    plan.write_text("- [x] a\n  comandos: viejo\n- [ ] b\n  comandos: gitleaks make\n"
+                    "- [ ] c\n  comandos: otro\n", encoding="utf-8")
+    assert loop._clave_tarea(str(plan), "comandos") == "gitleaks make"
+
+
+def test_el_juez_sabe_que_podia_ejecutar_el_agente(tmp_path):
+    from types import SimpleNamespace
+    cfg = SimpleNamespace(agente_tarea="claude", proyecto=str(tmp_path),
+                          comandos_extra=["gitleaks"], comandos_tarea=[])
+    assert "gitleaks" in loop._criterio_para_juez(cfg, "pasa el escaneo")
+    cfg.agente_tarea = "codex"
+    assert loop._criterio_para_juez(cfg, "pasa el escaneo") == "pasa el escaneo"
+
+
+@e2e
+def test_bloqueo_por_permiso_pausa_sin_gastar_reintentos(tmp_path):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    bin_, cuenta = _agente_que_cuenta(tmp_path)
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "echo '{\"usage\"",
+        "echo 'DEDALO_BLOQUEO_PERMISO: gitleaks detect'\necho '{\"usage\""), encoding="utf-8")
+    rc, _ = _correr(proyecto, _entorno(bin_))
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert rc == 11, log[-1500:]
+    assert "- [ ] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+    assert cuenta.read_text().count("x") == 1
+    assert "comando sin permiso: gitleaks detect" in log
+
+
+# --- point 20: resume on its own after the quota ---------------------------------
+
+def test_lee_la_hora_de_reseteo_del_mensaje():
+    import datetime as dt
+    ahora = dt.datetime(2026, 11, 8, 8, 0, tzinfo=dt.timezone.utc)  # 03:00 in Lima
+    texto = "You've hit your 5-hour limit · resets 3:40am (America/Lima)"
+    assert loop.segundos_hasta_reseteo(texto, ahora) == 40 * 60
+    # Already past today: tomorrow.
+    assert loop.segundos_hasta_reseteo("resets 2am (America/Lima)", ahora) == 23 * 3600
+    assert loop.segundos_hasta_reseteo("resets 12pm (America/Lima)", ahora) == 9 * 3600
+    for sin_hora in ("usage limit", "resets Nov 12", "resets 3 days from now", ""):
+        assert loop.segundos_hasta_reseteo(sin_hora, ahora) is None
+
+
+def _cfg_cuota(tmp_path, reanudar):
+    from types import SimpleNamespace
+    return SimpleNamespace(reanudar_tras_cuota=reanudar, hasta="", nombre="p",
+                           proyecto=str(tmp_path), origen="cli",
+                           log=str(tmp_path / "progreso.log"))
+
+
+@pytest.mark.parametrize(("mensaje", "esperado"), [
+    ("resets 1pm (America/Lima)", None), ("sin hora", 300)])
+def test_con_la_opcion_duerme_y_relanza(tmp_path, monkeypatch, mensaje, esperado):
+    from dedalo import loop_agentes
+    resultados = [5, 0]
+
+    def _run(_cfg):
+        loop_agentes.ULTIMA_CUOTA["texto"] = mensaje
+        return resultados.pop(0)
+
+    esperas = []
+    monkeypatch.setattr(loop, "run", _run)
+    monkeypatch.setattr(loop, "_notificar", lambda *a, **k: None)
+    monkeypatch.setattr(loop.time, "sleep", esperas.append)
+    monkeypatch.setattr(loop, "segundos_hasta_reseteo",
+                        lambda t: 1000 if "resets" in t else None)
+    cfg = _cfg_cuota(tmp_path, True)
+    assert loop._correr_reanudando(cfg, lambda: cfg) == 0
+    assert esperas == [1000 + loop.MARGEN_CUOTA if esperado is None else esperado]
+    assert "ESPERANDO CUOTA" in (tmp_path / "progreso.log").read_text(encoding="utf-8")
+
+
+def test_sin_la_opcion_una_parada_por_cuota_termina(tmp_path, monkeypatch):
+    monkeypatch.setattr(loop, "run", lambda _c: 5)
+    monkeypatch.setattr(loop.time, "sleep", lambda _s: pytest.fail("no debe esperar"))
+    assert loop._correr_reanudando(_cfg_cuota(tmp_path, False), lambda: None) == 5
