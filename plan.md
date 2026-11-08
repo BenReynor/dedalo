@@ -2,7 +2,7 @@
 
 Dédalo deja de ser una fila de tareas y pasa a ser un **orquestador por grafo**:
 cada tarea dice de qué depende, Dédalo calcula los **pisos** y avanza varias tareas
-a la vez (2 agentes por defecto, ajustable), cada una con el agente, modelo y gate
+a la vez (1 agente por defecto, ajustable), cada una con el agente, modelo y gate
 que pida, con respaldo de otros proveedores si uno se queda sin cuota y con un
 revisor que vigila que ninguna tarea pise el trabajo de otra.
 
@@ -187,7 +187,7 @@ Fuente: uso real y `ERROR_DEDALO_BASELINE.txt`. Lo marcado `[x]` ya está en `ma
   criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar (también en Windows, con rutas largas y archivos bloqueados contemplados); tests con dos tareas simultáneas en un repo temporal, corridos en el CI de Linux, macOS y Windows
 
 - [ ] Ejecución en paralelo con límite
-  criterio: hasta `max_agentes` tareas listas a la vez (por defecto 2, ajustable en GUI y MCP, 1 = comportamiento en fila); presupuesto y cuota globales del run, no por tarea; solo el coordinador escribe plan.md, lecciones.md, mapeo.txt, progreso.log y metrics.jsonl (los agentes reciben lo que necesitan en el prompt y devuelven su informe); Detener para todas las tareas en curso dejando su trabajo en sus ramas; tests: dos tareas independientes avanzan a la vez y una dependiente espera a ambas
+  criterio: hasta `max_agentes` tareas listas a la vez (por defecto 1 = en fila, ajustable en GUI y MCP); antes de lanzar, Dédalo mira la memoria libre y avisa si no alcanza para los agentes elegidos, con una sugerencia de cuántos usar, sin impedir que el usuario siga; el modo paralelo se marca como experimental en el README hasta que tenga uso real; presupuesto y cuota globales del run, no por tarea; solo el coordinador escribe plan.md, lecciones.md, mapeo.txt, progreso.log y metrics.jsonl (los agentes reciben lo que necesitan en el prompt y devuelven su informe); Detener para todas las tareas en curso dejando su trabajo en sus ramas; tests: dos tareas independientes avanzan a la vez y una dependiente espera a ambas, y el aviso de memoria con valores simulados
 
 - [ ] Informe de cambios de cada tarea
   criterio: al terminar, cada tarea produce un informe (archivos tocados con el diff resumido, qué hizo y por qué, y si tocó algo fuera de su `zona:` opcional) que el coordinador guarda en un registro de cambios del run; si el agente no lo da, se genera del diff y se le pide la explicación de los archivos fuera de zona; tests del informe generado y de la detección fuera de zona
