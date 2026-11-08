@@ -160,6 +160,12 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Lista de tareas en Ejecutar y registros etiquetados
   criterio: Ejecutar muestra una **lista de tareas** (filtros por fase y estado) con columnas estado, tarea, agente/modelo (desplegable: «Auto (peso)» o uno concreto), peso y un menú ⋯ con «Revisor especial…» (el revisor por defecto no se muestra); se pueden seleccionar varias filas y asignarles el mismo agente/peso; cada cambio se escribe en plan.md bajo esa tarea (`agente:`, `modelo:`, `peso:`, `revisor:`), que sigue siendo la única fuente de verdad (editar plan.md a mano refresca la lista); durante un run solo se editan las tareas que no han empezado; las opciones de lanzamiento marcan agente/modelo de tarea y revisor como «por defecto» y añaden pesos, cadena de respaldo, revisor de otra empresa, iteraciones «auto» y esperar cuota; progreso.log, incidencias.jsonl y metrics.jsonl llevan en cada entrada la tarea y el agente/modelo (`[id · agente/modelo]`), lecciones.md anota en cada lección dónde se aprendió, CONTEXTO.md sigue siendo uno solo y Logs tiene filtro por tarea; tests del etiquetado, del filtro, de que editar la lista escribe las claves correctas en plan.md y de que una tarea en curso no se puede editar, y smoke de Ejecutar (QT offscreen)
 
+- [ ] Avisar de versiones nuevas
+  criterio: al abrir la app, y como mucho una vez al día, Dédalo consulta la última versión publicada y avisa si hay una nueva, con sus notas y el enlace o comando para actualizar; se puede desactivar y un fallo de red no molesta; no se envía ningún dato del usuario ni de sus proyectos; tests con respuestas falsas (más nueva, igual, error)
+
+- [ ] Deshacer una ejecución
+  criterio: un botón en la GUI (y tool MCP) devuelve el proyecto al estado anterior a un run sin necesidad de saber git: muestra qué se va a quitar, pide confirmación y deja una rama de respaldo con lo deshecho, de modo que se puede recuperar; con cambios sin commitear se niega y dice por qué; tests con repo temporal: deshacer y recuperar
+
 - [ ] Versión intermedia 2.3.0
   criterio: manual al día con lo de las FASES 0–2; versión 2.3.0 en pyproject con notas; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario** (así ARGUS y MultiVoice pueden usar ya el modelo por tarea, el respaldo y los arreglos)
 
@@ -217,6 +223,12 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Sección Cabina: carriles y grafo en vivo
   criterio: sección propia «Cabina» en la barra lateral (también se abre desde Ejecutar) para ver el run gráficamente, actualizada en vivo: (1) **carriles**: uno por agente en curso con la tarea, el agente/modelo, el paso actual Plan → Agent → Gate → Reviewer → Commit, tiempo y coste de la tarea, y estados «esperando cuota» o «respaldo: X → Y»; una línea de tiempo con lo que hizo cada carril en el run; (2) **grafo por pisos**: una caja por tarea coloreada por estado (hecha, en curso con su carril, lista, esperando a <id>, bloqueada) con las flechas de dependencia, zoom y desplazamiento, resaltando el camino que frena a una tarea al pasar el ratón; (3) **detalle** al hacer clic en una tarea o carril: criterio, agente, gate y checks corridos, informe de cambios, avisos del revisor (p. ej. «tocó un archivo de la zona de X») y su log filtrado; con un plan simple muestra un solo carril y los pisos en fila; tests del modelo de la vista (pisos, colores, camino bloqueante) sin GUI y smoke de la Cabina con dos carriles y un grafo de 3 pisos (QT offscreen)
 
+- [ ] Asistente para escribir el plan
+  criterio: el usuario describe su idea y un agente propone `plan.md` con fases, tareas pequeñas y criterios verificables, que termina cada criterio con «lo no especificado NO es motivo de rechazo»; el usuario lo revisa y edita antes de guardarlo y nunca se sobrescribe un plan sin confirmar; el resultado pasa la validación del plan; disponible en GUI y MCP; tests con un agente falso (plan válido, inválido y plan existente)
+
+- [ ] Primer uso guiado
+  criterio: la primera vez, la app comprueba qué agentes hay instalados y con sesión, explica cómo iniciar sesión en los que falten y ofrece crear un proyecto de ejemplo cuyo gate pasa a la primera, para ver un run completo con un plan mínimo; se puede saltar y volver a abrir desde el menú; smoke test (QT offscreen) y test de que el ejemplo pasa su gate
+
 ## FASE 5B — Control desde el móvil
 
 - [ ] Control remoto por Telegram y Discord
@@ -262,6 +274,12 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 
 - [ ] Documentación del formato nuevo
   criterio: el manual (docs/MANUAL.md y .es.md) queda completo y revisado de punta a punta con todo Dédalo 3 (sección del plan con un ejemplo grande de 3 pisos y una tabla de todas las claves con su significado, valor por defecto y ejemplo; nuevas entradas en problemas frecuentes: conflictos entre tareas paralelas, tarea esperando a otra bloqueada, respaldo activado, ciclo en el plan); README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
+
+- [ ] Windows probado en un PC real
+  criterio: instalador sin bash, acceso directo, bandeja y un run completo con un agente real, probados en un PC con Windows y anotados en una lista de comprobación; los fallos encontrados se corrigen; el README actualiza el estado de Windows según lo comprobado
+
+- [ ] Preparar la publicación
+  criterio: GIF o vídeo corto en el README de un plan convirtiéndose en commits; guía para colaboradores en español e inglés; plantillas de GitHub para reportar fallos y proponer mejoras; el README abre con el público al que va dirigido (quien programa solo o en grupos pequeños con agentes de IA)
 
 - [ ] Release v3.0.0
   criterio: versión 3.0.0 en pyproject; notas con lo nuevo y la garantía de compatibilidad con los planes actuales; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario**
@@ -330,4 +348,5 @@ Para grupos pequeños, no empresas. Es opcional: quien no crea una red usa Déda
 - Modo PR: al terminar un run, abrir un pull request y esperar al CI de GitHub antes de integrar.
 - Modo «test primero» para arreglos: el agente escribe un test que falla, el gate comprueba que falla y luego que pasa con el arreglo.
 - Modelos locales (Ollama u otros vía opencode) documentados como agente/respaldo para quien quiera privacidad total.
-- Windows al nivel de Linux (instalador sin bash, pruebas reales en un PC).
+- Firmar el instalador de Windows y macOS para evitar los avisos de «programa no seguro» (tiene coste anual: cuando ya haya usuarios).
+- Pasar a inglés los nombres del código y las variables de entorno (solo si llegan colaboradores).
