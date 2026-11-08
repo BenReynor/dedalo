@@ -50,7 +50,7 @@ def test_listar_proyectos(proyecto):
 
 def test_estado_proyecto_cuenta_plan(proyecto):
     datos = json.loads(m.estado_proyecto("p1"))
-    assert datos["plan"] == {"pendientes": 1, "hechas": 1, "bloqueadas": 1}
+    assert datos["plan"] == {"pendientes": 1, "hechas": 1, "bloqueadas": 1, "para_persona": 0}
     assert datos["lecciones"]["existe"] is True
     assert datos["contexto"]["existe"] is True
     assert datos["loop"]["corriendo"] is False

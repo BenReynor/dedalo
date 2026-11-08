@@ -186,7 +186,6 @@ class Config:
         self.criterio_actual = ""
         self.pausar_si_crece = env.get("PAUSAR_SI_CRECE", "0") == "1"
         self.comandos_extra = loop_agentes.comandos_validos(env.get("COMANDOS_EXTRA", ""))
-        self.comandos_tarea = []
         self.reanudar_tras_cuota = env.get("REANUDAR_TRAS_CUOTA", "0") == "1"
         # The agent finished and only its verification was interrupted (quota
         # in the reviewer or judge): the next launch repeats just that part.
@@ -492,41 +491,16 @@ def _comandos_no_permitidos(plan_md, permitidos):
     that merely looks like one is not worth a warning."""
     salida = []
     tarea = None
-    propios = []
     for linea in _leer(plan_md).splitlines():
         if linea.startswith("- ["):
             tarea = linea[6:] if linea.startswith("- [ ] ") else None
-            propios = []
             continue
-        if tarea is None or not re.match(r"\s+\S", linea):
-            continue
-        m = re.match(r"\s+comandos:\s*(.*)$", linea)
-        if m:
-            propios = loop_agentes.comandos_validos(m.group(1))
-        if not re.match(r"\s+criterio:", linea):
+        if tarea is None or not re.match(r"\s+criterio:", linea):
             continue
         for cmd in dict.fromkeys(_COMANDO_CITADO.findall(linea)):
-            if cmd not in permitidos and cmd not in propios and shutil.which(cmd):
+            if cmd not in permitidos and shutil.which(cmd):
                 salida.append((tarea, cmd))
     return salida
-
-
-def _clave_tarea(plan_md, clave):
-    """Value of an indented `clave:` line under the first pending task."""
-    en_tarea = False
-    for linea in _leer(plan_md).splitlines():
-        if linea.startswith("- [ ] "):
-            if en_tarea:
-                return ""
-            en_tarea = True
-        elif linea.startswith("- ["):
-            if en_tarea:
-                return ""
-        elif en_tarea:
-            m = re.match(rf"\s+{re.escape(clave)}:\s*(.*)$", linea)
-            if m:
-                return m.group(1).strip()
-    return ""
 
 
 def _avisar_comandos_no_permitidos(cfg):
@@ -537,8 +511,8 @@ def _avisar_comandos_no_permitidos(cfg):
         permitidos = [*permitidos, cfg.lanzador_gate]
     for tarea, cmd in _comandos_no_permitidos(cfg.plan_md, permitidos):
         logx(cfg.log, f"AVISO: '{tarea[:60]}' cita `{cmd}` en su criterio y el "
-                      "agente no puede ejecutarlo; añádelo con `comandos:` en la "
-                      "tarea o `comandos_extra` en el proyecto")
+                      "agente no puede ejecutarlo; añádelo a `comandos_extra` en "
+                      "el lanzamiento del proyecto")
 
 def _mapear(cfg):
     """Regenerates mapeo.txt (silent: a map failure never stops the loop)."""
@@ -599,6 +573,9 @@ def restaurar_gate(dir_backup, cfg):
 
 def _notificar(cfg, evento, **datos):
     """Push notification for the project. Never raises: it must not stop the loop."""
+    if (evento == "tokens" and "reanuda" not in datos
+            and getattr(cfg, "reanudar_tras_cuota", False)):
+        return  # _correr_reanudando sends the one that says when it resumes
     if getattr(cfg, "origen", "") == "gui" and evento in (
             "inicio", "fin", "tokens", "error", "bloqueada"):
         # The GUI already derives these from the log it is tailing; sending
@@ -1253,8 +1230,6 @@ def _run(cfg):
         checkout(cfg.proyecto, rama_tarea, crear=True, desde=rama_run)
         cfg.rama_tarea = rama_tarea
         cfg.tarea_actual = tarea
-        cfg.comandos_tarea = loop_agentes.comandos_validos(
-            _clave_tarea(cfg.plan_md, "comandos"))
         pendientes_antes = _tareas_pendientes(cfg.plan_md)
         cfg.criterio_actual = criterio
         cfg.verificar_al_reanudar = False
@@ -1383,8 +1358,8 @@ def _run(cfg):
             if bloqueo:
                 comando = bloqueo.group(1)
                 mensaje(cfg, f"[dedalo] ⏸ '{tarea}' necesita un comando sin permiso "
-                             f"({comando}). Añádelo con `comandos:` o `comandos_extra` "
-                             "y relanza.")
+                             f"({comando}). Añádelo a `comandos_extra` en el lanzamiento "
+                             "del proyecto y relanza.")
                 logx(cfg.log, f"ABORTADO: la tarea necesita un comando sin permiso: "
                               f"{comando}")
                 _notificar(cfg, "error", detalle=f"comando sin permiso: {comando}")

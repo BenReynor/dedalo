@@ -672,22 +672,15 @@ def test_avisa_de_comandos_del_criterio_sin_permiso(tmp_path, monkeypatch):
     plan = tmp_path / "plan.md"
     plan.write_text(
         "- [ ] a\n  criterio: pasa `gitleaks detect` y `cargo test` y `noinstalado x`\n"
-        "- [ ] b\n  comandos: gitleaks\n  criterio: pasa `gitleaks detect`\n"
+        "- [ ] b\n  criterio: pasa `cargo test`\n"
         "- [x] c\n  criterio: `rm -rf x`\n", encoding="utf-8")
     assert loop._comandos_no_permitidos(str(plan), ["cargo"]) == [("a", "gitleaks")]
-
-
-def test_comandos_de_la_primera_tarea_pendiente(tmp_path):
-    plan = tmp_path / "plan.md"
-    plan.write_text("- [x] a\n  comandos: viejo\n- [ ] b\n  comandos: gitleaks make\n"
-                    "- [ ] c\n  comandos: otro\n", encoding="utf-8")
-    assert loop._clave_tarea(str(plan), "comandos") == "gitleaks make"
 
 
 def test_el_juez_sabe_que_podia_ejecutar_el_agente(tmp_path):
     from types import SimpleNamespace
     cfg = SimpleNamespace(agente_tarea="claude", proyecto=str(tmp_path),
-                          comandos_extra=["gitleaks"], comandos_tarea=[])
+                          comandos_extra=["gitleaks"])
     assert "gitleaks" in loop._criterio_para_juez(cfg, "pasa el escaneo")
     cfg.agente_tarea = "codex"
     assert loop._criterio_para_juez(cfg, "pasa el escaneo") == "pasa el escaneo"
@@ -845,3 +838,50 @@ def test_alcanzable_ve_los_nombres_en_un_ternario():
     check = _check_alcanzable()
     rust = "fn m() { generate_handler![a_pdf, a_csv]; }"
     assert check.problemas([rust], ["invoke<void>(f === 'PDF' ? 'a_pdf' : 'a_csv', { x });"]) == []
+
+
+def test_el_plan_no_puede_dar_permisos_al_agente(tmp_path):
+    from types import SimpleNamespace
+
+    from dedalo.loop_agentes import _comandos_extra
+    cfg = SimpleNamespace(comandos_extra=["gitleaks"])
+    assert _comandos_extra(cfg) == ["gitleaks"]
+    assert not hasattr(loop, "_clave_tarea")
+
+
+def test_cola_de_avisos_sobrevive_al_proceso(plataforma_falsa, monkeypatch):
+    from dedalo import notificaciones
+    plataforma_falsa["fallos"] = 4
+    notificaciones.enviar_texto({}, "cuota agotada")
+    # A new process starts with no memory of the failure: only the disk remains.
+    assert "falsa" in notificaciones._leer_cola()
+    assert notificaciones.enviar_texto({}, "inicio") == [("falsa", "OK")]
+    assert plataforma_falsa["llegados"] == ["inicio", "cuota agotada"]
+    assert notificaciones._leer_cola() == {}
+
+
+def test_con_reanudacion_solo_un_aviso_de_cuota(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    enviados = []
+    monkeypatch.setattr(loop.notificaciones, "enviar",
+                        lambda e, d, **k: enviados.append((e, d)) or [])
+    cfg = SimpleNamespace(reanudar_tras_cuota=True, origen="cli", nombre="p",
+                          proyecto=str(tmp_path), log=str(tmp_path / "l"))
+    loop._notificar(cfg, "tokens")
+    assert enviados == []
+    loop._notificar(cfg, "tokens", reanuda="a las 3")
+    assert len(enviados) == 1
+
+
+def test_tareas_manuales_visibles_en_estado_y_kanban(tmp_path, app):
+    from dedalo.paneles import PanelPlan
+    plan = tmp_path / "plan.md"
+    plan.write_text("- [ ] a\n- [M] llamar al proveedor\n", encoding="utf-8")
+    panel = PanelPlan()
+    p = Plan(str(plan))
+    p.cargar()
+    panel.kanban.cargar(p)
+    textos = [panel.kanban.col_pend.lista.item(i).text()
+              for i in range(panel.kanban.col_pend.lista.count())]
+    assert any("llamar al proveedor" in x for x in textos)
+    assert panel.kanban.col_pend.badge.text() == "1"

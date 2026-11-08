@@ -7,10 +7,17 @@ best effort: a notification must never break the loop.
 """
 
 import json
+import os
+import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
 from typing import Any
+
+from . import configuracion
+
+_COLA_LOCK = threading.Lock()
 
 PLANTILLAS = {
     "inicio": "🚀 *Loop iniciado*\nProyecto: `{proyecto}`\nModelo tarea: `{modelo_tarea}`\nModelo revisor: `{modelo_revisor}`",
@@ -166,7 +173,33 @@ _PLATAFORMAS = (
 
 _ESPERAS_REINTENTO = (1, 3, 10)  # seconds before each new attempt
 _MAX_ENCOLADOS = 10
-_ENCOLADOS: dict[str, list[str]] = {}  # undelivered texts, per platform
+
+
+def _ruta_cola() -> str:
+    # On disk: the quota and end-of-run notices are the engine's last sends,
+    # so a queue in memory would die with the process that needs it most.
+    return os.path.join(configuracion.CONFIG_DIR, "notificaciones_pendientes.json")
+
+
+def _leer_cola() -> dict[str, list[str]]:
+    try:
+        with open(_ruta_cola(), encoding="utf-8") as f:
+            datos = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return datos if isinstance(datos, dict) else {}
+
+
+def _guardar_cola(cola: dict[str, list[str]]) -> None:
+    ruta = _ruta_cola()
+    try:
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(ruta))
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cola, f, ensure_ascii=False)
+        os.replace(tmp, ruta)
+    except OSError:
+        pass
 
 
 def _transitorio(error: Exception) -> bool:
@@ -189,8 +222,11 @@ def _con_reintentos(enviar_uno, config: dict[str, Any], texto: str) -> str:
 
 def _vaciar_encolados(nombre: str, enviar_uno, config: dict[str, Any]) -> None:
     """Delivers what earlier failures left queued, stopping at the first error."""
-    # Taken out atomically: the panel sends from several threads at once.
-    cola = _ENCOLADOS.pop(nombre, [])
+    with _COLA_LOCK:
+        todas = _leer_cola()
+        cola = todas.pop(nombre, [])
+        if cola:
+            _guardar_cola(todas)
     while cola:
         try:
             if enviar_uno(config, cola[0]) != "OK":
@@ -199,7 +235,10 @@ def _vaciar_encolados(nombre: str, enviar_uno, config: dict[str, Any]) -> None:
             break
         cola.pop(0)
     if cola:
-        _ENCOLADOS.setdefault(nombre, [])[:0] = cola
+        with _COLA_LOCK:
+            todas = _leer_cola()
+            todas[nombre] = [*cola, *todas.get(nombre, [])][-_MAX_ENCOLADOS:]
+            _guardar_cola(todas)
 
 
 def _enviar_con_garantias(nombre: str, enviar_uno, config: dict[str, Any],
@@ -210,9 +249,10 @@ def _enviar_con_garantias(nombre: str, enviar_uno, config: dict[str, Any],
     except Exception as e:  # noqa: BLE001 - notifications are best effort
         estado = sanitizar(config, str(e))
         if _transitorio(e):
-            cola = _ENCOLADOS.setdefault(nombre, [])
-            cola.append(texto)
-            del cola[:-_MAX_ENCOLADOS]
+            with _COLA_LOCK:
+                todas = _leer_cola()
+                todas[nombre] = [*todas.get(nombre, []), texto][-_MAX_ENCOLADOS:]
+                _guardar_cola(todas)
             estado += " (encolada para el siguiente aviso)"
         return estado
     if estado == "OK":

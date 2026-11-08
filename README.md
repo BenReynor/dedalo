@@ -199,8 +199,7 @@ If quota runs out in the reviewer or judge, resuming repeats only the
 verification. A blocked task's work is kept in `dedalo/bloqueadas/<run>/t<n>`.
 
 **Agent commands.** `claude` can only run the commands on its list. Extend it with
-`"comandos_extra"` in the launch settings or a `comandos:` line under the task. The
-loop warns when a criterion quotes a command the agent cannot run.
+`"comandos_extra"` in the project's launch settings. The loop warns when a criterion quotes a command the agent cannot run.
 
 **New projects.** If the baseline fails in a project with no task done yet (e.g.
 task #1 creates the skeleton), the checks already failing are tolerated until

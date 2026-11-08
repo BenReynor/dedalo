@@ -515,6 +515,11 @@ class KanbanWidget(QWidget):
                 item.setForeground(Qt.red)
                 self.col_bloq.lista.addItem(item)
                 bloq += 1
+            elif tarea["estado"] == "manual":
+                # Listed with the pending ones, but the loop will not take it.
+                item.setText(t("👤 For a person · {tarea}", tarea=tarea["texto"]))
+                item.setForeground(Qt.gray)
+                self.col_pend.lista.addItem(item)
         # Update badges
         self.col_pend.badge.setText(str(pend))
         self.col_hecha.badge.setText(str(hecha))
@@ -650,10 +655,13 @@ class PanelPlan(QWidget):
         self._plan.texto = self.editor.toPlainText()
         self._modificado = True
         pend, hecho, bloqueada = self._plan.conteo()
-        self.lbl_conteo.setText(
-            t("Pending: {pend}   ·   Done: {hecho}   ·   "
-              "Blocked: {bloqueada}",
-              pend=pend, hecho=hecho, bloqueada=bloqueada))
+        texto = t("Pending: {pend}   ·   Done: {hecho}   ·   "
+                  "Blocked: {bloqueada}",
+                  pend=pend, hecho=hecho, bloqueada=bloqueada)
+        manuales = len(self._plan.manuales)
+        if manuales:
+            texto += "   ·   " + t("For a person: {n}", n=manuales)
+        self.lbl_conteo.setText(texto)
         self.kanban._actualizar()
 
 

@@ -364,6 +364,8 @@ _ES: dict[str, str] = {
         "⚠ SOBRECALENTAMIENTO: se abrirá el aviso de apagado.",
     "⚠ PC too hot": "⚠ PC demasiado caliente",
     "⚠ Task blocked": "⚠ Tarea bloqueada",
+    "For a person: {n}": "Para una persona: {n}",
+    "👤 For a person · {tarea}": "👤 Para una persona · {tarea}",
     "⚠ git not available: check that it is installed and your identity is configured (git config user.name/user.email)":
         "⚠ git no disponible: comprueba que está instalado y tu identidad configurada (git config user.name/user.email)",
     "✅ Loop finished": "✅ Loop finalizado",

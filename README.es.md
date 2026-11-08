@@ -200,8 +200,7 @@ cuota se acaba en el revisor o el juez, al reanudar se repite solo la
 verificación. Lo de una tarea bloqueada se conserva en `dedalo/bloqueadas/<run>/t<n>`.
 
 **Comandos del agente.** `claude` solo puede ejecutar los comandos de su lista.
-Amplíala con `"comandos_extra"` en el lanzamiento o con una línea `comandos:` bajo
-la tarea. El loop avisa si un criterio cita un comando sin permiso.
+Amplíala con `"comandos_extra"` en el lanzamiento del proyecto. El loop avisa si un criterio cita un comando sin permiso.
 
 **Proyecto nuevo.** Si el baseline falla en un proyecto sin ninguna tarea hecha
 (p. ej. el esqueleto lo crea la tarea #1), los checks que ya fallaban se toleran

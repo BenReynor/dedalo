@@ -24,10 +24,9 @@ from dedalo import consentimiento, loops_estado  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def notificaciones_sin_esperas(monkeypatch):
-    """No real pauses between retries, and no queue shared between tests."""
+    """No real pauses between retries."""
     from dedalo import notificaciones
     monkeypatch.setattr(notificaciones, "_ESPERAS_REINTENTO", (0, 0, 0))
-    monkeypatch.setattr(notificaciones, "_ENCOLADOS", {})
 
 
 @pytest.fixture(autouse=True)

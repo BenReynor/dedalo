@@ -298,8 +298,12 @@ def flags_claude(rol, proyecto="", modelo="", extra="", comandos=()):
 
 
 def _comandos_extra(cfg):
-    """Commands the project and the current task add to the agent's allowlist."""
-    return [*getattr(cfg, "comandos_extra", ()), *getattr(cfg, "comandos_tarea", ())]
+    """Commands the project adds to the agent's allowlist.
+
+    Only from the launch settings, outside the repo: agents can edit plan.md,
+    so a per-task key there would let one grant itself new commands.
+    """
+    return list(getattr(cfg, "comandos_extra", ()))
 
 
 def argv_claude(binario, cfg, rol, modelo=""):
