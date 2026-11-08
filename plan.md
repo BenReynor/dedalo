@@ -24,7 +24,7 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [x] Nunca se borra trabajo que no se pudo guardar
   criterio: `guardar_parcial` deshace antes las entradas intent-to-add (las deja `git add -N` el revisor, y con ellas `git stash` falla); si el stash falla por cualquier motivo, `_parar_limpio` **no** revierte ni borra la rama de la tarea: deja el trabajo donde está y lo registra en progreso.log e incidencias.jsonl; tests con repo temporal: parada tras `diff_para_revisor` → stash con archivos nuevos y modificados, y stash que falla → archivos intactos y rama conservada (16, caso B)
 
-- [ ] Un bloqueo o una cuota no tiran trabajo terminado
+- [x] Un bloqueo o una cuota no tiran trabajo terminado
   criterio: al bloquear una tarea su trabajo se conserva en `dedalo/bloqueadas/<run>/<n>` (con commit) y el log dice cómo recuperarlo, en vez de descartar la rama; si la cuota se agota en el revisor o en el juez, el trabajo que ya pasó por el agente se guarda y la iteración queda registrada en `estado`, de modo que al reanudar se restaura y se repite solo la verificación, sin volver a llamar al agente; si la tarea cambió en plan.md se empieza de cero y se avisa; tests con agentes falsos: bloqueo → rama conservada; cuota en revisor → al relanzar, el agente no se invoca y la tarea termina (16)
 
 - [x] La tarea sale del plan de la rama del run

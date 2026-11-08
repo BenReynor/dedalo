@@ -30,7 +30,7 @@ _CACHES = re.compile(
 CONTROL = (
     r"plan\.md|lecciones\.md|CONTEXTO\.md|progreso\.log|gate\.sh|dedalo\.sh"
     r"|mapear\.sh|mapeo\.txt|endpoints\.txt|metrics\.jsonl|incidencias\.jsonl"
-    r"|estado_loop\.json|gate_ultimo\.log"
+    r"|estado_loop\.json|gate_ultimo\.log|verificacion_pendiente\.json"
     r"|gate_checks(/.*)?|\.dedalo(/.*)?|\.dedalo_review(/.*)?")
 
 

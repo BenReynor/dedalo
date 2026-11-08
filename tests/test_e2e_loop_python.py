@@ -171,7 +171,8 @@ def test_tarea_que_no_pasa_el_gate_se_bloquea(tmp_path, capsys):
     assert "tarea BLOQUEADA: t1" in log
     assert "- [B] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
     gitlog = subprocess.run(
-        ["git", "log", "--all", "--format=%s"], cwd=str(proyecto),
+        ["git", "log", "--exclude=refs/heads/dedalo/bloqueadas/*", "--all",
+         "--format=%s"], cwd=str(proyecto),
         capture_output=True, text=True, check=True)
     asuntos = [linea for linea in gitlog.stdout.splitlines()
                if linea.startswith("dedalo:")]

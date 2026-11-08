@@ -181,6 +181,10 @@ class Config:
         self.rama_run = ""      # current run branch (for clean stops)
         self.rama_tarea = ""    # current task branch, "" between tasks
         self.tarea_actual = ""
+        self.criterio_actual = ""
+        # The agent finished and only its verification was interrupted (quota
+        # in the reviewer or judge): the next launch repeats just that part.
+        self.verificar_al_reanudar = False
         self.lanzador_gate = ""
         self.tolerados = set()  # checks red at a new project's baseline
         self.push = args.push
@@ -695,6 +699,8 @@ def _parar_limpio(cfg, motivo):
                           f"integrar en {rama_run}")
         else:
             borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
+        if stash and getattr(cfg, "verificar_al_reanudar", False):
+            _anotar_verificacion(cfg, stash)
         if stash:
             logx(cfg.log, f"Trabajo a medias de '{cfg.tarea_actual}' guardado en "
                           f"{stash.split(':', 1)[0]} ({etiqueta}); recupéralo con "
@@ -702,6 +708,74 @@ def _parar_limpio(cfg, motivo):
         logx(cfg.log, f"Repo limpio en {rama_run} tras parar ({motivo})")
     except Exception as e:  # noqa: BLE001 — a cleanup must never mask the stop
         logx(cfg.log, f"AVISO: no se pudo dejar limpio el repo: {e}")
+
+
+def _ruta_verificacion(cfg):
+    return rutas.estado(cfg.proyecto, "verificacion_pendiente.json")
+
+
+def _anotar_verificacion(cfg, stash):
+    """Records that this stash holds finished work still to be verified."""
+    _, sha, _ = run_git(cfg.proyecto, "rev-parse", stash.split(":", 1)[0])
+    ruta = _ruta_verificacion(cfg)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump({"tarea": cfg.tarea_actual, "criterio": cfg.criterio_actual,
+                   "stash": sha.strip()}, f, ensure_ascii=False)
+
+
+def _restaurar_verificacion(cfg, tarea, criterio):
+    """True if the work of an interrupted verification was restored.
+
+    The agent is then skipped on the first attempt, so a quota that ran out
+    in the reviewer or judge no longer costs redoing the whole task.
+    """
+    ruta = _ruta_verificacion(cfg)
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            nota = json.load(f)
+    except (OSError, ValueError):
+        return False
+    try:
+        os.unlink(ruta)
+    except OSError:
+        pass
+    sha = nota.get("stash", "")
+    if nota.get("tarea") != tarea or nota.get("criterio") != criterio:
+        logx(cfg.log, f"AVISO: la tarea '{nota.get('tarea')}' cambió desde la "
+                      f"parada; se empieza de cero (su trabajo sigue en {sha})")
+        return False
+    if run_git(cfg.proyecto, "stash", "apply", "-q", sha)[0] != 0:
+        logx(cfg.log, f"AVISO: no se pudo restaurar {sha}; se empieza de cero")
+        revertir(cfg.proyecto)
+        return False
+    _, lista, _ = run_git(cfg.proyecto, "stash", "list", "--format=%H")
+    hashes = lista.split()
+    if sha in hashes:
+        run_git(cfg.proyecto, "stash", "drop", "-q", f"stash@{{{hashes.index(sha)}}}")
+    logx(cfg.log, f"REANUDANDO verificación de '{tarea}': no se llama al agente")
+    return True
+
+
+def _conservar_bloqueada(cfg, fecha_run, iteracion, tarea):
+    """Saves a blocked task's work before it is discarded.
+
+    Returns the branch or stash holding it, "" if there was no work, or None
+    if it could not be saved: the caller must not discard anything then.
+    """
+    cambios = loop_git.cambios_pendientes(cfg.proyecto)
+    if not cambios:
+        return ""
+    rama_actual = cfg.rama_tarea
+    destino = f"dedalo/bloqueadas/{fecha_run}/t{iteracion}"
+    if checkout(cfg.proyecto, destino, crear=True) == 0:
+        if commit_tarea(cfg.proyecto, cambios, "dedalo: bloqueada: " + tarea[:40],
+                        tarea) == 0:
+            return destino
+        checkout(cfg.proyecto, rama_actual)
+        borrar_rama(cfg.proyecto, destino, fuerza=True)
+    return loop_git.guardar_parcial(
+        cfg.proyecto, f"dedalo {rama_actual}: bloqueada ({tarea[:40]})")
 
 
 def _commit_memoria(cfg, tarea, iteracion):
@@ -1040,11 +1114,14 @@ def _run(cfg):
         checkout(cfg.proyecto, rama_tarea, crear=True, desde=rama_run)
         cfg.rama_tarea = rama_tarea
         cfg.tarea_actual = tarea
+        cfg.criterio_actual = criterio
+        cfg.verificar_al_reanudar = False
 
         before = cfg.tmp("before")
         after = cfg.tmp("after")
         out = cfg.tmp("out")
         snapshot(cfg.proyecto, before)
+        verificacion_restaurada = _restaurar_verificacion(cfg, tarea, criterio)
         hecho = 0
         gate_out = None
         gate_rc = 1
@@ -1129,8 +1206,13 @@ def _run(cfg):
 
             pre = ""  # consumed: later failures set it again
             cfg.vivo.fase("Agente")
-            rc, _vivo = run_agente(cfg, cfg.agente_tarea, out,
-                                   cfg.modelo_tarea, prompt, tarea, iteracion)
+            if verificacion_restaurada and intento == 1:
+                rc = 0
+                for vacio in (out, out + ".err"):
+                    open(vacio, "w", encoding="utf-8").close()
+            else:
+                rc, _vivo = run_agente(cfg, cfg.agente_tarea, out,
+                                       cfg.modelo_tarea, prompt, tarea, iteracion)
             if rc == 124:
                 mensaje(cfg, f"[dedalo] ⚠ timeout: {cfg.agente_tarea} tardó "
                              f"más de {cfg.timeout_por_tarea}s")
@@ -1286,6 +1368,7 @@ def _run(cfg):
                 if loop_agentes._PATRON_TOKENS.search(motivo):
                     mensaje(cfg, f"[dedalo] ✗✗ el juez se quedó sin cuota ({motivo})"
                                  " — deteniendo loop sin marcar la tarea")
+                    cfg.verificar_al_reanudar = True
                     logx(cfg.log, f"ABORTADO: tokens/cuota agotados (juez): {motivo}")
                     _notificar(cfg, "error", detalle=f"juez sin cuota: {motivo}")
                     _incidencia(cfg, "aborto_tokens", motivo, tarea=tarea,
@@ -1293,6 +1376,7 @@ def _run(cfg):
                     return 5
                 mensaje(cfg, "[dedalo] ✗ el juez no pudo verificar el criterio "
                              f"({motivo}) — deteniendo loop sin marcar la tarea")
+                cfg.verificar_al_reanudar = True
                 logx(cfg.log, f"ABORTADO: juez no disponible ({motivo})")
                 _notificar(cfg, "error", detalle=f"juez no disponible: {motivo}")
                 _incidencia(cfg, "aborto_juez", f"juez no disponible: {motivo}",
@@ -1327,6 +1411,7 @@ def _run(cfg):
                     if resultado == "sin_auth":
                         mensaje(cfg, f"[dedalo] ✗✗ revisor ({cfg.revisor}) "
                                      "no está autenticado — deteniendo loop")
+                        cfg.verificar_al_reanudar = True
                         logx(cfg.log, f"ABORTADO: revisor sin autenticacion ({cfg.revisor})")
                         _notificar(cfg, "error", detalle=f"revisor sin autenticación: {cfg.revisor}")
                         _incidencia(cfg, "aborto_autenticacion",
@@ -1338,6 +1423,7 @@ def _run(cfg):
                     if resultado == "sin_tokens":
                         mensaje(cfg, "[dedalo] ✗ Tokens/cuota agotados del "
                                      "proveedor IA (revisor) — deteniendo loop")
+                        cfg.verificar_al_reanudar = True
                         logx(cfg.log, "ABORTADO: tokens/cuota agotados (revisor)")
                         _notificar(cfg, "tokens")
                         _incidencia(cfg, "aborto_tokens",
@@ -1518,14 +1604,27 @@ def _run(cfg):
                     "necesario.")
                 logx(cfg.log, "lección registrada (merge fallido)")
         else:
+            conservada = _conservar_bloqueada(cfg, fecha_run, iteracion, tarea)
+            if conservada is None:
+                detalle = loop_git.ULTIMO_ERROR["git"] or "sin detalle"
+                logx(cfg.log, f"ABORTADO: no se pudo conservar el trabajo de "
+                              f"'{tarea}' ({detalle}); queda sin tocar")
+                _incidencia(cfg, "aborto_sin_guardar", detalle, tarea=tarea,
+                            iteracion=iteracion, rama=rama_tarea)
+                cfg.rama_tarea = ""
+                return 9
+            if conservada:
+                logx(cfg.log, f"Trabajo de la tarea bloqueada conservado en "
+                              f"{conservada}")
             checkout(cfg.proyecto, rama_run)
             borrar_rama(cfg.proyecto, rama_tarea, fuerza=True)
             revertir(cfg.proyecto)
             _marcar(cfg, "B", tarea)
             cfg.vivo.cerrar_tarea("bloqueada")
             _notificar(cfg, "bloqueada", tarea=tarea)
-            logx(cfg.log, f"tarea BLOQUEADA: {tarea} (rama {rama_tarea} "
-                          "descartada)")
+            logx(cfg.log, f"tarea BLOQUEADA: {tarea} "
+                          + (f"(trabajo en {conservada})" if conservada
+                             else f"(rama {rama_tarea} sin cambios)"))
             print(f"[dedalo] ✗ tarea bloqueada tras {cfg.max_reintentos} "
                   "intentos. Marcada [B] en plan.md")
             alerta(cfg.voz, f"Tarea bloqueada: {tarea}")

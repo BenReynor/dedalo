@@ -362,3 +362,69 @@ def test_con_rama_de_trabajo_la_tarea_sale_del_plan_del_run(tmp_path):
     assert rc == 0, log[-2000:]
     assert log.count(": t1: crear modulo nuevo (rama") == 1, "t1 was redone"
     assert "== Iteración 1: t2" in log
+
+
+# --- point 16: blocked work is kept; a quota in the judge repeats only that ----
+
+def _agente_que_cuenta(tmp_path):
+    bin_ = _agente_falso(tmp_path / "bin")
+    cuenta = tmp_path / "llamadas_agente"
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "mkdir -p src\n", f"case \"$*\" in *--help*) ;; *) echo x >> '{cuenta}' ;; esac\nmkdir -p src\n"), encoding="utf-8")
+    return bin_, cuenta
+
+
+@e2e
+def test_tarea_bloqueada_conserva_su_trabajo(tmp_path):
+    gate = "#!/usr/bin/env bash\n[ -e src/nuevo.py ] && exit 1\nexit 0\n"
+    proyecto = _escenario(tmp_path, gate)
+    rc, _ = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    assert rc == 0
+    assert "- [B] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+    assert not (proyecto / "src" / "nuevo.py").exists()
+    bloqueadas = [r for r in _ramas(proyecto) if r.startswith("dedalo/bloqueadas/")]
+    assert len(bloqueadas) == 1
+    contenido = subprocess.check_output(
+        ["git", "-C", str(proyecto), "show", f"{bloqueadas[0]}:src/nuevo.py"], text=True)
+    assert "nuevo" in contenido
+
+
+@e2e
+def test_cuota_en_el_juez_al_reanudar_no_llama_al_agente(tmp_path):
+    from test_e2e_loop_python import _gate_con_juez
+    aviso = ("[GATE] ⚠ juez salió con rc=1 (¿cuota o red?): Credit balance is too "
+             "low; se omite (no bloqueante)")
+    gate, _c = _gate_con_juez(tmp_path, [aviso] * 3 + ["[GATE] ✓ juez: criterio cumplido"])
+    proyecto = _escenario(tmp_path, gate)
+    bin_, cuenta = _agente_que_cuenta(tmp_path)
+    env = {**_entorno(bin_), "ESPERA_JUEZ": "0"}
+    assert _correr(proyecto, env)[0] == 5
+    assert not (proyecto / "src" / "nuevo.py").exists()
+    assert cuenta.read_text().count("x") == 1
+    time.sleep(1.1)
+    rc, _ = _correr(proyecto, env)
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert rc == 0, log[-2000:]
+    assert "REANUDANDO verificación" in log
+    assert cuenta.read_text().count("x") == 1, "the agent was called again"
+    assert "- [x] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+    assert subprocess.check_output(
+        ["git", "-C", str(proyecto), "stash", "list"], text=True) == ""
+
+
+@e2e
+def test_si_la_tarea_cambio_tras_la_cuota_se_empieza_de_cero(tmp_path):
+    from test_e2e_loop_python import _gate_con_juez
+    aviso = ("[GATE] ⚠ juez salió con rc=1 (¿cuota o red?): Credit balance is too "
+             "low; se omite (no bloqueante)")
+    gate, _c = _gate_con_juez(tmp_path, [aviso] * 3 + ["[GATE] ✓ juez: ok"])
+    proyecto = _escenario(tmp_path, gate)
+    bin_, cuenta = _agente_que_cuenta(tmp_path)
+    env = {**_entorno(bin_), "ESPERA_JUEZ": "0"}
+    assert _correr(proyecto, env)[0] == 5
+    plan = proyecto / "plan.md"
+    plan.write_text(plan.read_text(encoding="utf-8").replace(
+        "existe src/nuevo.py", "existe src/nuevo.py y funciona"), encoding="utf-8")
+    time.sleep(1.1)
+    assert _correr(proyecto, env)[0] == 0
+    assert cuenta.read_text().count("x") == 2
