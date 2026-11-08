@@ -284,16 +284,22 @@ def cambios_pendientes(proyecto, control=CONTROL):
 def guardar_parcial(proyecto, mensaje, control=CONTROL):
     """Stashes a half-done task's work (tracked and new files) with a name.
 
-    Returns the stash description ("stash@{0}: …") or "" if there was
-    nothing to keep or the stash failed. CONTROL files are left alone.
+    Returns the stash description ("stash@{0}: …"), "" if there was nothing
+    to keep, or None if the stash failed: the caller must then leave the work
+    where it is. CONTROL files are left alone.
+
+    Intent-to-add entries are dropped first: the reviewer's diff leaves them
+    (`git add -N`) and with them `git stash` refuses to run.
     """
     rutas = cambios_pendientes(proyecto, control)
     if not rutas:
         return ""
-    rc, _, _ = run_git(proyecto, "stash", "push", "-u", "-q", "-m", mensaje,
-                       "--", *rutas)
+    run_git(proyecto, "reset", "-q", "--", *rutas)
+    rc, _, err = run_git(proyecto, "stash", "push", "-u", "-q", "-m", mensaje,
+                         "--", *rutas)
     if rc != 0:
-        return ""
+        ULTIMO_ERROR["git"] = err.strip()
+        return None
     _, out, _ = run_git(proyecto, "stash", "list", "-n", "1")
     return out.strip()
 

@@ -21,7 +21,7 @@ actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 
 Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de esa lista. Van antes que el manual porque cambian comportamientos que el manual tiene que describir.
 
-- [ ] Nunca se borra trabajo que no se pudo guardar
+- [x] Nunca se borra trabajo que no se pudo guardar
   criterio: `guardar_parcial` deshace antes las entradas intent-to-add (las deja `git add -N` el revisor, y con ellas `git stash` falla); si el stash falla por cualquier motivo, `_parar_limpio` **no** revierte ni borra la rama de la tarea: deja el trabajo donde está y lo registra en progreso.log e incidencias.jsonl; tests con repo temporal: parada tras `diff_para_revisor` → stash con archivos nuevos y modificados, y stash que falla → archivos intactos y rama conservada (16, caso B)
 
 - [ ] Un bloqueo o una cuota no tiran trabajo terminado

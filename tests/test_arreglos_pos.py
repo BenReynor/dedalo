@@ -297,3 +297,48 @@ def test_check_tolerado_no_salta_la_proteccion_del_juez(tmp_path):
     assert "se toleran (01_x.sh)" in log
     assert rc == 8, log[-1500:]
     assert "- [ ] t1" in (proyecto / "plan.md").read_text(encoding="utf-8")
+
+
+# --- point 16, case B: never revert what could not be saved -------------------
+
+def _repo_con_trabajo(tmp_path):
+    from dedalo import loop_git
+    _git("init", "-q", "-b", "master", cwd=tmp_path)
+    (tmp_path / "a.txt").write_text("viejo\n", encoding="utf-8")
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "base", cwd=tmp_path)
+    _git("branch", "dedalo/run", cwd=tmp_path)
+    _git("checkout", "-qb", "dedalo/tareas/t1", cwd=tmp_path)
+    (tmp_path / "a.txt").write_text("nuevo\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("archivo nuevo\n", encoding="utf-8")
+    loop_git.diff_para_revisor(str(tmp_path))  # leaves intent-to-add entries
+
+
+def _cfg_parada(tmp_path):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        proyecto=str(tmp_path), rama_tarea="dedalo/tareas/t1",
+        rama_run="dedalo/run", tarea_actual="t1",
+        log=str(tmp_path / "progreso.log"),
+        incidencias=str(tmp_path / "incidencias.jsonl"))
+
+
+def test_parada_tras_el_revisor_guarda_el_trabajo(tmp_path):
+    _repo_con_trabajo(tmp_path)
+    loop._parar_limpio(_cfg_parada(tmp_path), "cuota")
+    assert _rama_actual(tmp_path) == "dedalo/run"
+    assert not (tmp_path / "b.txt").exists()
+    _git("stash", "apply", cwd=tmp_path)
+    assert (tmp_path / "b.txt").read_text(encoding="utf-8") == "archivo nuevo\n"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "nuevo\n"
+
+
+def test_si_el_stash_falla_no_se_borra_nada(tmp_path, monkeypatch):
+    from dedalo import loop_git
+    _repo_con_trabajo(tmp_path)
+    monkeypatch.setattr(loop_git, "guardar_parcial", lambda *a, **k: None)
+    loop._parar_limpio(_cfg_parada(tmp_path), "cuota")
+    assert _rama_actual(tmp_path) == "dedalo/tareas/t1"
+    assert (tmp_path / "b.txt").exists()
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "nuevo\n"
+    assert "no se pudo guardar" in (tmp_path / "progreso.log").read_text(encoding="utf-8")

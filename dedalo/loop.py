@@ -676,6 +676,15 @@ def _parar_limpio(cfg, motivo):
     try:
         etiqueta = f"dedalo {rama_tarea}: parcial ({motivo})"
         stash = loop_git.guardar_parcial(cfg.proyecto, etiqueta)
+        if stash is None:
+            # Never revert what could not be saved: that lost finished work.
+            detalle = loop_git.ULTIMO_ERROR["git"] or "sin detalle"
+            logx(cfg.log, f"AVISO: no se pudo guardar el trabajo de "
+                          f"'{cfg.tarea_actual}' ({detalle}); queda sin tocar en "
+                          f"{rama_tarea}")
+            _incidencia(cfg, "parada_sin_guardar", detalle,
+                        tarea=cfg.tarea_actual, rama=rama_tarea)
+            return
         revertir(cfg.proyecto)
         checkout(cfg.proyecto, rama_run)
         _, n, _ = run_git(cfg.proyecto, "rev-list", "--count",
