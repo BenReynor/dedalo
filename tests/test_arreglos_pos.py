@@ -844,4 +844,4 @@ fn m() { generate_handler![abrir]; }
 def test_alcanzable_ve_los_nombres_en_un_ternario():
     check = _check_alcanzable()
     rust = "fn m() { generate_handler![a_pdf, a_csv]; }"
-    assert check.problemas([rust], ["invoke<void>(pdf ? 'a_pdf' : 'a_csv', { x });"]) == []
+    assert check.problemas([rust], ["invoke<void>(f === 'PDF' ? 'a_pdf' : 'a_csv', { x });"]) == []

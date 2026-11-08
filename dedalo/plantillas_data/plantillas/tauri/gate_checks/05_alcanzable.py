@@ -154,7 +154,7 @@ def llamadas(fuentes_front):
     patron = re.compile(r"\b(?:" + "|".join(sorted(envoltorios(fuentes_front))) + r")\b"
                         r"[^(\n]*\(\s*[\"'`]([A-Za-z0-9_]+)[\"'`]")
     ternario = re.compile(r"\b(?:" + "|".join(sorted(envoltorios(fuentes_front))) + r")\b"
-                          r"[^(\n]*\(\s*([^,\n\"'`]+\?[^,\n]+)")
+                          r"[^(\n]*\(\s*([^,\n]+\?[^,\n]+)")
     for texto in fuentes_front:
         for m in patron.finditer(texto):
             resto = texto[m.end():].lstrip()
@@ -173,7 +173,9 @@ def llamadas(fuentes_front):
             salida.append((m.group(1), claves))
         # `llamar(pdf ? "a_pdf" : "a_csv", args)`: both names are in use.
         for m in ternario.finditer(texto):
-            salida.extend((n, None) for n in re.findall(r"[\"'`](\w+)[\"'`]", m.group(1)))
+            # Only after the `?`: the condition can hold strings of its own.
+            opciones = m.group(1).split("?", 1)[1]
+            salida.extend((n, None) for n in re.findall(r"[\"'`](\w+)[\"'`]", opciones))
     return salida
 
 
