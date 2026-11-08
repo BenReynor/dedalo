@@ -171,6 +171,7 @@ class PanelWebhooks(QWidget):
             ("tarea", t("✅ Task completed (gate and reviewer passed)"),
              t("One message per task that ends green, with its commit.")),
             ("bloqueada", t("⚠ Task blocked"), ""),
+            ("plan_crecio", t("📝 Tasks added to the plan during a run"), ""),
             ("fin", t("✅ Loop finished"), ""),
             ("tokens", t("💸 Tokens exhausted"), ""),
             ("error", t("💥 Critical error"), ""),

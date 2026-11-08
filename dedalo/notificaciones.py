@@ -7,6 +7,8 @@ best effort: a notification must never break the loop.
 """
 
 import json
+import time
+import urllib.error
 import urllib.request
 from typing import Any
 
@@ -16,6 +18,7 @@ PLANTILLAS = {
     "tarea": "✅ *Tarea completada*\nProyecto: `{proyecto}`\nTarea: `{tarea}`\nIteración: {iteracion}\nRama: `{rama}`{commit}",
     "bloqueada": "⚠ *Tarea bloqueada*\nProyecto: `{proyecto}`\nTarea: `{tarea}`",
     "fin": "✅ *Loop finalizado*\nProyecto: `{proyecto}`\nTareas: {hechas}/{total}\nCoste: ${coste:.2f}\nDuración: {duracion_min:.1f} min",
+    "plan_crecio": "📝 *El plan creció*\nProyecto: `{proyecto}`\nTareas nuevas: {n}\n{titulos}",
     "tokens": "💸 *Tokens/cuota agotados*\nProyecto: `{proyecto}`\nEl loop se ha detenido.",
     "error": "💥 *Error crítico*\nProyecto: `{proyecto}`\nDetalle: `{detalle}`",
 }
@@ -29,7 +32,7 @@ class _Faltantes(dict):
 
 
 EVENTOS = ("inicio", "externo", "tarea", "bloqueada", "fin",
-           "tokens", "error")
+           "plan_crecio", "tokens", "error")
 
 
 def normalizar(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -161,17 +164,78 @@ _PLATAFORMAS = (
 )
 
 
+_ESPERAS_REINTENTO = (1, 3, 10)  # seconds before each new attempt
+_MAX_ENCOLADOS = 10
+_ENCOLADOS: dict[str, list[str]] = {}  # undelivered texts, per platform
+
+
+def _transitorio(error: Exception) -> bool:
+    """A network failure or a server-side error, worth trying again."""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    return isinstance(error, OSError)  # URLError, reset, timeout…
+
+
+def _con_reintentos(enviar_uno, config: dict[str, Any], texto: str) -> str:
+    for espera in (*_ESPERAS_REINTENTO, None):
+        try:
+            return enviar_uno(config, texto)
+        except Exception as e:  # noqa: BLE001
+            if espera is None or not _transitorio(e):
+                raise
+            time.sleep(espera)
+    return "OK"  # unreachable: the last attempt returns or raises
+
+
+def _vaciar_encolados(nombre: str, enviar_uno, config: dict[str, Any]) -> None:
+    """Delivers what earlier failures left queued, stopping at the first error."""
+    # Taken out atomically: the panel sends from several threads at once.
+    cola = _ENCOLADOS.pop(nombre, [])
+    while cola:
+        try:
+            if enviar_uno(config, cola[0]) != "OK":
+                break
+        except Exception:  # noqa: BLE001 - it stays queued for the next time
+            break
+        cola.pop(0)
+    if cola:
+        _ENCOLADOS.setdefault(nombre, [])[:0] = cola
+
+
+def _enviar_con_garantias(nombre: str, enviar_uno, config: dict[str, Any],
+                          texto: str) -> str:
+    """Retries transient failures; if they persist, queues the text."""
+    try:
+        estado = _con_reintentos(enviar_uno, config, texto)
+    except Exception as e:  # noqa: BLE001 - notifications are best effort
+        estado = sanitizar(config, str(e))
+        if _transitorio(e):
+            cola = _ENCOLADOS.setdefault(nombre, [])
+            cola.append(texto)
+            del cola[:-_MAX_ENCOLADOS]
+            estado += " (encolada para el siguiente aviso)"
+        return estado
+    if estado == "OK":
+        _vaciar_encolados(nombre, enviar_uno, config)
+    return estado
+
+
 def enviar_texto(config: dict[str, Any], texto: str,
                  solo: str | None = None) -> list[tuple[str, str]]:
     """Sends `texto` to every configured platform.
 
-    Returns `[(plataforma, "OK" | error)]`; never raises.
+    Returns `[(plataforma, "OK" | error)]`; never raises. `solo` is the panel's
+    "test this platform" button: one attempt, so the user sees the result now.
     """
     resultados = []
     for nombre, enviar_uno, configurada in _PLATAFORMAS:
         if solo and nombre != solo:
             continue
         if not configurada(config):
+            continue
+        if not solo:
+            resultados.append((nombre, _enviar_con_garantias(
+                nombre, enviar_uno, config, texto)))
             continue
         try:
             resultados.append((nombre, enviar_uno(config, texto)))

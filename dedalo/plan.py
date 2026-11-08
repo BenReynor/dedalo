@@ -8,7 +8,8 @@ task `- [ ]`, done `- [x]`, blocked `- [B]`).
 import os
 import re
 
-ESTADOS = {" ": "pendiente", "x": "hecha", "b": "bloqueada"}
+# `- [M]`: only a person can do it; the loop skips it and lists it at the end.
+ESTADOS = {" ": "pendiente", "x": "hecha", "b": "bloqueada", "m": "manual"}
 
 _LINEA_TAREA = re.compile(r"^\s*-\s+\[(.)\]\s*(.*)$")
 
@@ -61,6 +62,11 @@ class Plan:
             elif t["estado"] == "bloqueada":
                 bloq += 1
         return pend, hecho, bloq
+
+    @property
+    def manuales(self):
+        """Texts of the tasks only a person can do (`- [M]`)."""
+        return [t["texto"] for t in self.tareas if t["estado"] == "manual"]
 
     def marcar_tarea(self, texto, estado):
         """Marks the pending task whose line is exactly `- [ ] <texto>`.

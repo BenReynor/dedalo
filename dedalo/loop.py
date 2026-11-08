@@ -182,6 +182,7 @@ class Config:
         self.rama_tarea = ""    # current task branch, "" between tasks
         self.tarea_actual = ""
         self.criterio_actual = ""
+        self.pausar_si_crece = env.get("PAUSAR_SI_CRECE", "0") == "1"
         # The agent finished and only its verification was interrupted (quota
         # in the reviewer or judge): the next launch repeats just that part.
         self.verificar_al_reanudar = False
@@ -374,6 +375,12 @@ def _lanzador_gate(cfg):
 def _citar(texto):
     import shlex
     return shlex.quote(str(texto))
+
+
+def _tareas_pendientes(plan_md):
+    """Titles of the pending tasks, to notice the ones added during a run."""
+    return [li[len("- [ ] "):] for li in _leer(plan_md).splitlines()
+            if li.startswith("- [ ] ")]
 
 
 def _pausa_pendiente(plan_md):
@@ -849,8 +856,14 @@ def _resumen_bloqueadas(cfg):
                       if t["estado"] == "bloqueada"]
     except Exception:
         bloqueadas = []
+    try:
+        manuales = p.manuales
+    except Exception:  # noqa: BLE001
+        manuales = []
+    extra = ["", "== TAREAS PARA UNA PERSONA ==",
+             *[f"- [M] {t}" for t in manuales]] if manuales else []
     if not bloqueadas:
-        return []
+        return extra
     motivos = {}
     for li in _leer(cfg.incidencias).splitlines():
         try:
@@ -863,7 +876,7 @@ def _resumen_bloqueadas(cfg):
     for t in bloqueadas:
         m = motivos.get(t, "")
         lineas.append(f"- [B] {t}" + (f" — {m}" if m else ""))
-    return lineas
+    return lineas + extra
 
 
 def run(cfg):
@@ -1091,6 +1104,7 @@ def _run(cfg):
 
     iteracion = 0
     costo_total = "0.00"
+    detener_por_plan = False
     while iteracion < cfg.max_iter:
         if hora_limite(cfg.hasta):
             logx(cfg.log, f"Hora límite ({cfg.hasta}) alcanzada.")
@@ -1153,6 +1167,7 @@ def _run(cfg):
         checkout(cfg.proyecto, rama_tarea, crear=True, desde=rama_run)
         cfg.rama_tarea = rama_tarea
         cfg.tarea_actual = tarea
+        pendientes_antes = _tareas_pendientes(cfg.plan_md)
         cfg.criterio_actual = criterio
         cfg.verificar_al_reanudar = False
 
@@ -1235,6 +1250,10 @@ def _run(cfg):
                       f"{_checks_del_gate(cfg, rel_scripts)}"
                       f"{_comandos_permitidos(cfg)}"
                       "Ejecuta ÚNICAMENTE esta tarea.\n"
+                      "Si descubres algo que solo puede hacer una persona, "
+                      "dilo en tu resumen; nunca lo añadas a plan.md como "
+                      "tarea `- [ ]` (el loop intentaría hacerla): el marcador "
+                      "de esas tareas es `- [M]`.\n"
                       "NO hagas commits, NO crees, cambies ni borres ramas: el "
                       "script gestiona git.\n"
                       f"NO edites {rel_scripts}/*, plan.md, {rel_log}, "
@@ -1685,7 +1704,18 @@ def _run(cfg):
             logx(cfg.log, "lección registrada en lecciones.md (tarea bloqueada)")
 
         cfg.rama_tarea = ""
+        nuevas = [t for t in _tareas_pendientes(cfg.plan_md)
+                  if t not in pendientes_antes]
         _commit_memoria(cfg, tarea, iteracion)
+        if nuevas:
+            logx(cfg.log, f"PLAN AMPLIADO: {len(nuevas)} tarea(s) nueva(s) durante "
+                          f"la iteración: {'; '.join(nuevas)[:400]}")
+            _notificar(cfg, "plan_crecio", n=len(nuevas),
+                       titulos="\n".join(f"• {t}" for t in nuevas[:10]))
+            if cfg.pausar_si_crece:
+                logx(cfg.log, "PAUSA: el plan creció; revísalo y relanza para continuar")
+                print("[dedalo] ⏸ El plan creció: revísalo y relanza.")
+                detener_por_plan = True
 
         if hecho == 1 and merge_ok:
             ficha.generar(
@@ -1711,6 +1741,8 @@ def _run(cfg):
                 os.unlink(f)
             except OSError:
                 pass
+        if detener_por_plan:
+            break
 
     # --- Integrate work into the destination branch (--trabajo different from run) ---
     if cfg.rama_trabajo and cfg.rama_trabajo != rama_run:

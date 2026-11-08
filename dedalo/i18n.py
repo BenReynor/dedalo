@@ -367,6 +367,7 @@ _ES: dict[str, str] = {
     "⚠ git not available: check that it is installed and your identity is configured (git config user.name/user.email)":
         "⚠ git no disponible: comprueba que está instalado y tu identidad configurada (git config user.name/user.email)",
     "✅ Loop finished": "✅ Loop finalizado",
+    "📝 Tasks added to the plan during a run": "📝 Tareas añadidas al plan durante un run",
     "✅ Task completed (gate and reviewer passed)":
         "✅ Tarea completada (gate y revisor OK)",
     "✓ .gitignore updated and {salidos} files stopped being tracked (left uncommitted; commit in the project's repo if you want to persist it)":

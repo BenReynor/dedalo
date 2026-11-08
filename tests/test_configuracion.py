@@ -24,4 +24,4 @@ def test_fichas_desactivadas_por_defecto():
 
 def test_eventos_webhook():
     assert set(cfg.WEBHOOK_DEFECTO["eventos"]) == {
-        "inicio", "bloqueada", "fin", "tokens", "error"}
+        "inicio", "bloqueada", "plan_crecio", "fin", "tokens", "error"}

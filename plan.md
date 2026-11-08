@@ -39,17 +39,17 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [ ] Las funciones que se commitean se pueden usar
   criterio: check opcional «alcanzable» por stack, empezando por Tauri: compara `generate_handler![...]` con las invocaciones en `src/` y los nombres de sus argumentos, e informa de los comandos que nadie llama; se puede instalar desde las plantillas y admite lista de excepciones; tests con un proyecto de ejemplo (17)
 
-- [ ] Tareas que solo puede hacer una persona
+- [x] Tareas que solo puede hacer una persona
   criterio: el marcador `- [M]` en plan.md se salta sin bloquear, se cuenta aparte en GUI y MCP y se lista al final del run; el prompt prohíbe al agente crear `- [ ]` que declaren no ser automatizables; tests del parser, del salto y del resumen final (18)
 
-- [ ] El gate dice qué test falló
-  criterio: el filtro de las plantillas de test (Rust y demás) conserva `FAILED`, `panicked` y el bloque final `failures:`; un test que falla se repite una vez y, si entonces pasa, se informa como «inestable» en vez de ocultarlo; tests con salidas reales de cargo (22)
+- [x] El gate dice qué test falló
+  criterio: el filtro de las plantillas de test (el de Rust era el único que recortaba la salida) conserva `FAILED`, `panicked` y el bloque final `failures:`; un test que falla se repite una vez y, si entonces pasa, se informa como «inestable» en vez de ocultarlo; tests con salidas reales de cargo (22)
 
-- [ ] Las notificaciones no se pierden por un corte
+- [x] Las notificaciones no se pierden por un corte
   criterio: reintentos con espera (1, 3 y 10 s) ante errores de red o 5xx; si sigue fallando, el mensaje se encola y sale con la siguiente notificación; ningún token aparece en logs ni mensajes de error; tests con un servidor falso que falla N veces (14)
 
-- [ ] Avisar cuando el plan crece
-  criterio: si un agente añade tareas a plan.md durante un run, se notifica «el agente añadió N tareas» con sus títulos y el aviso de «última tarea» cuenta las nuevas; opción del proyecto para pausar y aprobarlas; tests con un agente falso que añade una tarea (19)
+- [x] Avisar cuando el plan crece
+  criterio: si un agente añade tareas a plan.md durante un run, se notifica «el agente añadió N tareas» con sus títulos y el total del aviso final ya las cuenta; opción del proyecto `pausar_si_crece` para parar y revisarlas; tests con un agente falso que añade una tarea (19)
 
 - [ ] Reanudar solo tras la cuota
   criterio: si todos los agentes disponibles (incluidos los de respaldo, FASE 2) están sin cuota, tras dejar el árbol limpio el loop integra lo hecho si el proyecto lo pide (ver la tarea de integración de FASE 1), queda «esperando cuota» (visible en GUI, MCP y notificaciones) y, con `reanudar_tras_cuota` activo, duerme hasta la hora del mensaje del proveedor («resets 3:40am (America/Lima)») más un margen; sin hora, reintenta con espera creciente (5, 10, 20… hasta 60 min); sin la opción, se detiene como hoy; tests con un agente falso sin cuota N veces y con un mensaje con hora de reseteo (7, 20)

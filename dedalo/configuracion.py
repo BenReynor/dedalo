@@ -71,6 +71,7 @@ WEBHOOK_DEFECTO = {
     "eventos": {
         "inicio": True,
         "bloqueada": True,
+        "plan_crecio": True,
         "fin": True,
         "tokens": True,
         "error": True,

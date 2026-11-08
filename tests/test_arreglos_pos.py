@@ -494,3 +494,160 @@ def test_si_no_puede_guardar_lo_de_un_loop_muerto_no_toca_nada(tmp_path, monkeyp
     assert rc == 1
     assert (proyecto / "a_medias.txt").exists()
     assert _rama_actual(proyecto) == "dedalo/tareas/2026-01-01_00-00-00/t5"
+
+
+# --- point 14: a network blip does not lose a notification ---------------------
+
+@pytest.fixture
+def plataforma_falsa(monkeypatch):
+    from dedalo import notificaciones
+    envios = {"fallos": 0, "llegados": []}
+
+    def enviar(_config, texto):
+        if envios["fallos"] > 0:
+            envios["fallos"] -= 1
+            raise ConnectionResetError(104, "Connection reset by peer")
+        envios["llegados"].append(texto)
+        return "OK"
+
+    monkeypatch.setattr(notificaciones, "_PLATAFORMAS",
+                        (("falsa", enviar, lambda _c: True),))
+    monkeypatch.setattr(notificaciones, "_ESPERAS_REINTENTO", (1, 3, 10))
+    esperas = []
+    monkeypatch.setattr(notificaciones.time, "sleep", esperas.append)
+    envios["esperas"] = esperas
+    return envios
+
+
+def test_notificacion_se_reintenta_tras_un_corte(plataforma_falsa):
+    from dedalo import notificaciones
+    plataforma_falsa["fallos"] = 2
+    assert notificaciones.enviar_texto({}, "aviso") == [("falsa", "OK")]
+    assert plataforma_falsa["esperas"] == [1, 3]
+    assert plataforma_falsa["llegados"] == ["aviso"]
+
+
+def test_notificacion_perdida_sale_con_la_siguiente(plataforma_falsa):
+    from dedalo import notificaciones
+    plataforma_falsa["fallos"] = 4
+    estado = notificaciones.enviar_texto({}, "cuota agotada")[0][1]
+    assert "encolada" in estado and plataforma_falsa["llegados"] == []
+    assert notificaciones.enviar_texto({}, "fin") == [("falsa", "OK")]
+    assert plataforma_falsa["llegados"] == ["fin", "cuota agotada"]
+
+
+def test_boton_de_probar_no_reintenta(plataforma_falsa):
+    from dedalo import notificaciones
+    plataforma_falsa["fallos"] = 1
+    estado = notificaciones.enviar_texto({}, "prueba", solo="falsa")[0][1]
+    assert "reset" in estado and plataforma_falsa["esperas"] == []
+
+
+# --- point 18: tasks only a person can do --------------------------------------
+
+@e2e
+def test_tareas_manuales_se_saltan_y_se_listan(tmp_path, capsys):
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    plan = proyecto / "plan.md"
+    plan.write_text("- [M] comprar la impresora\n- [ ] t1: crear modulo nuevo\n",
+                    encoding="utf-8")
+    _git("commit", "-qam", "plan", cwd=proyecto)
+    rc, _ = _correr(proyecto, _entorno(_agente_falso(tmp_path / "bin")))
+    texto = plan.read_text(encoding="utf-8")
+    assert rc == 0
+    assert "- [M] comprar la impresora" in texto and "- [x] t1" in texto
+    assert "- [M] comprar la impresora" in capsys.readouterr().out
+    p = Plan(str(plan))
+    p.cargar()
+    assert p.manuales == ["comprar la impresora"]
+    assert p.conteo() == (0, 1, 0)
+
+
+# --- point 19: the plan grows during a run --------------------------------------
+
+def _agente_que_amplia(tmp_path):
+    bin_ = _agente_falso(tmp_path / "bin")
+    bin_.write_text(bin_.read_text(encoding="utf-8").replace(
+        "mkdir -p src\n",
+        "case \"$*\" in *--help*) ;; *) printf -- '- [ ] t9: nueva\\n' >> plan.md ;; esac\n"
+        "mkdir -p src\n"),
+        encoding="utf-8")
+    return bin_
+
+
+@e2e
+@pytest.mark.parametrize("pausar", [False, True])
+def test_avisa_si_el_plan_crece_y_puede_pausar(tmp_path, monkeypatch, pausar):
+    avisos = []
+    monkeypatch.setattr(loop, "_notificar",
+                        lambda _c, evento, **d: avisos.append((evento, d)))
+    proyecto = _escenario(tmp_path, "#!/usr/bin/env bash\nexit 0\n")
+    env = {**_entorno(_agente_que_amplia(tmp_path)), "MAX_ITER": "1"}
+    if pausar:
+        env.update({"MAX_ITER": "5", "PAUSAR_SI_CRECE": "1"})
+    rc, _ = _correr(proyecto, env)
+    log = (proyecto / "progreso.log").read_text(encoding="utf-8")
+    assert rc == 0, log[-1500:]
+    assert "PLAN AMPLIADO: 1 tarea(s)" in log
+    crecio = [d for e, d in avisos if e == "plan_crecio"]
+    assert crecio and crecio[0]["n"] == 1 and "t9: nueva" in crecio[0]["titulos"]
+    if pausar:
+        assert log.count("== Iteración") == 1
+
+
+# --- point 22: the gate names the failed test -----------------------------------
+
+_SALIDA_CARGO = """running 2 tests
+test ventas::suma ... ok
+test ventas::resta ... FAILED
+
+failures:
+
+---- ventas::resta stdout ----
+
+thread 'ventas::resta' panicked at src/ventas.rs:9:5:
+assertion failed
+
+failures:
+    ventas::resta
+
+test result: FAILED. 1 passed; 1 failed
+error: test failed, to rerun pass `--lib`
+"""
+
+
+def _check_rust():
+    import importlib.util
+    ruta = os.path.join(os.path.dirname(gate.__file__), "plantillas_data", "plantillas",
+                        "rust", "gate_checks", "03_test.py")
+    spec = importlib.util.spec_from_file_location("check_rust_test", ruta)
+    modulo = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+def test_check_rust_nombra_el_test_que_fallo():
+    check = _check_rust()
+    assert check._tests_fallidos(_SALIDA_CARGO) == ["ventas::resta"]
+    salida = check._errores(_SALIDA_CARGO)
+    assert "ventas::resta ... FAILED" in salida and "panicked at" in salida
+
+
+@pytest.mark.parametrize(("segundo", "esperado"), [(0, 0), (101, 1)])
+def test_check_rust_repite_y_marca_inestable(monkeypatch, tmp_path, capsys, segundo, esperado):
+    from types import SimpleNamespace
+    check = _check_rust()
+    (tmp_path / "Cargo.toml").write_text("")
+    rcs = [101, segundo]
+    monkeypatch.setattr(check.shutil, "which", lambda _n: "/bin/cargo")
+    monkeypatch.setattr(check.subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=rcs.pop(0), stdout=_SALIDA_CARGO, stderr=""))
+    avisos, fallos = [], []
+    env = SimpleNamespace(proyecto=str(tmp_path), aviso=avisos.append,
+                          fail=fallos.append, ok=lambda _m: None)
+    assert check.run(env) == esperado
+    if esperado == 0:
+        assert "inestables" in avisos[0] and "ventas::resta" in avisos[0]
+    else:
+        assert "ventas::resta" in fallos[0]
