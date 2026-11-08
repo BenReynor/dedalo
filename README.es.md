@@ -191,6 +191,18 @@ el proyecto, el loop no arranca y dice qué archivos son.
 detiene el loop antes de empezar la tarea siguiente; la línea pasa a
 `- [PARADO] texto` y el siguiente lanzamiento sigue.
 
+**Tareas para una persona.** `- [M] texto` no la intenta el loop: se salta y se
+lista al final de la ejecución.
+
+**Sin cuota.** Con `"reanudar_tras_cuota": true` en el lanzamiento, el loop duerme
+hasta la hora de reseteo que da el proveedor (más un margen) y sigue solo. Si la
+cuota se acaba en el revisor o el juez, al reanudar se repite solo la
+verificación. Lo de una tarea bloqueada se conserva en `dedalo/bloqueadas/<run>/t<n>`.
+
+**Comandos del agente.** `claude` solo puede ejecutar los comandos de su lista.
+Amplíala con `"comandos_extra"` en el lanzamiento o con una línea `comandos:` bajo
+la tarea. El loop avisa si un criterio cita un comando sin permiso.
+
 **Proyecto nuevo.** Si el baseline falla en un proyecto sin ninguna tarea hecha
 (p. ej. el esqueleto lo crea la tarea #1), los checks que ya fallaban se toleran
 hasta que pasen; una tarea solo falla si rompe otro check o el juez la rechaza.
@@ -478,6 +490,7 @@ que varios stacks convivan sin chocar (`03_test_rust.py`, `03_test_go.py`, etc.)
 | `python` | `pyproject.toml` / `requirements.txt` | `ruff check .`, `pytest -q` (si hay `tests/`) |
 | `node` | `package.json` | `package.json` válido, `npm run lint`, `npm test`, `tsc --noEmit` (si hay `tsconfig.json`) |
 | `rust` | `Cargo.toml` (o `src-tauri/Cargo.toml` en apps Tauri) | `cargo fmt --check`, `cargo check`, `cargo test` |
+| `tauri` | Se añade junto a `rust` y `node` | Cada comando de `generate_handler!` se llama desde `src/`, las llamadas nombran comandos reales y envían sus argumentos obligatorios (excepciones: `.dedalo/alcanzable_ignorar.txt`) |
 | `go` | `go.mod` | `gofmt -l .`, `go vet ./...`, `go test ./...` |
 | `java` | `pom.xml` / `build.gradle` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
 | `kotlin` | `build.gradle.kts` / `*.kt` | `gradle compileKotlin`, `gradle test` |

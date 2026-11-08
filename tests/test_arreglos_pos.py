@@ -755,3 +755,93 @@ def test_sin_la_opcion_una_parada_por_cuota_termina(tmp_path, monkeypatch):
     monkeypatch.setattr(loop, "run", lambda _c: 5)
     monkeypatch.setattr(loop.time, "sleep", lambda _s: pytest.fail("no debe esperar"))
     assert loop._correr_reanudando(_cfg_cuota(tmp_path, False), lambda: None) == 5
+
+
+# --- point 17: committed commands can really be reached --------------------------
+
+def _check_alcanzable():
+    import importlib.util
+    ruta = os.path.join(os.path.dirname(gate.__file__), "plantillas_data", "plantillas",
+                        "tauri", "gate_checks", "05_alcanzable.py")
+    spec = importlib.util.spec_from_file_location("check_alcanzable", ruta)
+    modulo = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+_RUST = """
+#[tauri::command]
+pub async fn crear_venta(state: State<'_, Db>, producto_id: i64, nota: Option<String>) -> R<()> {}
+#[tauri::command]
+fn huerfano(app: tauri::AppHandle) {}
+#[tauri::command(rename_all = "snake_case")]
+fn listar(total_filas: i64) {}
+fn main() { tauri::Builder::default().invoke_handler(tauri::generate_handler![
+    ventas::crear_venta, huerfano, listar,
+]); }
+"""
+
+
+def test_alcanzable_detecta_comandos_sin_uso_y_argumentos():
+    check = _check_alcanzable()
+    front = ["""
+      await invoke<Foo<Bar>>("crear_venta", { productoId: 1 });
+      invoke('listar', { totalFilas: 2 });
+      invoke("no_existe");
+      // invoke("huerfano");
+    """]
+    encontrados = check.problemas([_RUST], [check._sin_comentarios(front[0])])
+    assert encontrados == [
+        "comando sin ninguna llamada desde src/: huerfano",
+        "llamada a un comando no registrado: no_existe",
+        "invoke('listar') sin el argumento 'total_filas'",
+    ]
+
+
+def test_alcanzable_acepta_excepciones_y_argumentos_opcionales():
+    check = _check_alcanzable()
+    front = ['invoke("crear_venta", { productoId: 1 }); invoke("listar", { total_filas: 1 });'
+             'invoke("huerfano");']
+    assert check.problemas([_RUST], front) == []
+    assert check.problemas([_RUST], ['invoke("listar", args); invoke("crear_venta", {...x});'],
+                           ignorar=["huerfano"]) == []
+
+
+def test_alcanzable_en_un_proyecto(tmp_path):
+    from types import SimpleNamespace
+    check = _check_alcanzable()
+    for sub in ("src-tauri/src", "src"):
+        (tmp_path / sub).mkdir(parents=True)
+    (tmp_path / "src-tauri/src/main.rs").write_text(_RUST, encoding="utf-8")
+    (tmp_path / "src/a.test.ts").write_text('invoke("huerfano")', encoding="utf-8")
+    (tmp_path / "src/a.ts").write_text(
+        'invoke("crear_venta", { productoId: 1 }); invoke("listar", { total_filas: 1 });',
+        encoding="utf-8")
+    fallos = []
+    env = SimpleNamespace(proyecto=str(tmp_path), aviso=print, ok=print, fail=fallos.append)
+    assert check.run(env) == 1, "a call only from a test file does not count"
+    (tmp_path / ".dedalo").mkdir()
+    (tmp_path / ".dedalo/alcanzable_ignorar.txt").write_text("huerfano\n", encoding="utf-8")
+    assert check.run(env) == 0
+
+
+def test_alcanzable_entiende_ayudantes_y_lifetimes():
+    check = _check_alcanzable()
+    rust = """
+#[tauri::command]
+fn abrir(estado: State<'_, EstadoApp>, monto_inicial: i64) {}
+fn m() { generate_handler![abrir]; }
+"""
+    front = ["""export async function llamar<T>(comando: string, args?: X): Promise<T> {
+        try { return await invoke<T>(comando, args); } catch (e) { throw e; }
+      }""", 'llamar<Caja>("abrir", { montoInicial });']
+    assert check.problemas([rust], front) == []
+    assert check.problemas([rust], [front[0], 'llamar("abrir", {});']) == [
+        "invoke('abrir') sin el argumento 'montoInicial'"]
+
+
+def test_alcanzable_ve_los_nombres_en_un_ternario():
+    check = _check_alcanzable()
+    rust = "fn m() { generate_handler![a_pdf, a_csv]; }"
+    assert check.problemas([rust], ["invoke<void>(pdf ? 'a_pdf' : 'a_csv', { x });"]) == []

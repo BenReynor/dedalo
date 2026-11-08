@@ -190,6 +190,18 @@ names the files.
 loop before the next task starts; the line becomes `- [PARADO] text` and the next
 launch goes on.
 
+**Tasks for a person.** The loop does not attempt `- [M] text`: it skips it and
+lists it at the end of the run.
+
+**Out of quota.** With `"reanudar_tras_cuota": true` in the launch settings, the
+loop sleeps until the provider's reset time (plus a margin) and goes on by itself.
+If quota runs out in the reviewer or judge, resuming repeats only the
+verification. A blocked task's work is kept in `dedalo/bloqueadas/<run>/t<n>`.
+
+**Agent commands.** `claude` can only run the commands on its list. Extend it with
+`"comandos_extra"` in the launch settings or a `comandos:` line under the task. The
+loop warns when a criterion quotes a command the agent cannot run.
+
 **New projects.** If the baseline fails in a project with no task done yet (e.g.
 task #1 creates the skeleton), the checks already failing are tolerated until
 they pass; a task only fails if it breaks another check or the judge rejects it.
@@ -477,6 +489,7 @@ language suffix so several stacks coexist without collisions
 | `python` | `pyproject.toml` / `requirements.txt` | `ruff check .`, `pytest -q` (if `tests/`) |
 | `node` | `package.json` | `package.json` validity, `npm run lint`, `npm test`, `tsc --noEmit` (when `tsconfig.json` exists) |
 | `rust` | `Cargo.toml` (or `src-tauri/Cargo.toml` for Tauri apps) | `cargo fmt --check`, `cargo check`, `cargo test` |
+| `tauri` | Add it next to `rust` and `node` | Every command in `generate_handler!` is called from `src/`, calls name real commands and send their required arguments (exceptions: `.dedalo/alcanzable_ignorar.txt`) |
 | `go` | `go.mod` | `gofmt -l .`, `go vet ./...`, `go test ./...` |
 | `java` | `pom.xml` / `build.gradle` | `mvn -q -B -DskipTests compile` / `gradle compileJava`, `mvn test` / `gradle test` |
 | `kotlin` | `build.gradle.kts` / `*.kt` | `gradle compileKotlin`, `gradle test` |

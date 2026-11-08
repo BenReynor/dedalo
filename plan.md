@@ -36,8 +36,8 @@ Fuente: `ERROR_DEDALO_BASELINE.txt`; el número entre paréntesis es el punto de
 - [x] Criterios que el agente sí puede cumplir
   criterio: al arrancar, los comandos citados entre comillas invertidas en cada criterio se comparan con los que el agente puede ejecutar (`bash_permitidos` en claude) y se avisa de los que no; agente y juez reciben la lista de comandos permitidos; `comandos_extra` por proyecto y `comandos:` por tarea amplían la lista; si el agente informa de un bloqueo por permiso (línea `DEDALO_BLOQUEO_PERMISO:`), la tarea se pausa con el motivo sin gastar reintentos; tests de la validación, del prompt y de la pausa (15)
 
-- [ ] Las funciones que se commitean se pueden usar
-  criterio: check opcional «alcanzable» por stack, empezando por Tauri: compara `generate_handler![...]` con las invocaciones en `src/` y los nombres de sus argumentos, e informa de los comandos que nadie llama; se puede instalar desde las plantillas y admite lista de excepciones; tests con un proyecto de ejemplo (17)
+- [x] Las funciones que se commitean se pueden usar
+  criterio: check opcional «alcanzable» por stack, empezando por Tauri: compara `generate_handler![...]` con las invocaciones en `src/` y los nombres de sus argumentos, e informa de los comandos que nadie llama; se instala con la plantilla `tauri` y admite lista de excepciones (`.dedalo/alcanzable_ignorar.txt`); tests con un proyecto de ejemplo (17)
 
 - [x] Tareas que solo puede hacer una persona
   criterio: el marcador `- [M]` en plan.md se salta sin bloquear, se cuenta aparte en GUI y MCP y se lista al final del run; el prompt prohíbe al agente crear `- [ ]` que declaren no ser automatizables; tests del parser, del salto y del resumen final (18)
