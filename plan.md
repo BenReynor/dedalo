@@ -217,21 +217,13 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Sección Cabina: carriles y grafo en vivo
   criterio: sección propia «Cabina» en la barra lateral (también se abre desde Ejecutar) para ver el run gráficamente, actualizada en vivo: (1) **carriles**: uno por agente en curso con la tarea, el agente/modelo, el paso actual Plan → Agent → Gate → Reviewer → Commit, tiempo y coste de la tarea, y estados «esperando cuota» o «respaldo: X → Y»; una línea de tiempo con lo que hizo cada carril en el run; (2) **grafo por pisos**: una caja por tarea coloreada por estado (hecha, en curso con su carril, lista, esperando a <id>, bloqueada) con las flechas de dependencia, zoom y desplazamiento, resaltando el camino que frena a una tarea al pasar el ratón; (3) **detalle** al hacer clic en una tarea o carril: criterio, agente, gate y checks corridos, informe de cambios, avisos del revisor (p. ej. «tocó un archivo de la zona de X») y su log filtrado; con un plan simple muestra un solo carril y los pisos en fila; tests del modelo de la vista (pisos, colores, camino bloqueante) sin GUI y smoke de la Cabina con dos carriles y un grafo de 3 pisos (QT offscreen)
 
-## FASE 5B — Control desde el móvil y grupos pequeños
-
-Público: personas que trabajan solas con agentes y grupos pequeños, no empresas. Sin servidor central: git sigue siendo la fuente de verdad.
+## FASE 5B — Control desde el móvil
 
 - [ ] Control remoto por Telegram y Discord
   criterio: desactivado por defecto; con él activo, el usuario puede pedir estado, pausar, continuar, detener y aprobar o rechazar una revisión manual desde el chat; solo se aceptan órdenes de identificadores de usuario de una lista permitida y del chat configurado (cualquier otro se ignora y se registra), y un mensaje del chat nunca llega al agente como instrucción: es una lista cerrada de órdenes, sin comandos libres; detener y aprobar piden confirmación; funciona sin abrir puertos (Telegram por consulta periódica, Discord por gateway); los tokens no aparecen en logs; tests con clientes falsos: usuario no autorizado, orden desconocida, confirmación y aprobación
 
 - [ ] Control remoto por WhatsApp
   criterio: mismas órdenes y mismas reglas que Telegram y Discord; como la API de WhatsApp entrega los mensajes por un webhook público, el manual explica qué hace falta (URL accesible o túnel), se valida la firma de cada petición y sigue desactivado por defecto; tests con peticiones firmadas y sin firmar
-
-- [ ] Varias personas en un mismo proyecto
-  criterio: dos personas con su propio Dédalo sobre el mismo repo no toman la misma tarea: al empezar, la tarea se reserva con una marca compartida por git (quién, cuándo, caducidad) y un intento concurrente pasa a la siguiente; los commits y el historial dicen quién lanzó cada tarea; `responsable:` opcional asigna una tarea a una persona y los demás la saltan; sin estas claves y con una sola persona todo funciona como antes; tests con dos clones de un repo temporal
-
-- [ ] Revisión entre personas y avisos del grupo
-  criterio: opción para que una tarea la apruebe una persona distinta de quien lanzó el loop, desde la GUI o el control remoto, con roles sencillos por proyecto (quién puede aprobar y quién detener); las notificaciones pueden ir a un canal del grupo e indican de quién es cada run; tests de permisos por rol
 
 ## FASE 6 — MCP al día
 
@@ -273,6 +265,64 @@ Público: personas que trabajan solas con agentes y grupos pequeños, no empresa
 
 - [ ] Release v3.0.0
   criterio: versión 3.0.0 en pyproject; notas con lo nuevo y la garantía de compatibilidad con los planes actuales; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario**
+
+## FASE 10 — Redes de trabajo (después de la versión 3)
+
+Para grupos pequeños, no empresas. Es opcional: quien no crea una red usa Dédalo como siempre. Un **líder** tiene el centro (su PC o un servidor) y **decide a quién invita**: es su responsabilidad, y la app se lo recuerda. Los ayudantes trabajan con sus propios modelos y cuentas y envían código al centro. Requiere las dependencias (FASE 3) y el contenedor (FASE 8). Valores por defecto acordados: todos ven la actividad de todos, proveedores libres hasta que el líder los limite, máximo 2 tareas reservadas por persona.
+
+- [ ] Centro y transporte
+  criterio: un proyecto puede convertirse en red con un líder y un centro; el centro es la única autoridad sobre plan, gates e integración; el transporte es un repo privado usado como buzón, sin abrir puertos ni servidor propio; ayudantes y centro siguen funcionando si el otro está apagado y sus entregas esperan; tests con dos clones y un remoto temporal
+
+- [ ] Invitaciones e identidad
+  criterio: el líder genera un enlace o código con caducidad y un solo uso; antes de crearlo, la app le advierte que el invitado recibirá el código del proyecto y que al expulsarlo **conservará su copia**; el invitado ve quién lo invita, confía una sola vez en la clave de ese líder y acepta las condiciones del proyecto (propiedad del código aportado), si las hay; cada miembro tiene su propia clave para firmar lo que envía; tests de caducidad, reutilización y firma inválida
+
+- [ ] Roles y permisos
+  criterio: roles Líder, Editor, Editor de gates, Ayudante y Observador; **solo el líder** los concede o retira, con caducidad opcional y permisos por archivo (plan.md, gates, otros); el centro comprueba cada permiso, sin fiarse de lo que diga el cliente; tests de cada rol y de un cliente que finge permisos
+
+- [ ] Sincronización firmada desde el centro
+  criterio: al entrar, y cada vez que el líder cambia algo, el ayudante recibe plan, gates, reglas, contexto y lecciones; solo se aplican cambios firmados por el líder, con aviso de qué cambió, y los gates corren en el contenedor; un cambio sin firma válida se rechaza y se registra; tests de cambio firmado, manipulado y antiguo (repetición)
+
+- [ ] Entorno común
+  criterio: el proyecto define un contenedor con sus herramientas y dependencias, que el ayudante prepara al entrar; se comprueba que todos usan una versión compatible de Dédalo, con aviso si alguien va atrasado; `.env`, tokens y demás secretos del líder nunca se envían y los ayudantes usan datos de prueba; tests de versión incompatible y de que un secreto no entra en la sincronización
+
+- [ ] Reservas de tareas y dependencias entre miembros
+  criterio: un miembro reserva una tarea en el centro y nadie más puede tomarla; máximo de reservas por persona (2 por defecto); la reserva caduca si el miembro desaparece; `responsable:` asigna una tarea a una persona; una tarea no se puede iniciar hasta que sus dependencias estén integradas en el centro, las haya hecho quien las haya hecho; tests con dos miembros, reserva simultánea, caducidad y dependencias
+
+- [ ] Modelos de cada ayudante y proveedores permitidos
+  criterio: cada ayudante configura en su PC sus cuentas y modelos, y el plan solo indica el peso de la tarea; nadie comparte claves; el líder puede limitar los proveedores admitidos en su proyecto, porque el código se envía a la IA que use cada ayudante, y una entrega hecha con un proveedor no permitido se rechaza; tests de la lista permitida
+
+- [ ] Primera gate en el PC del ayudante y entregas firmadas
+  criterio: antes de enviar, el mismo gate del centro corre en el PC del ayudante, y si falla no se envía; la entrega va firmada por su autor; el centro limita cuántas entregas acepta por persona y hora; tests de gate rojo, firma ajena y exceso de envíos
+
+- [ ] Segunda gate en el centro, siempre aislada
+  criterio: cada entrega entra en una cola y corre en el centro **dentro del contenedor, sin acceso a los archivos, claves ni red del líder**; sin contenedor disponible el modo red no acepta entregas; tests de que una entrega no puede leer fuera del contenedor
+
+- [ ] Revisión de seguridad de cada entrega
+  criterio: aparte del gate, cada entrega se revisa de forma automática en busca de código que se ejecuta al compilar o instalar (`build.rs`, `postinstall`), dependencias nuevas, archivos protegidos, secretos, binarios, llamadas de red nuevas y cambios en CI; lo sospechoso exige aprobación del líder; el contenido de la entrega se trata como datos para la IA revisora, nunca como órdenes; el manual dice que esto reduce el riesgo pero no lo elimina; tests con entregas maliciosas de cada tipo, incluida una inyección de prompt
+
+- [ ] Propuestas de cambios en plan, gates y otros archivos
+  criterio: si un miembro cambia plan.md, gates u otros archivos de control, se envía como propuesta; el líder ve el diff y puede aceptar, modificar o rechazar con motivo; quien tenga el permiso concedido puede cambiar lo que ese permiso cubra; los gates siempre requieren aprobación del líder; tests de cada resultado y de permisos
+
+- [ ] Integración y devolución
+  criterio: una entrega aprobada se integra en el centro y habilita las tareas que dependían de ella; si falla o tiene conflicto se devuelve al ayudante con el motivo para rehacerla, con un límite de intentos; tests de integración, conflicto y dependencia habilitada
+
+- [ ] Expulsar y quitar tareas
+  criterio: el líder puede expulsar a un miembro, lo que revoca su clave y sus accesos, invalida sus entregas pendientes y libera sus reservas; también puede quitarle una tarea a alguien sin expulsarlo; tests de envío tras la expulsión y de tarea reasignada
+
+- [ ] Registro compartido que no se puede alterar
+  criterio: el centro guarda un registro encadenado de quién hizo qué y cuándo (reservas, entregas, resultados, permisos, expulsiones) y detecta cualquier manipulación; todos los miembros ven la actividad de todos y el líder puede restringirlo; tests de un registro manipulado
+
+- [ ] Panel Equipo
+  criterio: nueva sección con quién está conectado, qué hace cada uno, cola de entregas, propuestas pendientes, roles y registro; las acciones del líder (expulsar, quitar tarea, aprobar) solo le aparecen a él; textos con i18n; smoke test (QT offscreen)
+
+- [ ] Comentarios por tarea y avisos del grupo
+  criterio: comentarios en cada tarea, entrega o propuesta, visibles para el grupo; las notificaciones pueden ir a un canal del grupo e indican de quién es cada acción; el control por móvil de cada persona sigue limitado a su propio PC, y el del líder incluye sus acciones; tests de permisos
+
+- [ ] Continuidad del centro
+  criterio: copia de seguridad del estado del centro, traspaso del liderazgo a otro miembro con la firma del líder actual, y un procedimiento documentado si el líder pierde su clave; tests de restauración y de traspaso
+
+- [ ] Auditoría y publicación como experimental
+  criterio: revisión de seguridad completa del modo red; manual con la guía para líderes y sus riesgos (a quién invitar, copia que conserva un expulsado, privacidad del código); se publica marcado como experimental; **push y release solo con el «sí» del usuario**
 
 ## Más adelante (ideas, sin criterios todavía)
 - Índice de símbolos del repo con tree-sitter (funciones, clases y quién las usa) para un mapeo más preciso y para calcular el impacto de una tarea.
