@@ -286,19 +286,16 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 
 ## FASE 10 — Trabajar en grupo sobre GitHub (después de la versión 3)
 
-Para grupos pequeños, no empresas, y opcional. Sin sistema propio de invitaciones, roles ni firmas: colaboradores, permisos, revisiones, historial y expulsiones ya los da GitHub. Cada persona usa su propio Dédalo con sus cuentas y modelos. El líder decide a quién da acceso; quien sale del repo conserva su copia. Se decidió así tras descartar un diseño con el PC del líder como centro: era más trabajo y menos seguro, porque ejecutaba código ajeno en ese PC.
+Para grupos pequeños, no empresas, y opcional. Sin sistema propio de invitaciones, roles ni firmas: colaboradores, permisos, revisiones, historial y expulsiones ya los da GitHub. El CI y la protección del repo son responsabilidad del líder o de quien lo administre; Dédalo no los gestiona. Cada persona usa su propio Dédalo con sus cuentas y modelos. El líder decide a quién da acceso; quien sale del repo conserva su copia. Se decidió así tras descartar un diseño con el PC del líder como centro: era más trabajo y menos seguro, porque ejecutaba código ajeno en ese PC.
 
-- [ ] Datos compartidos por el repo
-  criterio: `plan.md`, `lecciones.md` y `CONTEXTO.md` ya viajan con el repo; se añade una carpeta versionada para gates y reglas comunes (hoy `.dedalo/` está ignorada y no se comparte) que Dédalo instala al arrancar; siguen siendo locales el estado, los logs y la configuración personal de cuentas y modelos, y ningún secreto entra en el repo; si los gates cambian tras un `git pull`, se pide confirmar de nuevo, porque son código que se ejecuta en cada PC; tests con dos clones de un repo temporal
+- [ ] Archivos compartidos por el repo
+  criterio: en el repo solo van los archivos de Dédalo pensados para compartir (`plan.md`, `lecciones.md` y `CONTEXTO.md`); los gates, el estado, los logs y la configuración de cuentas y modelos siguen siendo locales de cada persona; cuando varias personas tocan esos archivos no hay conflictos evitables: `lecciones.md` se fusiona sumando las dos partes y las marcas de `plan.md` se resuelven sin perder tareas de nadie; tests con dos clones de un repo temporal
 
 - [ ] Reparto de tareas entre personas
   criterio: `responsable:` asigna una tarea a una persona (identificada en su configuración local), y su Dédalo salta las de otros; las tareas sin responsable las toma quien llegue primero tras comprobar `main`; una tarea no se inicia hasta que sus dependencias estén integradas en `main`, las haya hecho quien las haya hecho; sin estas claves todo funciona como antes; tests con dos clones y una dependencia entre personas
 
 - [ ] Modo PR
-  criterio: opción para que, al terminar una tarea, Dédalo abra un pull request y espere al CI antes de marcarla hecha; si el CI falla, el motivo vuelve como feedback al siguiente intento; la primera gate sigue corriendo en el PC de quien hizo la tarea; tests con un `gh` falso (CI verde, rojo y agotado el tiempo)
-
-- [ ] CI y protección del repo
-  criterio: Dédalo genera un workflow que corre las mismas gates en GitHub Actions y una guía o asistente para activar lo que hace que ese CI **bloquee de verdad**: rama protegida, CI obligatorio y `CODEOWNERS` para gates, plan y workflows; el workflow avisa de lo que un test no detecta: dependencias nuevas, código que se ejecuta al compilar o instalar, secretos, y tests borrados o desactivados; el manual explica que el CI solo bloquea lo que se le configura y que no detecta por sí solo código malicioso, por lo que la revisión humana de los PR sigue siendo necesaria; tests del workflow generado
+  criterio: opción para que, al terminar una tarea, Dédalo abra un pull request y, si el repo tiene CI, lo espere antes de marcarla hecha; si el CI falla, el motivo vuelve como feedback al siguiente intento; la primera gate sigue corriendo en el PC de quien hizo la tarea; tests con un `gh` falso (CI verde, rojo y agotado el tiempo)
 
 ## Más adelante (ideas, sin criterios todavía)
 - Índice de símbolos del repo con tree-sitter (funciones, clases y quién las usa) para un mapeo más preciso y para calcular el impacto de una tarea.
