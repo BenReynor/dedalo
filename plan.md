@@ -185,6 +185,9 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Gate por tarea o por fase
   criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; nueva plantilla de check opcional **e2e** (Playwright para proyectos web, comando configurable para otros) para que los gates se parezcan más al uso real; tests de selección de checks y de que un check inexistente se rechaza al validar
 
+- [ ] Árbol de tareas
+  criterio: nueva vista en el panel Plan que dibuja las tareas como un **árbol de habilidades de videojuego**, a partir de `depende:` (sin claves nuevas): cada tarea es un nodo unido a las que necesita y a las que desbloquea, y una tarea puede requerir varias a la vez, como materiales que se combinan para forjar otra; estados visibles de un vistazo: bloqueada por dependencias (apagada, con candado), disponible, en curso, hecha, fallida `[B]` y para una persona `[M]`; al completarse una tarea se iluminan las líneas y se desbloquean las siguientes; las fases se ven como ramas; zoom y desplazamiento; al pulsar un nodo se ve su criterio, responsable, de qué depende, qué desbloquea y por qué no está disponible; un plan sin dependencias se ve como una sola línea; respeta los temas e i18n; `validar_plan` del MCP devuelve el mismo árbol en texto; los «pisos» quedan como cálculo interno y no se muestran con ese nombre; tests de la disposición (varios padres, ciclos rechazados, plan en fila) y smoke de la vista (QT offscreen)
+
 ## FASE 5B — Control desde el móvil
 
 - [ ] Control remoto por Telegram y Discord
