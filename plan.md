@@ -14,7 +14,7 @@ convenga. Reglas: código y comentarios en inglés, textos de la interfaz con
 salida) y `.venv/bin/ruff check dedalo tests`. **Manual**: toda tarea que cambie
 cómo se usa Dédalo actualiza también su sección de `docs/MANUAL.md` y
 `docs/MANUAL.es.md` en el mismo commit (a partir de que exista el manual).
-**Ramas**: la carpeta `dedalo` en `main` es la copia estable con la que corren los loops de otros proyectos. Se trabaja en el `git worktree` `~/Escritorio/Programas_Propios/dedalo-3` (con su propio `.venv`). Los **arreglos** se integran en `main` cuando están probados; cada **mejora** va en su propia rama (`mejora/<nombre>`) y no toca `main` hasta que el usuario lo pida. `ERROR_DEDALO_BASELINE.txt` es el backlog vivo de la sesión del POS: un punto se pasa a «Ya ARREGLADOS» al integrarse en `main`, no antes. **Un solo motor**: el loop vive en Python (`dedalo/loop.py` y compañía); `plantillas_data/dedalo.sh` queda congelado como legado (se sigue copiando para compatibilidad, pero no recibe funciones nuevas y el manual lo dice). **Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
+**Ramas**: la carpeta `dedalo` en `main` es la copia estable con la que corren los loops de otros proyectos. Se trabaja en el `git worktree` `~/Escritorio/Programas_Propios/dedalo-3` (con su propio `.venv`). Los **arreglos** se integran en `main` cuando están probados; cada **mejora** va en su propia rama (`mejora/<nombre>`) y no toca `main` hasta que el usuario lo pida. `ERROR_DEDALO_BASELINE.txt` es el backlog vivo de la sesión del POS: un punto se pasa a «Ya ARREGLADOS» al integrarse en `main`, no antes. **Un solo motor**: el loop vive en Python (`dedalo/loop.py` y compañía); `plantillas_data/dedalo.sh` se retira (tarea «Retirar funciones sin uso», FASE 1). **Simple por defecto**: todo lo nuevo es opcional y se activa solo al escribirlo en el plan, para que un proyecto pequeño siga usando la estructura sencilla de siempre. **Compatibilidad**: un plan.md
 actual (sin las claves nuevas) funciona exactamente como hoy, en fila.
 
 ## FASE 0A — Arreglos urgentes (informe del POS, 2026-11-08)
@@ -134,6 +134,9 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Coste acumulado por proyecto y por fase
   criterio: además del coste del run, Dédalo guarda el acumulado por proyecto y por fase (sumando metrics.jsonl de todos los runs) y lo muestra en GUI y MCP; con CLIs de suscripción se marca como estimado y, si el CLI la informa, se muestra la hora de reseteo de la cuota; con tokens reales disponibles se calcula con ellos y, si no los hay, se muestra «no disponible» en vez de un número fijo; tests de la suma entre runs y del caso sin tokens (8, 24)
 
+- [ ] Retirar funciones sin uso
+  criterio: se quitan de la interfaz, el motor, las plantillas y la documentación: apagado por temperatura de CPU, avisos por voz, navegador de contexto, fichas JSON por tarea y el motor antiguo `dedalo.sh` (ningún proyecto registrado las tiene activas, comprobado el 2026-11-08); las claves viejas en `proyectos.json` se ignoran sin error; los proyectos ya instalados siguen funcionando aunque conserven esos archivos; se trabaja en su propia rama; la suite pasa sin los tests de lo retirado
+
 ## FASE 2 — Agente y modelo por tarea, pesos y respaldo
 
 - [ ] Adaptadores por agente
@@ -151,12 +154,8 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Cadena de respaldo por cuota
   criterio: el proyecto (y opcionalmente la tarea con `respaldo:`) define una cadena ordenada de agente/modelo; si el agente de una tarea falla por cuota, límite de tokens o de velocidad (los patrones de error ya detectados, por agente), la tarea continúa con el siguiente de la cadena **en la misma rama/copia**, con un prompt que le dice qué hizo el anterior (diff y resumen); cada cambio de agente queda en progreso.log y metrics.jsonl (qué agente/modelo hizo cada parte y su coste); si se agota la cadena, se aplica la espera de cuota (FASE 1); tests con agentes falsos
 
-- [ ] Escalado automático de modelo y pista humana
-  criterio: opción del proyecto (y `escalar: no` por tarea para desactivarla): si una tarea falla el gate o el revisor dos veces con su modelo, el siguiente intento sube un peso (ligero → normal → pesado) y queda anotado; antes de reintentar una tarea fallida o bloqueada, el usuario puede escribirle una **pista** al agente (GUI, MCP `pista_tarea(nombre, id, texto)`) que se añade al prompt del siguiente intento; tests del escalado (y de que no pasa del peso máximo) y de la pista en el prompt
-
-- [ ] Respuestas estructuradas del agente y del revisor
-  criterio: el veredicto del revisor/juez y el informe final del agente se piden en un bloque JSON con esquema (veredicto, motivos, archivos, riesgos) y se validan; si no es válido se pide una vez de nuevo y, si sigue mal, se interpreta el texto como hoy y se anota; tests con respuestas válidas, inválidas y en texto libre
-
+- [ ] Pista humana al reintentar
+  criterio: antes de reintentar una tarea fallida o bloqueada, el usuario puede escribirle una **pista** al agente (GUI, MCP `pista_tarea(nombre, id, texto)`) que se añade al prompt del siguiente intento; tests de la pista en el prompt
 - [ ] Lista de tareas en Ejecutar y registros etiquetados
   criterio: Ejecutar muestra una **lista de tareas** (filtros por fase y estado) con columnas estado, tarea, agente/modelo (desplegable: «Auto (peso)» o uno concreto), peso y un menú ⋯ con «Revisor especial…» (el revisor por defecto no se muestra); se pueden seleccionar varias filas y asignarles el mismo agente/peso; cada cambio se escribe en plan.md bajo esa tarea (`agente:`, `modelo:`, `peso:`, `revisor:`), que sigue siendo la única fuente de verdad (editar plan.md a mano refresca la lista); durante un run solo se editan las tareas que no han empezado; las opciones de lanzamiento marcan agente/modelo de tarea y revisor como «por defecto» y añaden pesos, cadena de respaldo, revisor de otra empresa, iteraciones «auto» y esperar cuota; progreso.log, incidencias.jsonl y metrics.jsonl llevan en cada entrada la tarea y el agente/modelo (`[id · agente/modelo]`), lecciones.md anota en cada lección dónde se aprendió, CONTEXTO.md sigue siendo uno solo y Logs tiene filtro por tarea; tests del etiquetado, del filtro, de que editar la lista escribe las claves correctas en plan.md y de que una tarea en curso no se puede editar, y smoke de Ejecutar (QT offscreen)
 
@@ -183,45 +182,13 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Planificador por grafo
   criterio: el loop elige la siguiente tarea entre las «listas» (todas sus dependencias hechas `[x]`), por piso y luego por orden del plan; si una tarea queda bloqueada `[B]`, todas las que dependen de ella (directa o indirectamente) se marcan «esperando a <id>» y el resto sigue; el run termina cuando no quedan tareas listas, informando de las que esperan y por qué; tests de orden, de propagación de bloqueos y de fin de run
 
-- [ ] Tareas descubiertas
-  criterio: si un agente detecta que falta algo fuera de su tarea (p. ej. «hace falta una migración antes»), lo devuelve en su informe estructurado como tarea propuesta (título, criterio, depende); el coordinador la añade al plan marcada `[?]` (propuesta) sin ejecutarla, y el usuario la aprueba o descarta desde la GUI/MCP (o se aprueban solas si el proyecto lo permite); una tarea aprobada entra en el grafo con sus dependencias; tests del flujo propuesta → aprobada/descartada y de que `[?]` no se ejecuta
-
 - [ ] Gate por tarea o por fase
   criterio: `gate:` en una tarea o en la cabecera de una fase elige qué checks correr (nombres de `gate_checks`, p. ej. `gate: rust, i18n`) o añade un comando extra (`gate+: npm run e2e`); sin `gate:` se corre el gate completo; el baseline y el gate final del run siempre corren completos; el resultado dice qué checks se corrieron; nueva plantilla de check opcional **e2e** (Playwright para proyectos web, comando configurable para otros) para que los gates se parezcan más al uso real; tests de selección de checks y de que un check inexistente se rechaza al validar
-
-## FASE 4 — Varios agentes a la vez
-
-- [ ] Investigar cómo lo resuelven otros
-  criterio: nota `docs/investigacion_paralelo.md` (corta) con cómo resuelven Composio Agent Orchestrator, DoorDash Agentic Orchestrator y uno más el aislamiento por worktree, los puertos/bases de datos compartidas, los conflictos y la fusión; qué adoptamos, qué no y por qué; ajustes concretos a los criterios de esta fase si hace falta (sin copiar código)
-
-- [ ] Copias aisladas por tarea
-  criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar (también en Windows, con rutas largas y archivos bloqueados contemplados); tests con dos tareas simultáneas en un repo temporal, corridos en el CI de Linux, macOS y Windows
-
-- [ ] Ejecución en paralelo con límite
-  criterio: hasta `max_agentes` tareas listas a la vez (por defecto 1 = en fila, ajustable en GUI y MCP); antes de lanzar, Dédalo mira la memoria libre y avisa si no alcanza para los agentes elegidos, con una sugerencia de cuántos usar, sin impedir que el usuario siga; el modo paralelo se marca como experimental en el README hasta que tenga uso real; presupuesto y cuota globales del run, no por tarea; solo el coordinador escribe plan.md, lecciones.md, mapeo.txt, progreso.log y metrics.jsonl (los agentes reciben lo que necesitan en el prompt y devuelven su informe); Detener para todas las tareas en curso dejando su trabajo en sus ramas; tests: dos tareas independientes avanzan a la vez y una dependiente espera a ambas, y el aviso de memoria con valores simulados
-
-- [ ] Informe de cambios de cada tarea
-  criterio: al terminar, cada tarea produce un informe (archivos tocados con el diff resumido, qué hizo y por qué, y si tocó algo fuera de su `zona:` opcional) que el coordinador guarda en un registro de cambios del run; si el agente no lo da, se genera del diff y se le pide la explicación de los archivos fuera de zona; tests del informe generado y de la detección fuera de zona
-
-- [ ] Revisor que vigila a las demás tareas
-  criterio: antes de integrar una tarea, el revisor recibe su informe, la lista de archivos que están cambiando las tareas en curso y los de los pilares de pisos superiores pendientes que declaran esas zonas; si la tarea tocó archivos que otra está trabajando o que pertenecen a otra zona, no se integra: el revisor pide al agente que lo justifique o lo deshaga, lo reporta en progreso.log/GUI/MCP y, si persiste, la tarea se rehace después de la otra; tests con dos tareas que tocan el mismo archivo
-
-- [ ] Ejecutar con varios carriles
-  criterio: arriba de Ejecutar, el estado resumido pasa a una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con Iniciar / Detener todo / Ejecutar gate; la lista de tareas añade las columnas piso y depende de, y marca el carril de las tareas en curso; las opciones de lanzamiento añaden agentes a la vez y carpeta de compilación compartida/por carril; Logs da un color por carril; smoke de Ejecutar con dos carriles (QT offscreen)
-
-- [ ] Mapeo con varios agentes
-  criterio: mapeo.txt lo escribe solo el coordinador, después de cada integración (en el orden de la cola) y a partir de la rama del run, nunca de las copias de las tareas; la actualización es incremental (solo los archivos que tocó la tarea integrada) y al final del run se hace un mapeo completo; cada agente recibe el mapa más reciente al empezar o al rehacer su tarea; el mapa que recibe marca como «en obras por [id]» los archivos que están cambiando otras tareas en curso y las zonas declaradas, y el prompt le pide no tocarlos (el revisor lo comprueba después); tests: mapeo incremental igual al completo, marcas «en obras» con dos tareas simultáneas
-
-- [ ] Integración en cola y conflictos
-  criterio: las tareas terminadas se integran de una en una en la rama del run (cola); si una integración da conflicto, la tarea se rehace automáticamente sobre la rama actualizada (con su informe anterior como contexto) hasta 2 veces y luego se marca `[B]` con el motivo; `zona:` se usa también para no lanzar a la vez dos tareas de la misma zona; tests de integración limpia, conflicto resuelto rehaciendo y conflicto que bloquea
 
 ## FASE 5B — Control desde el móvil
 
 - [ ] Control remoto por Telegram y Discord
   criterio: desactivado por defecto; con él activo, el usuario puede pedir estado, pausar, continuar, detener y aprobar o rechazar una revisión manual desde el chat; solo se aceptan órdenes de identificadores de usuario de una lista permitida y del chat configurado (cualquier otro se ignora y se registra), y un mensaje del chat nunca llega al agente como instrucción: es una lista cerrada de órdenes, sin comandos libres; detener y aprobar piden confirmación; funciona sin abrir puertos (Telegram por consulta periódica, Discord por gateway); los tokens no aparecen en logs; tests con clientes falsos: usuario no autorizado, orden desconocida, confirmación y aprobación
-
-- [ ] Control remoto por WhatsApp
-  criterio: mismas órdenes y mismas reglas que Telegram y Discord; como la API de WhatsApp entrega los mensajes por un webhook público, el manual explica qué hace falta (URL accesible o túnel), se valida la firma de cada petición y sigue desactivado por defecto; tests con peticiones firmadas y sin firmar
 
 ## FASE 6 — MCP al día
 
@@ -259,7 +226,7 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 ## FASE 9 — Documentación y versión 3
 
 - [ ] Documentación del formato nuevo
-  criterio: el manual (docs/MANUAL.md y .es.md) queda completo y revisado de punta a punta con todo Dédalo 3 (sección del plan con un ejemplo grande de 3 pisos y una tabla de todas las claves con su significado, valor por defecto y ejemplo; nuevas entradas en problemas frecuentes: conflictos entre tareas paralelas, tarea esperando a otra bloqueada, respaldo activado, ciclo en el plan); README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
+  criterio: el manual (docs/MANUAL.md y .es.md) queda completo y revisado de punta a punta con todo Dédalo 3 (sección del plan con un ejemplo grande de 3 pisos y una tabla de todas las claves con su significado, valor por defecto y ejemplo; nuevas entradas en problemas frecuentes: tarea esperando a otra bloqueada, respaldo activado, ciclo en el plan); README.md y README.es.md explican el plan por grafo con un ejemplo de 3 pisos (`id`, `depende`, fases con `depende`, `peso`, `agente`/`modelo`, `revisor`, `respaldo`, `gate`, `zona`), el paralelismo y sus límites (recursos, cuota), la cadena de respaldo, la espera de cuota y la revisión cruzada; `llms.txt` y la plantilla de plan generada por `instalar_proyecto` incluyen las claves nuevas; capturas nuevas de la vista de grafo
 
 - [ ] Windows probado en un PC real
   criterio: instalador sin bash, acceso directo, bandeja y un run completo con un agente real, probados en un PC con Windows y anotados en una lista de comprobación; los fallos encontrados se corrigen; el README actualiza el estado de Windows según lo comprobado
@@ -269,6 +236,29 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 
 - [ ] Release v3.0.0
   criterio: versión 3.0.0 en pyproject; notas con lo nuevo y la garantía de compatibilidad con los planes actuales; CI verde en Linux, macOS y Windows; **push y release solo con el «sí» del usuario**
+
+## FASE 4 — Varios agentes a la vez (después de la versión 3, experimental)
+
+- [ ] Copias aisladas por tarea
+  criterio: cada tarea en curso trabaja en su propio `git worktree` (rama de tarea actual) en `.dedalo/trabajo/<run>/<id>`; variables de entorno por copia para que el gate no se pise: `DEDALO_SLOT`, un rango de puertos propio (`DEDALO_PORT_BASE`) y, configurable, carpeta de compilación propia (p. ej. `CARGO_TARGET_DIR`) o compartida; las copias se borran al integrar (también en Windows, con rutas largas y archivos bloqueados contemplados); tests con dos tareas simultáneas en un repo temporal, corridos en el CI de Linux, macOS y Windows
+
+- [ ] Ejecución en paralelo con límite
+  criterio: hasta `max_agentes` tareas listas a la vez (por defecto 1 = en fila, ajustable en GUI y MCP); antes de lanzar, Dédalo mira la memoria libre y avisa si no alcanza para los agentes elegidos, con una sugerencia de cuántos usar, sin impedir que el usuario siga; el modo paralelo se marca como experimental en el README hasta que tenga uso real; presupuesto y cuota globales del run, no por tarea; solo el coordinador escribe plan.md, lecciones.md, mapeo.txt, progreso.log y metrics.jsonl (los agentes reciben lo que necesitan en el prompt y devuelven su informe); Detener para todas las tareas en curso dejando su trabajo en sus ramas; tests: dos tareas independientes avanzan a la vez y una dependiente espera a ambas, y el aviso de memoria con valores simulados
+
+- [ ] Informe de cambios de cada tarea
+  criterio: al terminar, cada tarea produce un informe (archivos tocados con el diff resumido, qué hizo y por qué, y si tocó algo fuera de su `zona:` opcional) que el coordinador guarda en un registro de cambios del run; si el agente no lo da, se genera del diff y se le pide la explicación de los archivos fuera de zona; tests del informe generado y de la detección fuera de zona
+
+- [ ] Revisor que vigila a las demás tareas
+  criterio: antes de integrar una tarea, el revisor recibe su informe, la lista de archivos que están cambiando las tareas en curso y los de los pilares de pisos superiores pendientes que declaran esas zonas; si la tarea tocó archivos que otra está trabajando o que pertenecen a otra zona, no se integra: el revisor pide al agente que lo justifique o lo deshaga, lo reporta en progreso.log/GUI/MCP y, si persiste, la tarea se rehace después de la otra; tests con dos tareas que tocan el mismo archivo
+
+- [ ] Ejecutar con varios carriles
+  criterio: arriba de Ejecutar, el estado resumido pasa a una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con Iniciar / Detener todo / Ejecutar gate; la lista de tareas añade las columnas piso y depende de, y marca el carril de las tareas en curso; las opciones de lanzamiento añaden agentes a la vez y carpeta de compilación compartida/por carril; Logs da un color por carril; smoke de Ejecutar con dos carriles (QT offscreen)
+
+- [ ] Mapeo con varios agentes
+  criterio: mapeo.txt lo escribe solo el coordinador, después de cada integración (en el orden de la cola) y a partir de la rama del run, nunca de las copias de las tareas; la actualización es incremental (solo los archivos que tocó la tarea integrada) y al final del run se hace un mapeo completo; cada agente recibe el mapa más reciente al empezar o al rehacer su tarea; el mapa que recibe marca como «en obras por [id]» los archivos que están cambiando otras tareas en curso y las zonas declaradas, y el prompt le pide no tocarlos (el revisor lo comprueba después); tests: mapeo incremental igual al completo, marcas «en obras» con dos tareas simultáneas
+
+- [ ] Integración en cola y conflictos
+  criterio: las tareas terminadas se integran de una en una en la rama del run (cola); si una integración da conflicto, la tarea se rehace automáticamente sobre la rama actualizada (con su informe anterior como contexto) hasta 2 veces y luego se marca `[B]` con el motivo; `zona:` se usa también para no lanzar a la vez dos tareas de la misma zona; tests de integración limpia, conflicto resuelto rehaciendo y conflicto que bloquea
 
 ## FASE 10 — Trabajar en grupo sobre GitHub (después de la versión 3)
 
@@ -288,5 +278,6 @@ Para grupos pequeños, no empresas, y opcional. Sin sistema propio de invitacion
 - Lecciones globales entre proyectos (opt-in): las lecciones generales de un proyecto disponibles para los demás.
 - Modo «test primero» para arreglos: el agente escribe un test que falla, el gate comprueba que falla y luego que pasa con el arreglo.
 - Modelos locales (Ollama u otros vía opencode) documentados como agente/respaldo para quien quiera privacidad total.
+- Primer uso guiado: comprobar agentes, explicar cómo iniciar sesión y ofrecer un proyecto de ejemplo (el MCP no lo cubre porque presupone un agente ya conectado).
 - Firmar el instalador de Windows y macOS para evitar los avisos de «programa no seguro» (tiene coste anual: cuando ya haya usuarios).
 - Pasar a inglés los nombres del código y las variables de entorno (solo si llegan colaboradores).
