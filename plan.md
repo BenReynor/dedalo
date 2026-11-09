@@ -188,6 +188,22 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 - [ ] Árbol de tareas
   criterio: nueva vista en el panel Plan que dibuja las tareas como un **árbol de habilidades de videojuego**, a partir de `depende:` (sin claves nuevas): cada tarea es un nodo unido a las que necesita y a las que desbloquea, y una tarea puede requerir varias a la vez, como materiales que se combinan para forjar otra; estados visibles de un vistazo: bloqueada por dependencias (apagada, con candado), disponible, en curso, hecha, fallida `[B]` y para una persona `[M]`; al completarse una tarea se iluminan las líneas y se desbloquean las siguientes; las fases se ven como ramas; zoom y desplazamiento; al pulsar un nodo se ve su criterio, responsable, de qué depende, qué desbloquea y por qué no está disponible; un plan sin dependencias se ve como una sola línea; respeta los temas e i18n; `validar_plan` del MCP devuelve el mismo árbol en texto; los «pisos» quedan como cálculo interno y no se muestran con ese nombre; tests de la disposición (varios padres, ciclos rechazados, plan en fila) y smoke de la vista (QT offscreen)
 
+## FASE 3B — Una interfaz que se sienta como un juego
+
+La temática es opcional: el tema sobrio de siempre sigue disponible y cada cual elige. Cambia cómo se ve, nunca lo que hace; legibilidad y contraste por encima del efecto.
+
+- [ ] Temas en Ajustes y temas de verdad
+  criterio: el selector de temas pasa a una sección Ajustes; un tema deja de ser solo colores y define también tipografía (fuentes incluidas con licencia libre), bordes, formas, iconos y animaciones; los temas actuales siguen funcionando; cambiar de tema no requiere reiniciar; tests de carga de temas y de contraste mínimo, y smoke (QT offscreen)
+
+- [ ] Temas de videojuego
+  criterio: al menos cuatro temas que se sientan como estar dentro de un juego: retro pixel, HUD cyberpunk, anime y fantasía/RPG; incluyen el árbol de tareas y todas las secciones, sin zonas que se queden con el aspecto normal; capturas de cada tema en el README; smoke de cada tema (QT offscreen)
+
+- [ ] Interfaz reorganizada con barra de estado de juego
+  criterio: el árbol de tareas pasa a ser la pantalla principal del proyecto; una barra superior muestra de un vistazo el progreso del plan (como experiencia), la cuota restante si se conoce (como energía) y el coste (como monedas), y quién trabaja ahora; las secciones se reordenan como el menú de un juego; cada agente se muestra como un personaje y elegir modelo y peso de una tarea se presenta como equiparlo; con un agente se ve uno y con varios, un grupo; las funciones y atajos actuales siguen accesibles; textos con i18n; smoke (QT offscreen)
+
+- [ ] Modo juego opcional: vocabulario y logros
+  criterio: opción en Ajustes, apagada por defecto en el tema sobrio, que cambia el vocabulario visible (tarea → misión, gate → prueba, bloqueada → derrotada…) sin tocar `plan.md` ni el MCP; logros sencillos por proyecto (primera tarea, sin fallos en una fase, fase completada) guardados en local y sin efecto en el motor; tests del vocabulario y de los logros
+
 ## FASE 5B — Control desde el móvil
 
 - [ ] Control remoto por Telegram y Discord
