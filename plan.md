@@ -207,27 +207,13 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
   criterio: antes de integrar una tarea, el revisor recibe su informe, la lista de archivos que están cambiando las tareas en curso y los de los pilares de pisos superiores pendientes que declaran esas zonas; si la tarea tocó archivos que otra está trabajando o que pertenecen a otra zona, no se integra: el revisor pide al agente que lo justifique o lo deshaga, lo reporta en progreso.log/GUI/MCP y, si persiste, la tarea se rehace después de la otra; tests con dos tareas que tocan el mismo archivo
 
 - [ ] Ejecutar con varios carriles
-  criterio: arriba de Ejecutar, el estado resumido pasa a una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con un botón «Abrir Cabina» e Iniciar / Detener todo / Ejecutar gate; la lista de tareas añade las columnas piso y depende de, y marca el carril de las tareas en curso; las opciones de lanzamiento añaden agentes a la vez y carpeta de compilación compartida/por carril; Logs da un color por carril; smoke de Ejecutar con dos carriles (QT offscreen)
+  criterio: arriba de Ejecutar, el estado resumido pasa a una línea (en curso / esperando cuota / parado, progreso del plan y «N carriles activos») con Iniciar / Detener todo / Ejecutar gate; la lista de tareas añade las columnas piso y depende de, y marca el carril de las tareas en curso; las opciones de lanzamiento añaden agentes a la vez y carpeta de compilación compartida/por carril; Logs da un color por carril; smoke de Ejecutar con dos carriles (QT offscreen)
 
 - [ ] Mapeo con varios agentes
   criterio: mapeo.txt lo escribe solo el coordinador, después de cada integración (en el orden de la cola) y a partir de la rama del run, nunca de las copias de las tareas; la actualización es incremental (solo los archivos que tocó la tarea integrada) y al final del run se hace un mapeo completo; cada agente recibe el mapa más reciente al empezar o al rehacer su tarea; el mapa que recibe marca como «en obras por [id]» los archivos que están cambiando otras tareas en curso y las zonas declaradas, y el prompt le pide no tocarlos (el revisor lo comprueba después); tests: mapeo incremental igual al completo, marcas «en obras» con dos tareas simultáneas
 
 - [ ] Integración en cola y conflictos
   criterio: las tareas terminadas se integran de una en una en la rama del run (cola); si una integración da conflicto, la tarea se rehace automáticamente sobre la rama actualizada (con su informe anterior como contexto) hasta 2 veces y luego se marca `[B]` con el motivo; `zona:` se usa también para no lanzar a la vez dos tareas de la misma zona; tests de integración limpia, conflicto resuelto rehaciendo y conflicto que bloquea
-
-## FASE 5 — El plan manda: dirección automática y vistas
-
-- [ ] Analizar un plan y proponer el grafo
-  criterio: botón «Analizar plan» en la GUI y MCP `proponer_grafo(nombre)`: un agente lee un plan sin claves (o con pocas) y propone `id`, `depende`, `peso`, `gate` y `zona` por tarea; se muestra como diff del plan y solo se guarda si el usuario lo aprueba; la propuesta se valida (FASE 3) antes de mostrarse; tests con un agente falso
-
-- [ ] Sección Cabina: carriles y grafo en vivo
-  criterio: sección propia «Cabina» en la barra lateral (también se abre desde Ejecutar) para ver el run gráficamente, actualizada en vivo: (1) **carriles**: uno por agente en curso con la tarea, el agente/modelo, el paso actual Plan → Agent → Gate → Reviewer → Commit, tiempo y coste de la tarea, y estados «esperando cuota» o «respaldo: X → Y»; una línea de tiempo con lo que hizo cada carril en el run; (2) **grafo por pisos**: una caja por tarea coloreada por estado (hecha, en curso con su carril, lista, esperando a <id>, bloqueada) con las flechas de dependencia, zoom y desplazamiento, resaltando el camino que frena a una tarea al pasar el ratón; (3) **detalle** al hacer clic en una tarea o carril: criterio, agente, gate y checks corridos, informe de cambios, avisos del revisor (p. ej. «tocó un archivo de la zona de X») y su log filtrado; con un plan simple muestra un solo carril y los pisos en fila; tests del modelo de la vista (pisos, colores, camino bloqueante) sin GUI y smoke de la Cabina con dos carriles y un grafo de 3 pisos (QT offscreen)
-
-- [ ] Asistente para escribir el plan
-  criterio: el usuario describe su idea y un agente propone `plan.md` con fases, tareas pequeñas y criterios verificables, que termina cada criterio con «lo no especificado NO es motivo de rechazo»; el usuario lo revisa y edita antes de guardarlo y nunca se sobrescribe un plan sin confirmar; el resultado pasa la validación del plan; disponible en GUI y MCP; tests con un agente falso (plan válido, inválido y plan existente)
-
-- [ ] Primer uso guiado
-  criterio: la primera vez, la app comprueba qué agentes hay instalados y con sesión, explica cómo iniciar sesión en los que falten y ofrece crear un proyecto de ejemplo cuyo gate pasa a la primera, para ver un run completo con un plan mínimo; se puede saltar y volver a abrir desde el menú; smoke test (QT offscreen) y test de que el ejemplo pasa su gate
 
 ## FASE 5B — Control desde el móvil
 
@@ -248,7 +234,7 @@ Orden: primero lo ya hecho, luego los arreglos (van a `main` al estar probados),
 ## FASE 7 — Rendimiento (si hace falta, midiendo antes)
 
 - [ ] Medir antes de optimizar
-  criterio: el gate guarda la duración de cada check y del total por iteración en metrics.jsonl; la Cabina y el MCP muestran los checks más lentos; se mide también el tamaño de los prompts (tokens aproximados de plan, lecciones, mapeo y contexto) y el uso de la GUI con logs grandes; nota `docs/rendimiento.md` con los números y qué merece optimizarse (si nada lo merece, se dice y se cierra la fase)
+  criterio: el gate guarda la duración de cada check y del total por iteración en metrics.jsonl; Métricas y el MCP muestran los checks más lentos; se mide también el tamaño de los prompts (tokens aproximados de plan, lecciones, mapeo y contexto) y el uso de la GUI con logs grandes; nota `docs/rendimiento.md` con los números y qué merece optimizarse (si nada lo merece, se dice y se cierra la fase)
 
 - [ ] Prompts que no crecen sin control
   criterio: lecciones.md y CONTEXTO.md se compactan cuando pasan de un tamaño configurable (un agente ligero resume lo antiguo conservando lo vigente; el original se archiva en `.dedalo/estado/archivo/`); el prompt de cada tarea incluye solo las partes del mapeo relevantes (archivos de su zona y los que nombra el criterio) además de un resumen global; archivos enormes nunca se pegan enteros (tope por archivo con aviso); tests de compactación, de selección del mapeo y del tope
