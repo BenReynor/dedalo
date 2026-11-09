@@ -217,6 +217,12 @@ La temática es opcional: el tema sobrio de siempre sigue disponible y cada cual
 - [ ] Prueba de punta a punta por MCP
   criterio: un test (con agentes falsos) maneja un run completo solo por MCP: configurar, validar, ensayo, lanzar con 2 carriles, ver el grafo, dar una pista, aprobar una tarea descubierta, continuar tras la pausa de fase y terminar; sirve de ejemplo en docs/MCP.md
 
+- [ ] Skills incluidas para usar Dédalo con pocos tokens
+  criterio: Dédalo trae cuatro skills cortas que se cargan solo cuando hacen falta: `dedalo-piloto` (vigilar un loop gastando poco: estado antes que log, pocas líneas, sin consultas continuas, `esperar_evento`), `dedalo-plan` (tareas pequeñas, criterios verificables, dependencias y peso de cada tarea), `dedalo-diagnostico` (qué mirar ante un fallo y en qué orden) y `dedalo-reglas` (lo comprobable va a un check del gate y `CONTEXTO.md` queda corto); la guía se escribe una vez y también llega a los clientes sin skills por el manual del MCP y `dedalo://manual`; instalarlas es opcional y nunca sobrescribe las del usuario; tests de instalación, de no sobrescritura y de tamaño máximo de cada skill
+
+- [ ] Respuestas cortas del MCP por defecto
+  criterio: las tools de lectura devuelven por defecto un resumen breve y piden más detalle con un parámetro; se añade una tool de resumen del proyecto en pocas líneas (estado, tarea actual, último fallo, qué necesita del usuario); tests del límite de tamaño de cada respuesta
+
 ## FASE 7 — Rendimiento (si hace falta, midiendo antes)
 
 - [ ] Medir antes de optimizar
