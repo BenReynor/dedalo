@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,8 +9,8 @@ description = "Orchestrates AI agents to iterate on tasks, run tests, and commit
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-    "PySide6>=6.11.0",
-    "pyqtgraph>=0.13.7",
+    "PySide6>=6.12.0",
+    "pyqtgraph>=0.14.0",
 ]
 
 [project.optional-dependencies]
@@ -18,12 +18,12 @@ dependencies = [
 # `dev` so CI has it and the tests in tests/test_mcp_server.py run (they
 # do importorskip, so without it they just skip).
 dev = [
-    "pytest>=8",
+    "pytest>=9.2.0",
     "ruff",
-    "mcp>=2",
+    "mcp>=2.3.0",
 ]
 mcp = [
-    "mcp>=2",
+    "mcp>=2.3.0",
 ]
 
 [tool.setuptools.packages.find]
